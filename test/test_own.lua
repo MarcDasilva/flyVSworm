@@ -71,16 +71,46 @@ for _ = 1, 40 do own.add_step() end
 own.tag_visit("04A1B2C3D4E5F6")
 assert(own.tag_seen("04A1B2C3D4E5F6") == 40)
 
--- Persistence across a full reload.
+-- More distinctive state ahead of the reload below. A save-format offset
+-- error corrupts silently with no pcall and no crash, so the round-trip
+-- assertions must cover every persisted field individually, and every value
+-- here is chosen so it cannot alias another field's value (see the reload
+-- assertions' messages for which offset a failure implicates).
+own.record_catch(15)                     -- caught(15) == 1
+for _ = 1, 5 do own.record_catch(20) end -- caught(20) == 5
+own.add(20)                              -- collection bit in a THIRD bitmap byte (byte 3)
+for _ = 1, 7 do own.add_egg() end        -- eggs == 7, distinct from balls == 255
+
+for _ = 1, 8960 do own.add_step() end    -- steps: 40 -> 9000
+own.tag_visit("AABBCCDD001122")          -- second tag entry, recorded at step 9000
+for _ = 1, 50 do own.add_step() end      -- steps: 9000 -> 9050, distinct from both tag steps
+assert(own.tag_seen("AABBCCDD001122") == 9000)
+
+-- Persistence across a full reload. Every field below gets its own assertion
+-- naming the field, so a shifted byte offset points straight at itself
+-- instead of hiding behind an unrelated field that happens to still match.
 own.save()
 local saved = M.files["appdata/save.dat"]
 assert(saved and #saved >= 43, "save file too short: " .. tostring(saved and #saved))
 package.loaded["own"] = nil
 local own2 = require("own")
 own2.load()
-assert(own2.starter() == 4)
-assert(own2.has(36) and own2.caught(7) == 3)
-assert(own2.tag_seen("04A1B2C3D4E5F6") == 40)
+assert(own2.starter() == 4, "starter did not survive reload")
+assert(own2.has(4), "starter's collection bit did not survive reload")
+assert(own2.has(1) and own2.has(8) and own2.has(9),
+  "byte-1 collection bits did not survive reload")
+assert(own2.has(20), "byte-3 (middle) collection bit did not survive reload")
+assert(own2.has(36), "byte-5 (last) collection bit did not survive reload")
+assert(not own2.has(7), "removed species must stay removed across reload")
+assert(own2.caught(7) == 3, "caught(7) did not survive reload")
+assert(own2.caught(2) == 255, "caught(2) saturation did not survive reload")
+assert(own2.caught(15) == 1, "caught(15) did not survive reload")
+assert(own2.caught(20) == 5, "caught(20) did not survive reload")
+assert(own2.balls() == 255, "balls did not survive reload")
+assert(own2.eggs() == 7, "eggs did not survive reload")
+assert(own2.steps() == 9050, "steps did not survive reload")
+assert(own2.tag_seen("04A1B2C3D4E5F6") == 40, "first tag's step did not survive reload")
+assert(own2.tag_seen("AABBCCDD001122") == 9000, "second tag's step did not survive reload")
 
 -- Corruption must degrade to a fresh save, never crash. There is no pcall.
 for _, bad in ipairs({"", "\1", "\1\4\0\0", string.rep("\255", 20), string.rep("\0", 500)}) do
