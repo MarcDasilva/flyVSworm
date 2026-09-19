@@ -9,7 +9,8 @@ import math
 import struct
 from pathlib import Path
 
-from .connectome import load_connectome, assign_physiology, neuron_positions
+from .connectome import load_connectome, assign_physiology
+from .morphology import load_morphology, pack_morphology, soma_positions
 from .pack_addr import derive_addresses, chain_order_index
 from .refsim import compute_resting_state
 
@@ -42,7 +43,10 @@ def _q88(v: float) -> int:
 def build_all() -> Path:
     c = load_connectome()
     p = assign_physiology(c)
-    pos = neuron_positions(c)
+    # Cell-body coordinates are READ OFF THE TRACING, never computed. See
+    # pipeline/morphology.py and data/raw/morphology/SOURCE.txt.
+    arbors = load_morphology(c.names)
+    pos = soma_positions(arbors)
     n = len(c.names)
 
     # --- CSR by POSTSYNAPTIC neuron: row i holds every edge arriving at i. ---
@@ -176,6 +180,10 @@ def build_all() -> Path:
 
     (DATA / "names.json").write_text(json.dumps(c.names))
     (DATA / "positions.json").write_text(json.dumps(pos))
+    # The arbors themselves: 9,429 traced neurite segments the browser maps
+    # straight into a vertex buffer. positions.json is derived from the SAME
+    # arbors above, so a soma can never drift off its own processes.
+    (DATA / "morphology.bin").write_bytes(pack_morphology(arbors))
     (DATA / "addresses.json").write_text(json.dumps(addrs))
 
     # TASK5: front-end connectome renderer wants a bounded edge list, not the

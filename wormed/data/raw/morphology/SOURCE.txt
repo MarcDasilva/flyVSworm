@@ -1,0 +1,48 @@
+Neuron morphology source (3D anatomy)
+=====================================
+
+Fetched 2026-09-19 from openworm/CElegansNeuroML, pinned at commit
+  b36380a36d2a6dda0f03c946c433524b25ea2268  (2023-03-30)
+  https://github.com/openworm/CElegansNeuroML
+  path: CElegans/generatedNeuroML2/<NAME>.cell.nml
+
+302 files committed verbatim, one per neuron in data/names.json. The upstream
+directory holds 303 .cell.nml files; the extra one is MDL08, a body-wall
+muscle, and is not copied here. Coverage of names.json is exact — every one of
+the 302 neurons has a traced morphology, nothing is interpolated or invented.
+
+Provenance of the geometry itself: the 3D model was produced by Dr. Christian
+Grove and Dr. Paul Sternberg at the VirtualWorm project (WormBase, CalTech)
+and released into the PUBLIC DOMAIN, digitised from the White, Southgate,
+Thomson & Brenner (1986) serial-section electron micrographs. OpenWorm
+converted the WormBase Virtual Worm Blender files into these NeuroML2
+multi-compartmental cells. So the coordinates below are a tracing of a real
+animal, not a layout algorithm.
+
+Known properties of these exact files, verified by direct inspection here:
+
+  - Units are micrometres. Axes in the native frame are NOT the conventional
+    ones: y is anterior-posterior (nose negative, tail positive, range
+    -349.5 to 448.4), z is dorsoventral, x is left-right. Checked against
+    known anatomy rather than assumed — IL1DL (nose) sits at y = -282.8 and
+    PLML (tail) at y = +410.1. wormed/pipeline/morphology.py remaps these
+    into the renderer's frame and asserts the orientation.
+
+  - A <segment> carries a <distal> point always and a <proximal> point only
+    sometimes. When <proximal> is absent the segment starts at its PARENT's
+    distal point — that is the NeuroML rule, and ignoring it disconnects the
+    arbor into a cloud of floating sticks instead of a neuron. Segment ids
+    are sparse and NOT in parent-before-child order, so the parent's distal
+    must be resolved from a full id map, not from the preceding element.
+
+  - Segment id 0 is the soma in every one of these files, with proximal ==
+    distal (a sphere, not a cylinder). That point is what data/positions.json
+    now records as the cell-body coordinate.
+
+  - 13,869 segments across the 302 cells.
+
+What these files do NOT contain: synapses. The .cell.nml files are pure
+morphology. Connectivity comes from NeuronConnect.csv in the parent directory
+(Varshney et al. 2011), and the two sources are joined only by neuron name.
+Upstream's own README is explicit that its synapse and ion-channel modelling
+is placeholder work; none of that is used here, only the traced geometry.

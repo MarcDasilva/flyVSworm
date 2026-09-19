@@ -11,7 +11,7 @@ import { readFileSync } from "node:fs";
 import * as THREE from "three";
 import { WormBody, type BehaviorState } from "./body.js";
 import { WormMesh } from "./worm.js";
-import { BrainCloud } from "./brain.js";
+import { BrainCloud, parseMorphology } from "./brain.js";
 
 const DATA = new URL("../../data/", import.meta.url);
 const read = (f: string) => JSON.parse(readFileSync(new URL(f, DATA), "utf8"));
@@ -19,10 +19,34 @@ const read = (f: string) => JSON.parse(readFileSync(new URL(f, DATA), "utf8"));
 const positions: [number, number, number][] = read("positions.json");
 const names: string[] = read("names.json");
 const edges: [number, number][] = read("edges.json");
+const raw = readFileSync(new URL("morphology.bin", DATA));
+const morphology = parseMorphology(
+  raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength) as ArrayBuffer);
 
 assert.equal(positions.length, 302, "positions.json is not 302 neurons");
 assert.equal(names.length, 302, "names.json is not 302 neurons");
 assert.ok(edges.length > 0, "edges.json is empty");
+assert.equal(morphology.range.length, 604, "morphology.bin is not 302 neurons");
+assert.ok(morphology.segments > 5000, "morphology.bin has too few neurites to be a tracing");
+
+// Every neuron must own a stretch of the vertex buffer, and the stretches
+// must tile it exactly. A neuron with zero segments renders as a bare dot and
+// a gap between ranges is geometry that no voltage will ever repaint.
+let cursor = 0;
+for (let i = 0; i < 302; i++) {
+  assert.equal(morphology.range[i * 2], cursor, `${names[i]}: segment range is not contiguous`);
+  assert.ok(morphology.range[i * 2 + 1] > 0, `${names[i]}: no traced neurites`);
+  cursor += morphology.range[i * 2 + 1];
+}
+assert.equal(cursor, morphology.segments, "segment ranges do not tile the buffer");
+
+// Corrupt input must name the file, not blank the screen. The header lies
+// about the segment count here, which is exactly the failure a silent
+// truncation during deploy produces.
+const bad = raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength) as ArrayBuffer;
+new DataView(bad).setUint32(12, 99999, true);
+assert.throws(() => parseMorphology(bad), /morphology\.bin/);
+assert.throws(() => parseMorphology(new ArrayBuffer(8)), /morphology\.bin/);
 
 const FWD: BehaviorState = { state: 1, gain: 1 };
 const REV: BehaviorState = { state: 2, gain: 1 };
@@ -53,13 +77,32 @@ function instanced(root: THREE.Object3D): THREE.InstancedMesh[] {
 const scene = new THREE.Scene();
 const body = new WormBody(24);
 const worm = new WormMesh(scene);
-const brain = new BrainCloud(scene, positions, names, edges);
+const brain = new BrainCloud(scene, positions, names, morphology);
 
 // One account per neuron on chain, one instance per neuron here. A mismatch
 // means setVoltages would paint the wrong cells.
 const nodes = instanced(scene).find(m => m.count === 302);
 assert.ok(nodes, "no InstancedMesh with 302 instances — the neuron cloud is wrong");
 assert.ok(nodes.instanceColor, "neuron instances carry no colour buffer");
+
+// Every cell body must sit ON its own traced arbor. Reading the soma from a
+// different source than the neurites is the mistake that leaves 302 dots
+// hovering beside the wires, and it looks almost right until you zoom.
+const verts = morphology.verts;
+for (const name of ["AVAL", "PLML", "IL1DL", "VD6", "PHAL"]) {
+  const i = names.indexOf(name);
+  const start = morphology.range[i * 2], count = morphology.range[i * 2 + 1];
+  let best = Infinity;
+  for (let s = start; s < start + count; s++) {
+    for (const o of [0, 3]) {
+      const d = (verts[s * 6 + o] - positions[i][0]) ** 2
+              + (verts[s * 6 + o + 1] - positions[i][1]) ** 2
+              + (verts[s * 6 + o + 2] - positions[i][2]) ** 2;
+      if (d < best) best = d;
+    }
+  }
+  assert.ok(best < 1e-9, `${name}: soma is not on its own arbor (d2=${best})`);
+}
 
 // Frame 1 warms every lazily-allocated buffer, so the census is only stable
 // from frame 2 on — compare against that, not against the constructor.
@@ -110,6 +153,43 @@ brain.setVoltages(new Int16Array(302).fill(20));
 let moved = 0;
 for (let i = 0; i < cold.length; i++) if (Math.abs(cold[i] - colours[i]) > 1e-6) moved++;
 assert.ok(moved > cold.length / 2, "setVoltages did not repaint the cloud");
+
+// THE POINT OF THE TRACED ANATOMY: a spike must light the neuron's WIRES,
+// not just its cell body. Painting only the 302 somas leaves 9,429 neurites
+// frozen at the resting colour and the render is a dot cloud again.
+const wires = scene.getObjectByProperty("isLineSegments2", true) as THREE.Mesh | undefined;
+assert.ok(wires, "no LineSegments2 in the scene — the arbors are not drawn");
+const wireBuf = (wires.geometry.getAttribute("instanceColorStart") as THREE.InterleavedBufferAttribute)
+  .data.array as Float32Array;
+assert.equal(wireBuf.length, morphology.segments * 6,
+  "neurite colour buffer does not cover every segment endpoint");
+
+brain.setVoltages(new Int16Array(302).fill(-80));
+const wireCold = Float32Array.from(wireBuf);
+brain.setVoltages(new Int16Array(302).fill(20));
+let wiresMoved = 0;
+for (let i = 0; i < wireCold.length; i++) if (Math.abs(wireCold[i] - wireBuf[i]) > 1e-6) wiresMoved++;
+assert.ok(wiresMoved > wireCold.length / 2,
+  `only ${wiresMoved}/${wireCold.length} neurite colour floats moved between -80 mV and +20 mV`);
+
+// Depolarising ONE cell must light that cell's arbor and leave its
+// neighbours alone. A range table that is off by one paints the wrong
+// neuron, which no whole-buffer check above can see.
+const solo = new Int16Array(302).fill(-80);
+const target = names.indexOf("AVAL");
+solo[target] = 20;
+brain.setVoltages(solo);
+const lit = (i: number) => {
+  const start = morphology.range[i * 2], count = morphology.range[i * 2 + 1];
+  let moved = 0;
+  for (let s = start; s < start + count; s++)
+    if (Math.abs(wireBuf[s * 6] - wireCold[s * 6]) > 1e-6) moved++;
+  return moved / count;
+};
+assert.equal(lit(target), 1, "AVAL's own arbor did not light up");
+for (const other of ["AVAR", "PLML", "IL1DL"])
+  assert.equal(lit(names.indexOf(other)), 0, `${other} lit up when only AVAL fired`);
+brain.setVoltages(new Int16Array(302).fill(-70));
 
 // Chain indices are not trusted input; a bad edge must be dropped, not thrown.
 brain.fireEdge(-1, 5);

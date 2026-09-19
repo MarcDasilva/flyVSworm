@@ -22,13 +22,22 @@ Program account: `taXILSqS99UxmqBxrvpcETPQ8j6zd-xmFmK6EQ5xFWrvgQ` (seed
 
 ## The three layers
 
-**Data** (`wormed/pipeline/`). Varshney et al. 2011 `NeuronConnect.csv`, fetched
-from openworm/ConnectomeToolbox and committed verbatim under
-`wormed/data/raw/`. 6,394 chemical synaptic contacts across 2,573 directed
-edges; 890 gap-junction contacts across 517 undirected junctions. Packed into
-`wormed/data/topology.bin` (28,564 bytes): CSR by postsynaptic neuron,
-gap junctions in both directions, per-neuron parameters, and a 257-entry
-sigmoid lookup table. No float anywhere in the file.
+**Data** (`wormed/pipeline/`). Two sources, both committed verbatim under
+`wormed/data/raw/`. Wiring is Varshney et al. 2011 `NeuronConnect.csv`, fetched
+from openworm/ConnectomeToolbox: 6,394 chemical synaptic contacts across 2,573
+directed edges; 890 gap-junction contacts across 517 undirected junctions.
+Packed into `wormed/data/topology.bin` (28,564 bytes): CSR by postsynaptic
+neuron, gap junctions in both directions, per-neuron parameters, and a
+257-entry sigmoid lookup table. No float anywhere in the file.
+
+Shape is the OpenWorm `CElegansNeuroML` cells, pinned at commit `b36380a`: the
+traced 3D morphology of all 302 neurons, digitised by the VirtualWorm project
+(Grove and Sternberg, WormBase/CalTech, released into the public domain) from
+the White et al. 1986 electron micrographs. 13,869 traced segments, merged
+where collinear to 9,429 and packed into `wormed/data/morphology.bin`
+(228,728 bytes). Coverage is exact — every neuron in `names.json` has a real
+arbor, and `wormed/data/positions.json` is now each cell's traced soma point
+rather than a computed one.
 
 **Brain** (`wormed/program/`). One RISC-V program, a 5,224-byte binary compiled
 for ThruVM by the Thru C SDK. `sim.c` is the timestep and compiles unchanged for the
@@ -38,7 +47,11 @@ neuron per step.
 
 **Body** (`wormed/web/`). Three.js. A follow-the-leader kinematic body: the head
 steers, every segment follows the path the head traced, which is why the worm
-is inextensible by construction. It reads the behavior byte and the voltage
+is inextensible by construction. Above it the nervous system is drawn as the
+tracing, not as a layout — 9,429 neurites in one draw call, each tinted by its
+own neuron's membrane potential, so a spike lights the wires it actually
+travels. Nothing in the renderer may move a neuron: the nerve ring reads as a
+ring because the animal has one. It reads the behavior byte and the voltage
 frames off the node's gRPC event stream. A small Node relay (`relay.mjs`) is
 the only process in the demo that can spend: the browser reads the chain
 directly but never signs anything.
@@ -185,6 +198,24 @@ it, both drives sit near 0.016, under the classifier's release threshold, so
 the honest output is PAUSE. A permanent small stimulus would keep it crawling
 and would be a fabrication.
 
+**13. The geometry is measured; where a synapse is drawn is not.** Neuron
+shapes and soma positions come from the tracing and are checked against known
+anatomy in `wormed/pipeline/test_morphology.py`. Synapse *sites* are not in
+either source: `NeuronConnect.csv` gives pre/post pairs and a contact count,
+with no coordinate, and the morphology files carry no synapses at all. So a
+firing transfer is animated cell body to cell body, bowed onto the body
+midline, and the point where a particle appears to cross between two neurons
+is a drawing convention rather than a location. The two datasets are joined
+only by neuron name. Using the closest approach between two arbors would be a
+defensible estimate of where the contact sits, and is not what this does.
+
+**14. The traced animal is a posed specimen.** It is bent into a crawling
+posture, and that bend is kept — the render shows the worm the tracing
+describes, curving through about a fifth of a body length. It does not flex
+with the animated body below it, so the brain's pose and the body's gait are
+independent. The two are separate objects, as the seam in caveat 4 already
+implies.
+
 ## Cost and operations
 
 Fee is exactly 200 units per transaction, and **a reverted transaction is still
@@ -211,12 +242,22 @@ failing into the chain.
 Every suite, run on this commit against the live alphanet. Not "tests pass" —
 these are the counts and the output.
 
-Offline pipeline, 28 tests:
+Offline pipeline, 25 tests:
 
 ```
 $ python3 -m pytest wormed/pipeline/test_pipeline.py -q
-............................                                             [100%]
-28 passed in 22.36s
+.........................                                                [100%]
+25 passed in 34.66s
+```
+
+Traced anatomy, 11 tests. These assert facts about a real animal that no
+layout function could satisfy by luck — the nerve ring closing as a hollow
+annulus, AVA's axon spanning the body, the cord classes running head to tail:
+
+```
+$ python3 -m pytest wormed/pipeline/test_morphology.py -q
+...........                                                              [100%]
+11 passed in 3.56s
 ```
 
 Native C against the Python Q16.16 reference:
@@ -282,7 +323,7 @@ pip3 install -r wormed/requirements.txt
 python3 -c "from wormed.pipeline.pack import build_all; build_all()"
 
 # 3. The offline half of the verification chain
-python3 -m pytest wormed/pipeline/test_pipeline.py -q
+python3 -m pytest wormed/pipeline/test_pipeline.py wormed/pipeline/test_morphology.py -q
 cd wormed/program && gcc -O0 -g -I. native_test.c sim.c -o /tmp/nt && /tmp/nt
 
 # 4. Build and deploy the program, then record its address
@@ -351,3 +392,5 @@ batch 12 step  39000 FORWARD fwd 0.535 rev 0.235
 | `SPEC.md` | the design, including two places where reality corrected it |
 | `wormed/program/worm.c` | instruction dispatch, settlement, the classifier |
 | `wormed/program/sim.c` | the timestep, compiled for both targets |
+| `wormed/data/raw/morphology/SOURCE.txt` | where the 3D anatomy came from and what is known to be true of it |
+| `wormed/pipeline/morphology.py` | NeuroML2 arbors into the render frame, and the two judgement calls involved |

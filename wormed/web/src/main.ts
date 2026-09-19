@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { WormBody, BEHAVIOR, type BehaviorState } from "./body.js";
 import { WormMesh } from "./worm.js";
-import { BrainCloud } from "./brain.js";
+import { BrainCloud, parseMorphology } from "./brain.js";
 import { ChainFeed, type Behavior, type ChainConfig, type RelayStatus } from "./chain.js";
 
 const scene = new THREE.Scene();
@@ -34,19 +34,22 @@ addEventListener("resize", () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
+  // LineMaterial measures neurite width in pixels, so it needs telling.
+  brain.setResolution(innerWidth, innerHeight);
 });
 
 // data/ sits outside the vite root; vite.config.ts maps it onto the URL root,
 // so these are /positions.json and NOT /data/positions.json.
-const [positions, names, edges] = await Promise.all([
+const [positions, names, morphology] = await Promise.all([
   fetch("/positions.json").then(r => r.json()) as Promise<[number, number, number][]>,
   fetch("/names.json").then(r => r.json()) as Promise<string[]>,
-  fetch("/edges.json").then(r => r.json()) as Promise<[number, number][]>,
+  fetch("/morphology.bin").then(r => r.arrayBuffer()).then(parseMorphology),
 ]);
 
 const body = new WormBody(24);
 const worm = new WormMesh(scene);
-const brain = new BrainCloud(scene, positions, names, edges);
+const brain = new BrainCloud(scene, positions, names, morphology);
+brain.setResolution(innerWidth, innerHeight);
 
 // ---------------------------------------------------------------------------
 // CHAIN DRIVER. Every number below is read off Thru: voltages and synaptic
@@ -152,7 +155,7 @@ function frame(now: number): void {
       `brain    ${status ? (status.stepping ? "stepping" : status.awake ? "waking" : "idle — touch to wake") : "relay offline"}`,
       `fee payer ${status ? status.balance.toLocaleString() : "?"} units` +
         (status && status.balance < status.floor ? `  LOW: ${status.faucet}` : ""),
-      `neurons  ${n}   edges ${edges.length}   fps ${fps.toFixed(0)}`,
+      `neurons  ${n}   neurites ${brain.segments}   fps ${fps.toFixed(0)}`,
     ].join("\n");
     drawLog();
   }

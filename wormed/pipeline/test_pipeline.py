@@ -2,7 +2,7 @@ import json
 import struct
 from pathlib import Path
 
-from wormed.pipeline.connectome import load_connectome, assign_physiology, neuron_positions
+from wormed.pipeline.connectome import load_connectome, assign_physiology
 from wormed.pipeline.pack import build_all, LAYOUT
 
 DATA = Path(__file__).resolve().parent.parent / "data"
@@ -82,27 +82,6 @@ def test_conductance_scales_with_contact_count():
     lo = min(range(len(weights)), key=lambda i: weights[i])
     hi = max(range(len(weights)), key=lambda i: weights[i])
     assert p.chem_g[hi] > p.chem_g[lo]
-
-def test_positions_are_worm_shaped_not_a_hairball():
-    """A force-directed layout tells the viewer nothing. The point cloud must
-    be anatomically ordered: head cells anterior, tail cells posterior."""
-    c = load_connectome()
-    pos = neuron_positions(c)
-    assert len(pos) == 302
-    x = {n: pos[i][0] for i, n in enumerate(c.names)}
-    # ALM is an anterior touch cell; PLM is a posterior one. This ordering is
-    # the whole point of using real coordinates.
-    assert x["ALML"] < x["PLML"], "anterior/posterior axis is inverted or flat"
-    assert all(0.0 <= p[0] <= 1.0 for p in pos)
-    assert all(-1.0 <= p[1] <= 1.0 and -1.0 <= p[2] <= 1.0 for p in pos)
-
-def test_positions_are_spread_not_degenerate():
-    c = load_connectome()
-    pos = neuron_positions(c)
-    xs = sorted(p[0] for p in pos)
-    assert xs[-1] - xs[0] > 0.5, "all neurons collapsed onto one point"
-    assert len({round(p[0], 3) for p in pos}) > 50, "too many neurons share an x"
-
 
 def test_every_array_offset_is_8_byte_aligned():
     """ThruVM raises an exception on unaligned access and on any access that
@@ -185,6 +164,9 @@ def test_sidecar_json_files_are_complete():
     prov = json.loads((DATA / "provenance.json").read_text())
     assert len(names) == 302 and len(pos) == 302
     assert "caveat" in prov
+    # The renderer 404s silently on a missing asset and then draws nothing,
+    # so build_all must actually emit the geometry, not just the tables.
+    assert (DATA / "morphology.bin").stat().st_size > 100_000
 
 
 def test_provenance_records_cli_derivation():
@@ -453,32 +435,3 @@ def test_touch_reflex_drives_the_right_command_neurons():
 
     rev, fwd = drives({"PLML": 40.0})
     assert fwd > THRESH_ON and fwd > rev, f"tail touch: rev={rev} fwd={fwd}"
-
-
-def test_each_ventral_cord_class_spans_the_cord_in_number_order():
-    """Cord cells are numbered head-to-tail and each class runs the WHOLE cord.
-    Ranking all cord names in one sorted list — the original bug — compressed
-    every class into a ~4% band and ordered them lexicographically, so VD12 sat
-    anterior to VD3 and DA9 sat at 0.446 instead of near the tail. Nothing else
-    in the suite looks at position ORDER, and the render still looked plausible,
-    so only this test catches it."""
-    import re
-    from wormed.pipeline.connectome import load_connectome, neuron_positions, _ganglion_of
-
-    c = load_connectome()
-    x = {n: p[0] for n, p in zip(c.names, neuron_positions(c))}
-    classes: dict[str, list[tuple[int, float]]] = {}
-    for n in c.names:
-        m = re.fullmatch(r"([A-Z]+)(\d+)", n)
-        if m and _ganglion_of(n) == "ventral_cord":
-            classes.setdefault(m.group(1), []).append((int(m.group(2)), x[n]))
-
-    assert len(classes) >= 5, f"expected the cord motor classes, got {sorted(classes)}"
-    for cls, cells in classes.items():
-        cells.sort()
-        xs = [v for _, v in cells]
-        assert xs == sorted(xs), f"{cls} is not ordered by number: {cells}"
-        if len(cells) >= 5:
-            assert xs[-1] - xs[0] > 0.30, (
-                f"{cls} spans only {xs[-1] - xs[0]:.3f} of the cord — classes "
-                f"are stacked in blocks again")
