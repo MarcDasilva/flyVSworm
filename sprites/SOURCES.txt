@@ -1,0 +1,26 @@
+Sprite assets for the Hack the North 2026 badge (320x240 screen, 42x42 icon).
+
+gen1-16/        151 PNG, uniform 16x16 RGBA, National Dex order
+                Cut from a community pixel-art sheet of all 151 Gen 1
+                Pokemon by @balavicknesh. The sheet draws each creature on a
+                16x16 canvas upscaled 6x; tools/cut_sheet.py recovers the
+                native pixels, so these are the artist's exact art, not a
+                downsample. One sprite (089 Muk) measured 17 wide and lost a
+                single column of WebP bleed.
+
+iconic-36/      Curated picks grouped by type, contributed separately.
+
+app-icon-42.png 42x42, the launcher icon. Feed it to the IDE's Choose image,
+                which converts to icon.bin (5,304 bytes, LVGL RGB565A8).
+
+These are fan art of Nintendo / Game Freak characters. Treat them as the
+hackathon assets they are; do not redistribute.
+
+Regenerate
+  python3 tools/cut_sheet.py --sheet     re-cut gen1-16 from the source sheet
+  python3 tools/gen_dex16.py             rebuild app/dex16.txt from gen1-16
+
+Removed 2026-09-19: the PokeAPI and veekun dumps (pokeapi/, veekun/,
+standard-96x96/, shiny-96x96/, icons-32/ - 25,522 files, 164 MB). They fed a
+photo-downsampling pipeline that gen1-16 replaced outright. Recover with
+git checkout <commit-before-removal> -- sprites/ if ever needed.
