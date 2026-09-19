@@ -193,10 +193,23 @@ entry into and exit from OMEGA is tested on chain, but the rendered turn is
 only checked geometrically — that the direction of travel changes by more than
 a threshold — not against how a real animal turns.
 
-**12. Idle means PAUSE, and a paused worm stands still.** With nobody touching
-it, both drives sit near 0.016, under the classifier's release threshold, so
-the honest output is PAUSE. A permanent small stimulus would keep it crawling
-and would be a fabrication.
+**12. The demo touches the worm for you, and that is why it moves.** With
+nobody touching it, both drives sit near 0.016, under the classifier's
+release threshold, so the honest output is PAUSE — and `body.ts` returns
+early on PAUSE, meaning a genuinely untouched animal is not slow, it is
+frozen. Because a frozen animal is also a blank demo, the relay stimulates
+ALML or PLML itself every 22 seconds while a viewer is present, alternating
+head and tail. Each one buys roughly 20 seconds of reverse, omega turn and
+forward before the classifier settles back to PAUSE.
+
+Nothing about that motion is emergent. It is the same escape response a click
+produces, triggered by a timer in `relay.mjs` instead of by you, and it is
+logged as `auto-stim` / `auto-rel` rather than `stimulate` / `release` so the
+transaction panel never passes off an injected stimulus as spontaneous
+behaviour. Set `AUTO_TOUCH_MS = 0` in `wormed/web/relay.mjs` for the older
+click-to-move demo, in which the animal stands still until asked. The
+automatic touches cost about 2,000 units/minute on top of the stepper's
+4,500.
 
 **13. The geometry is measured; where a synapse is drawn is not.** Neuron
 shapes and soma positions come from the tracing and are checked against known

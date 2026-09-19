@@ -39,6 +39,28 @@ const VIEWER_TTL_MS = 15_000;
 // touch and any touch wakes it.
 const IDLE_MS = 180_000;
 
+// --- idle motion -----------------------------------------------------------
+// An untouched worm classifies as PAUSE and a paused worm stands still, which
+// is the honest output and is also a frozen screen: a visitor who never
+// clicks sees a dead animal. So the relay touches it on a timer while
+// somebody is watching.
+//
+// This is a DEMO AFFORDANCE, and the log says so — the rows read `auto-stim`
+// and `auto-rel`, never a plain `stimulate` — because the motion it produces
+// is a response to a stimulus THIS PROCESS injected, not locomotion emerging
+// from the connectome. Downstream nothing can tell an automatic touch from a
+// clicked one, which is exactly why the label has to live here.
+//
+// A touch buys about 20 s of movement (reverse, omega, forward, then back to
+// PAUSE), so this interval keeps the animal nearly always moving. It is not
+// free: four extra transactions per touch, roughly 2,000 units/minute on top
+// of the stepper's 4,500. Set to 0 to switch it off and go back to
+// click-to-move.
+const AUTO_TOUCH_MS = 22_000;
+// Head touch drives reverse, tail touch drives forward. Alternating gives
+// both, and an omega turn each time the stimulus is released.
+const AUTO_NEURONS = ["ALML", "PLML"];
+
 // Both are overwritten by the worker's first reply — deploy.py's
 // BALANCE_FLOOR and FAUCET_REFILL are the one definition (R19).
 let balance = Infinity;
@@ -48,6 +70,8 @@ let stepping = false;
 let workerAlive = true;
 let viewerSeen = 0;
 let wakeAt = 0;
+let autoAt = 0;
+let autoIdx = 0;
 const log = [];
 
 function note(entry) {
@@ -144,7 +168,21 @@ async function stepperLoop() {
   for (;;) {
     if (awake() && balance >= floor) {
       stepping = true;
-      await stepperCycle();
+      if (AUTO_TOUCH_MS > 0 && Date.now() - autoAt >= AUTO_TOUCH_MS) {
+        autoAt = Date.now();
+        // Guarded because this runs INSIDE the forever-loop: a throw here
+        // escapes it and stepping stops for good, with the HUD still
+        // claiming the relay is fine. chain() resolves rather than rejects
+        // on a failed transaction, so this should never fire — which is
+        // precisely why it would be invisible if it did.
+        try {
+          await touch(AUTO_NEURONS[autoIdx++ % AUTO_NEURONS.length], true);
+        } catch (e) {
+          note({ op: "auto-stim", error: String(e && e.message || e) });
+        }
+      } else {
+        await stepperCycle();
+      }
     } else {
       stepping = false;
       await new Promise(r => setTimeout(r, 500));
@@ -158,11 +196,11 @@ async function stepperLoop() {
 // it, and the classifier only leaves REVERSE for the omega turn once the
 // reversal drive falls back under THRESH_OFF (worm.c do_classify). A touch
 // that is never released leaves the animal reversing forever.
-async function touch(neuron) {
-  await chain("stimulate", { op: "stimulate", neuron, mV: STIM_MV });
+async function touch(neuron, auto = false) {
+  await chain(auto ? "auto-stim" : "stimulate", { op: "stimulate", neuron, mV: STIM_MV });
   await chain("step", { op: "step", n: TOUCH_STEPS, settleEvery: SETTLE_EVERY });
   await chain("classify", { op: "classify" });
-  await chain("release", { op: "stimulate", neuron, mV: 0.0 });
+  await chain(auto ? "auto-rel" : "release", { op: "stimulate", neuron, mV: 0.0 });
 }
 
 function json(res, code, body) {
@@ -200,6 +238,9 @@ createServer((req, res) => {
       if (!await affordable()) { json(res, 503, brokeError()); return; }
       viewerSeen = Date.now();
       wakeAt = Date.now();
+      // A click restarts the idle timer: the worm is already about to move,
+      // so an automatic touch on top would only spend for nothing.
+      autoAt = Date.now();
       json(res, 202, { queued: neuron, balance });
       touch(neuron).catch(e => console.error("relay: touch failed", e));
     });

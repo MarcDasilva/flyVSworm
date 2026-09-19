@@ -15,7 +15,9 @@ const WALL_H = 0.42;       // rim height in body lengths; the worm is 1.0 long
 const WALL_T = 0.11;       // rim thickness
 const SOIL_D = 0.35;       // soil depth below the floor
 const STAND_TOP = 0.45;    // plinth top, a hair above the rim
-const LAPTOP_SCALE = 0.18; // the .abc ships ~4.45 units wide; this is ~0.8
+const STAND_W = 1.7;       // plinth footprint; must stay wider than the laptop
+const STAND_D = 1.15;      //   or the machine overhangs its own table
+const LAPTOP_SCALE = 0.24; // the .abc ships ~4.45 units wide; this is ~1.1
 
 /**
  * Dirt without an image file: white noise for grain, dark blobs for grit. The
@@ -54,12 +56,16 @@ export function buildTerrarium(scene: THREE.Scene): THREE.Group {
   const group = new THREE.Group();
   const tex = dirt();
   tex.repeat.set(6, 6);
+  // The texture is tinted DOWN here rather than at the pixels, so the grain
+  // and the grit blobs keep their contrast against each other instead of
+  // being crushed together into flat mud.
   const soil = new THREE.MeshStandardMaterial({
-    color: 0xffffff, map: tex, bumpMap: tex, bumpScale: 0.6, roughness: 1,
+    color: 0x6b5744, map: tex, bumpMap: tex, bumpScale: 0.6, roughness: 1,
   });
-  // The plinth is darker than the soil or the laptop sits on camouflage.
+  // The plinth stays darker still than the soil, or the laptop sits on
+  // camouflage.
   const stone = new THREE.MeshStandardMaterial({
-    color: 0x6f6257, map: tex, bumpMap: tex, bumpScale: 0.4, roughness: 0.9,
+    color: 0x3d372f, map: tex, bumpMap: tex, bumpScale: 0.4, roughness: 0.9,
   });
 
   const w = ARENA.halfX + WALL_T, d = ARENA.halfY + WALL_T;
@@ -78,8 +84,11 @@ export function buildTerrarium(scene: THREE.Scene): THREE.Group {
   box(WALL_T, WALL_H, d * 2, w - WALL_T / 2, WALL_H / 2, 0);
 
   // The plinth stands OUTSIDE the rim: inside it, the worm would crawl into a
-  // pillar the body integrator knows nothing about.
-  box(1.0, STAND_TOP + SOIL_D, 0.7, 0, (STAND_TOP - SOIL_D) / 2, d + 0.5, stone);
+  // pillar the body integrator knows nothing about. Its near face is placed
+  // flush against the rim rather than at a fixed offset, so resizing it
+  // cannot push it into the terrarium wall.
+  box(STAND_W, STAND_TOP + SOIL_D, STAND_D,
+      0, (STAND_TOP - SOIL_D) / 2, d + STAND_D / 2, stone);
 
   scene.add(group);
   return group;
@@ -116,11 +125,17 @@ export async function loadLaptop(scene: THREE.Scene): Promise<THREE.Group> {
   });
 
   group.scale.setScalar(LAPTOP_SCALE);
-  // The lid opens past vertical towards -z. Face-on to the camera it hides
-  // its own keyboard and reads as a floating panel, so the prop is turned
-  // three-quarters: screen still lit towards the viewer, body still legible.
-  group.rotation.y = Math.PI * 0.78;
-  group.position.set(0, STAND_TOP, ARENA.halfY + WALL_T + 0.5);
+  // Square to the table, screen towards the viewer.
+  group.rotation.y = 0;
+
+  // Sit it ON the table rather than trusting the model's origin to be at its
+  // feet: the origin is wherever the .abc author left it, so at any other
+  // scale a fixed y either sinks the machine into the plinth or floats it.
+  // Measure the rotated, scaled bounds and drop the base onto STAND_TOP.
+  group.position.set(0, 0, ARENA.halfY + WALL_T + STAND_D / 2);
+  group.updateMatrixWorld(true);
+  const bounds = new THREE.Box3().setFromObject(group);
+  group.position.y = STAND_TOP - bounds.min.y;
   scene.add(group);
   return group;
 }
