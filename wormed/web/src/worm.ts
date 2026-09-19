@@ -15,19 +15,16 @@ const HEAD_EXP = 0.30;     // low exponent = blunt nose
 const TAIL_EXP = 0.85;     // high exponent = long whip tail
 const TRAIL_MAX = 800;     // samples; at TRAIL_STEP apart that is ~12 L of track
 const TRAIL_STEP = 0.015;  // do not sample a nose that has not moved
-const GRID_CELL = 0.25;    // agar lattice pitch, quarter of a body length
-const GRID_CELLS = 32;     // lattice reaches GRID_CELLS * GRID_CELL either way
 
 /**
- * The worm, its agar, and the track it has crawled.
+ * The worm and the track it has crawled, drawn in WORLD coordinates.
  *
- * THE TREADMILL: the worm crawls 0.26 body lengths per second and never stops,
- * so in ten seconds it is 2.6 L from where it started and in two minutes it is
- * 30 L away — off any fixed plane and out of any fixed frustum. The scene is
- * therefore drawn in the worm's frame: mid-body is pinned to the origin and the
- * agar lattice and the trail slide past it. The camera and the brain above it
- * can then stay put and the user's orbit is never yanked around. The cost is
- * that absolute position is not visible, which nothing in this demo needs.
+ * An unbounded worm crawls 0.26 body lengths a second and is 30 L away after
+ * two minutes, which is why this used to be a treadmill with the animal
+ * pinned at the origin. The pen (props.ts ARENA, enforced in body.ts) is what
+ * replaced it: the worm now stays in frame because it cannot leave, so the
+ * ground and the terrarium around it are FIXED and the camera never moves.
+ * The soil comes from props.ts — this class owns the animal, not the set.
  */
 export class WormMesh {
   readonly group = new THREE.Group();
@@ -38,44 +35,20 @@ export class WormMesh {
   private readonly rings: THREE.Vector3[] = [];
   private readonly cos: Float32Array;
   private readonly sin: Float32Array;
-  private readonly centre = new THREE.Vector3();
-  private readonly grid: THREE.LineSegments;
   private readonly trail: THREE.Line;
   private readonly trailBuf: Float32Array;
   private trailCount = 0;
 
   constructor(scene: THREE.Scene) {
-    const agar = new THREE.Mesh(
-      new THREE.PlaneGeometry(40, 40, 1, 1),
-      new THREE.MeshStandardMaterial({ color: 0x16211d, roughness: 0.95 }));
-    agar.rotation.x = -Math.PI / 2;
-    this.group.add(agar);
-
-    // The lattice is what makes the treadmill read as motion. It is snapped to
-    // a world-space grid modulo GRID_CELL, so it slides under a worm that is
-    // itself never translated — remove it and the worm looks like it is
-    // running on the spot.
-    const g: number[] = [];
-    for (let i = -GRID_CELLS; i <= GRID_CELLS; i++) {
-      const u = i * GRID_CELL, e = GRID_CELLS * GRID_CELL;
-      g.push(u, 0, -e, u, 0, e, -e, 0, u, e, 0, u);
-    }
-    this.grid = new THREE.LineSegments(
-      new THREE.BufferGeometry().setAttribute("position",
-        new THREE.Float32BufferAttribute(g, 3)),
-      new THREE.LineBasicMaterial({ color: 0x2b4038, transparent: true, opacity: 0.35 }));
-    this.grid.position.y = 0.001;
-    this.group.add(this.grid);
-
     this.trailBuf = new Float32Array(TRAIL_MAX * 3);
     const trailGeo = new THREE.BufferGeometry();
     trailGeo.setAttribute("position", new THREE.BufferAttribute(this.trailBuf, 3));
     trailGeo.setDrawRange(0, 0);
     this.trail = new THREE.Line(trailGeo, new THREE.LineBasicMaterial({
       color: 0x4e7f6d, transparent: true, opacity: 0.7 }));
-    // Trail vertices are WORLD coordinates that drift with the crawl while the
-    // object is offset back to the worm, so any bounding sphere three computes
-    // is stale one frame later and culls the trail at random camera angles.
+    // Trail vertices are WORLD coordinates appended in place, so any bounding
+    // sphere three computes is stale one frame later and culls the track at
+    // random camera angles.
     this.trail.frustumCulled = false;
     this.trail.position.y = 0.002;
     this.group.add(this.trail);
@@ -113,9 +86,9 @@ export class WormMesh {
     }
     geo.setIndex(idx);
     // Pinned, NEVER computed: every position is rewritten each frame, so a
-    // cached sphere would describe the previous pose. Mid-body sits at the
-    // origin and the body reaches half a length either way.
-    geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 0.8);
+    // cached sphere would describe the previous pose. The worm roams the pen,
+    // so the sphere has to cover the whole pen, not one body length.
+    geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 4);
     this.mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
       color: 0xd8cfa8, roughness: 0.35, transparent: true, opacity: 0.94 }));
     this.mesh.position.y = RADIUS;   // the body rests ON the agar, not in it
@@ -134,13 +107,9 @@ export class WormMesh {
       const p = points[i];
       pts[i].set(p[0], 0, p[1]);
     }
-    this.centre.copy(pts[pts.length >> 1]);
-
-    for (let j = 0; j <= RINGS; j++) {
-      this.curve.getPoint(j / RINGS, this.rings[j]).sub(this.centre);
-    }
+    for (let j = 0; j <= RINGS; j++) this.curve.getPoint(j / RINGS, this.rings[j]);
     this.writeTube();
-    this.slideWorld(pts[0]);
+    this.extendTrail(pts[0]);
   }
 
   /**
@@ -177,15 +146,8 @@ export class WormMesh {
     this.nrmAttr.needsUpdate = true;
   }
 
-  /** Slides agar and trail under a worm that is drawn at the origin. */
-  private slideWorld(nose: THREE.Vector3): void {
-    const cx = this.centre.x, cz = this.centre.z;
-    const mod = (v: number) => v - Math.floor(v / GRID_CELL) * GRID_CELL;
-    this.grid.position.x = -mod(cx);
-    this.grid.position.z = -mod(cz);
-    this.trail.position.x = -cx;
-    this.trail.position.z = -cz;
-
+  /** The crawl track, in world coordinates, newest sample last. */
+  private extendTrail(nose: THREE.Vector3): void {
     const n = this.trailCount;
     const far = n === 0 || Math.hypot(
       nose.x - this.trailBuf[(n - 1) * 3], nose.z - this.trailBuf[(n - 1) * 3 + 2]

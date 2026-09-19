@@ -62,6 +62,27 @@ def objects(f, blocks):
     return out
 
 
+def names(f, blocks, count):
+    """The parent group's trailing data block names its children: a u32
+    length, the name, one separator byte. Names are what the web scene keys
+    the screen material off, so a miss falls back to positional parts."""
+    for i in range(count + 1, count + 4):
+        blk = blocks.get('/2/1/%d' % i)
+        if not blk:
+            continue
+        off, size = blk
+        out, at = [], off
+        while at < off + size and len(out) < count:
+            n, = struct.unpack_from('<I', f, at)
+            if n <= 0 or n > 64:
+                break
+            out.append(f[at + 4:at + 4 + n].decode('utf8', 'replace'))
+            at += 5 + n
+        if len(out) == count:
+            return out
+    return ['part%d' % i for i in range(count)]
+
+
 def triangles(pos, idx, cnt, m):
     """Alembic winds faces clockwise where three.js wants counter-clockwise,
     so each fan is emitted reversed — otherwise the whole model renders
@@ -92,7 +113,11 @@ def main(src, dst):
         t = triangles(pos, idx, cnt, m)
         parts.append(len(t) // 9)
         floats.extend(t)
-    header = json.dumps({'parts': parts}).encode()
+    header = json.dumps({'parts': parts,
+                         'names': names(f, blocks, len(parts))}).encode()
+    # The reader takes a Float32Array VIEW straight onto the payload, which
+    # throws unless the header leaves it 4-byte aligned.
+    header += b' ' * (-(len(header) + 4) % 4)
     with open(dst, 'wb') as o:
         o.write(struct.pack('<I', len(header)))
         o.write(header)

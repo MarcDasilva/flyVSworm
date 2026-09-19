@@ -11,6 +11,7 @@ import { readFileSync } from "node:fs";
 import * as THREE from "three";
 import { WormBody, type BehaviorState } from "./body.js";
 import { WormMesh } from "./worm.js";
+import { ARENA } from "./props.js";
 import { BrainCloud, parseMorphology } from "./brain.js";
 
 const DATA = new URL("../../data/", import.meta.url);
@@ -75,7 +76,7 @@ function instanced(root: THREE.Object3D): THREE.InstancedMesh[] {
 }
 
 const scene = new THREE.Scene();
-const body = new WormBody(24);
+const body = new WormBody(24, ARENA);
 const worm = new WormMesh(scene);
 const brain = new BrainCloud(scene, positions, names, morphology);
 
@@ -290,36 +291,32 @@ for (const cell of ["ALML", "ALMR", "AVM", "AVDL", "AVDR", "AVAL", "AVAR",
 }
 assert.equal(brain.labelIndex("NOSUCHCELL"), -1);
 
-// THE TREADMILL. Ten seconds of forward crawl is 2.6 body lengths — off the
-// plan's 6x6 plate in half a minute and out of a fixed frustum sooner. The
-// worm is redrawn at the origin every frame, so its geometry must stay inside
-// the pinned bounding sphere no matter how far it has travelled.
+// THE PEN. Ten seconds of forward crawl is 2.6 body lengths — far enough to
+// leave any fixed plate, which is why the animal is confined instead of
+// recentred. Every drawn vertex must stay over the soil, or the worm is
+// rendered crawling through the dirt wall while the integrator thinks it is
+// inside.
 for (let f = 0; f < 600; f++) {
   body.update(DT, FWD);
   worm.update(body.points);
 }
 const travelled = Math.hypot(body.points[0][0], body.points[0][1]);
-assert.ok(travelled > 2, `worm only travelled ${travelled} L in 10 s — body model stalled`);
+assert.ok(travelled > 0.5, `worm only travelled ${travelled} L in 10 s — body model stalled`);
 
 const tube = scene.getObjectByProperty("type", "Mesh") as THREE.Mesh | undefined;
-let far = 0;
-let finite = true;
-scene.traverse(o => {
-  const m = o as THREE.Mesh;
-  if (!m.geometry || m.geometry.boundingSphere?.radius !== 0.8) return;
-  const p = m.geometry.attributes.position.array as Float32Array;
-  for (let i = 0; i < p.length; i++) {
-    if (!Number.isFinite(p[i])) finite = false;
-    far = Math.max(far, Math.abs(p[i]));
-  }
-});
 assert.ok(tube, "no worm mesh in the scene");
+const p = tube.geometry.attributes.position.array as Float32Array;
+let finite = true, outX = 0, outZ = 0;
+for (let i = 0; i < p.length; i += 3) {
+  if (!Number.isFinite(p[i]) || !Number.isFinite(p[i + 1]) || !Number.isFinite(p[i + 2])) finite = false;
+  outX = Math.max(outX, Math.abs(p[i]) - ARENA.halfX);
+  outZ = Math.max(outZ, Math.abs(p[i + 2]) - ARENA.halfY);
+}
 assert.ok(finite, "worm geometry contains NaN");
-assert.ok(far > 0.1, "worm geometry is degenerate");
-assert.ok(far < 0.8,
-  `worm geometry reaches ${far} from the origin after ${travelled.toFixed(2)} L of crawl — ` +
-  "the recentring is broken and the worm will leave the frame");
+// The body is a tube of radius 0.034 around a centreline that is clamped ON
+// the boundary, so half a body width of overhang is the most that is sane.
+assert.ok(outX < 0.04 && outZ < 0.04,
+  `worm reaches ${outX.toFixed(3)} past the x wall and ${outZ.toFixed(3)} past the z wall`);
 
 console.log(`OK: scene holds ${base.objects} objects, ${base.materials} materials ` +
-  `across 120 frames; worm crawled ${travelled.toFixed(2)} L and stayed within ` +
-  `${far.toFixed(3)} of the origin`);
+  `across 120 frames; worm crawled ${travelled.toFixed(2)} L and stayed in the pen`);

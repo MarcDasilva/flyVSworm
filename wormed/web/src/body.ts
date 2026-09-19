@@ -1,4 +1,6 @@
 export type BehaviorState = { state: 0 | 1 | 2 | 3; gain: number };
+/** Half-extents of the pen, in body coordinates. See props.ts ARENA. */
+export type Arena = { halfX: number; halfY: number };
 export type Vec3 = [number, number, number];
 
 /** Behavior codes exactly as the on-chain classifier emits them (SPEC.md 3.2). */
@@ -31,6 +33,16 @@ const GAIN_MIN = 0.2, GAIN_MAX = 1.5;
 // also how far the tail must back through stale forward track before a
 // reversal starts laying its own, so it buys headroom without stalling REVERSE.
 const PATH_SLACK = 0.05;             // fraction of L
+
+// Walls. A worm that meets a barrier turns along it and, if it is nose-on,
+// curls hard away — so proximity steers and contact turns sharper. The chain
+// still owns state and gain; this only bends WHERE the animal goes, never
+// whether it moves. Without the steer the clamp alone would bunch the whole
+// body into one corner.
+const WALL_FEEL = 0.30;   // body lengths from the wall where the turn begins
+const WALL_YAW = 7.0;     // rad/s of turn at the wall
+const WALL_BUMP = 2.0;    // extra turn once the leading end is touching
+const WALL_TOUCH = 0.02;  // "touching" — inside this the position is clamped
 
 // The path resolves the body curve at one point per sub-step, so a slow frame
 // would otherwise coarsen the worm's shape. Frame time comes from
@@ -69,7 +81,8 @@ export class WormBody {
   private readonly bodySpan: number;
   private readonly keep: number;
 
-  constructor(private readonly segments = 24) {
+  constructor(private readonly segments = 24,
+              private readonly arena?: Arena) {
     this.seg = BODY_LENGTH_MM / segments;
     this.bodySpan = (segments - 1) * this.seg;
     this.keep = this.bodySpan + PATH_SLACK * BODY_LENGTH_MM;
@@ -124,8 +137,11 @@ export class WormBody {
     const n = this.path.length;
     const tip = reverse ? this.path[n - 1] : this.path[0];
     const prev = reverse ? this.path[n - 2] : this.path[1];
-    const heading = Math.atan2(tip[1] - prev[1], tip[0] - prev[0]) + yaw * dt;
+    const facing = Math.atan2(tip[1] - prev[1], tip[0] - prev[0]);
+    yaw += this.wallYaw(tip, facing);
+    const heading = facing + yaw * dt;
     const next: Vec3 = [tip[0] + Math.cos(heading) * d, tip[1] + Math.sin(heading) * d, 0];
+    this.confine(next);
 
     if (reverse) {
       this.path.push(next);
@@ -136,6 +152,37 @@ export class WormBody {
       this.pathLen += d;
       this.trimBack();
     }
+  }
+
+  /**
+   * Turn rate that keeps the leading end off the walls: proportional to how
+   * far the tip has to swing to face back inside, ramped up by how close it
+   * is. The clamp on the returned angle is what makes a nose-on approach
+   * curl instead of dithering between two equally good ways round.
+   */
+  private wallYaw(tip: Vec3, facing: number): number {
+    if (!this.arena) return 0;
+    const dx = this.arena.halfX - Math.abs(tip[0]);
+    const dy = this.arena.halfY - Math.abs(tip[1]);
+    const prox = Math.min(dx, dy);
+    if (prox > WALL_FEEL) return 0;
+    // Inward normal of the NEAREST wall — the only one worth turning from.
+    const inward = dx < dy
+      ? Math.atan2(0, -Math.sign(tip[0] || 1))
+      : Math.atan2(-Math.sign(tip[1] || 1), 0);
+    let diff = inward - facing;
+    while (diff > Math.PI) diff -= 2 * Math.PI;
+    while (diff < -Math.PI) diff += 2 * Math.PI;
+    const strength = (1 - Math.max(0, prox) / WALL_FEEL)
+      * (prox < WALL_TOUCH ? WALL_BUMP : 1);
+    return WALL_YAW * strength * Math.max(-1, Math.min(1, diff));
+  }
+
+  /** The hard guarantee: NO point of the track ever leaves the pen. */
+  private confine(p: Vec3): void {
+    if (!this.arena) return;
+    p[0] = Math.max(-this.arena.halfX, Math.min(this.arena.halfX, p[0]));
+    p[1] = Math.max(-this.arena.halfY, Math.min(this.arena.halfY, p[1]));
   }
 
   /** REVERSE only: the nose retreats along the track, so drop that arc. */

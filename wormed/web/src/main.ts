@@ -4,6 +4,7 @@ import { WormBody, BEHAVIOR, type BehaviorState } from "./body.js";
 import { WormMesh } from "./worm.js";
 import { BrainCloud, parseMorphology } from "./brain.js";
 import { ChainFeed, type Behavior, type ChainConfig, type RelayStatus } from "./chain.js";
+import { ARENA, buildTerrarium, loadLaptop } from "./props.js";
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0b0f14);
@@ -17,15 +18,15 @@ rim.position.set(-3, 2, -2);
 scene.add(rim);
 
 const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.01, 100);
-camera.position.set(0, 2.0, 1.9);
+camera.position.set(0, 2.8, 4.2);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 document.body.appendChild(renderer.domElement);
-// The worm is redrawn at the origin every frame (see WormMesh), so the orbit
-// target is fixed and the camera NEVER chases a wandering animal.
+// The worm cannot leave the pen (props.ts ARENA, enforced in body.ts), so the
+// orbit target is the pen itself and the camera NEVER chases the animal.
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.set(0, 0.50, 0);
+controls.target.set(0, 0.5, 0);
 controls.enableDamping = true;
 controls.maxPolarAngle = Math.PI * 0.49;   // stay above the agar
 controls.update();
@@ -46,9 +47,12 @@ const [positions, names, morphology] = await Promise.all([
   fetch("/morphology.bin").then(r => r.arrayBuffer()).then(parseMorphology),
 ]);
 
-const body = new WormBody(24);
+const body = new WormBody(24, ARENA);
 const worm = new WormMesh(scene);
 const brain = new BrainCloud(scene, positions, names, morphology);
+buildTerrarium(scene);
+// The desk prop is 1.5 MB and nothing waits on it — the worm runs while it loads.
+void loadLaptop(scene).catch(e => console.warn("laptop model failed to load", e));
 brain.setResolution(innerWidth, innerHeight);
 
 // ---------------------------------------------------------------------------

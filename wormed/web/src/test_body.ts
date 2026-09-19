@@ -167,6 +167,41 @@ function assertInextensible(w: WormBody, where: string) {
     `frame rate changed the distance travelled: ${df} vs ${ds}`);
 }
 
+// THE PEN. A confined worm must stay in it under every state, must roam it
+// rather than settle into a rut along one wall, and must NOT solve the wall
+// by grinding to a halt against it — which a position clamp alone does.
+{
+  const pen = { halfX: 1.8, halfY: 1.2 };
+  const w = new WormBody(SEGMENTS, pen);
+  let far = -Infinity, near = 0;
+  const lo = [Infinity, Infinity], hi = [-Infinity, -Infinity];
+  for (let i = 0; i < 6000; i++) {
+    const b = i % 900 < 600 ? FWD : i % 900 < 750 ? OMEGA : REV;
+    w.update(DT, b);
+    assertInextensible(w, `penned frame ${i}`);
+    for (const pt of w.points) {
+      far = Math.max(far, Math.abs(pt[0]) - pen.halfX, Math.abs(pt[1]) - pen.halfY);
+      for (const k of [0, 1]) {
+        lo[k] = Math.min(lo[k], pt[k]);
+        hi[k] = Math.max(hi[k], pt[k]);
+      }
+    }
+    const [x, y] = w.points[0];
+    if (Math.abs(x) > pen.halfX - 0.3 || Math.abs(y) > pen.halfY - 0.3) near++;
+  }
+  assert.ok(far <= 1e-9, `worm escaped the pen by ${far}`);
+  assert.ok(near > 300, `worm never worked a wall (${near} frames) — the steering is untested`);
+  assert.ok(hi[0] - lo[0] > pen.halfX, `worm covered only ${hi[0] - lo[0]} L of x — stuck in a rut`);
+  assert.ok(hi[1] - lo[1] > pen.halfY, `worm covered only ${hi[1] - lo[1]} L of y — stuck in a rut`);
+
+  // Still crawling at the end: sampled over a whole undulation period so the
+  // body wave cannot pass for travel.
+  const before = [...w.points[0]];
+  run(w, Math.round(60 / 0.4), FWD);
+  assert.ok(dist(w.points[0], before) > 0.05,
+    `penned worm stalled against a wall: moved ${dist(w.points[0], before)}`);
+}
+
 // Garbage from the classifier must not produce NaN geometry — the renderer
 // would silently draw nothing.
 {
