@@ -165,3 +165,88 @@ def assign_physiology(c: Connectome) -> Physiology:
 
     p.params = [NeuronParam() for _ in c.names]
     return p
+
+
+# Anterior-posterior anchor per ganglion, 0.0 = nose, 1.0 = tail tip.
+# Source: WormAtlas ganglion organization.
+GANGLION_X = {
+    "pharynx": 0.03,
+    "anterior": 0.06, "dorsal": 0.10, "lateral": 0.13, "ventral": 0.17,
+    "retrovesicular": 0.28, "ventral_cord": 0.55, "preanal": 0.82,
+    "dorsorectal": 0.88, "lumbar": 0.93,
+}
+
+# Name-prefix -> ganglion. Longest prefix wins, so ordering matters.
+PREFIX_GANGLION = [
+    ("IL", "anterior"), ("OL", "anterior"), ("CEP", "anterior"), ("URA", "anterior"),
+    ("URB", "anterior"), ("URX", "anterior"), ("URY", "anterior"), ("BAG", "anterior"),
+    ("RME", "dorsal"), ("RMD", "dorsal"), ("RID", "dorsal"), ("ALA", "dorsal"),
+    ("AVA", "lateral"), ("AVB", "lateral"), ("AVD", "lateral"), ("AVE", "lateral"),
+    ("AVH", "lateral"), ("AVJ", "lateral"), ("AIA", "lateral"), ("AIB", "lateral"),
+    ("AIY", "lateral"), ("AIZ", "lateral"), ("RIA", "lateral"), ("RIB", "lateral"),
+    ("RIM", "lateral"), ("RIV", "lateral"), ("SMD", "lateral"), ("AWA", "lateral"),
+    ("AWB", "lateral"), ("AWC", "lateral"), ("ASE", "lateral"), ("ASH", "lateral"),
+    ("ADL", "lateral"), ("AFD", "lateral"), ("ALM", "lateral"), ("AVM", "ventral"),
+    ("RIH", "ventral"), ("RIF", "ventral"), ("RIG", "ventral"), ("AVK", "ventral"),
+    ("AVF", "retrovesicular"), ("AVG", "retrovesicular"), ("RIS", "retrovesicular"),
+    ("DA", "ventral_cord"), ("DB", "ventral_cord"), ("DD", "ventral_cord"),
+    ("VA", "ventral_cord"), ("VB", "ventral_cord"), ("VC", "ventral_cord"),
+    ("VD", "ventral_cord"), ("AS", "ventral_cord"),
+    ("PVC", "lumbar"), ("PVD", "lumbar"), ("PVW", "lumbar"), ("PVN", "lumbar"),
+    ("PLM", "lumbar"), ("PHA", "lumbar"), ("PHB", "lumbar"), ("PQR", "lumbar"),
+    ("PVP", "preanal"), ("PVT", "preanal"), ("DVA", "dorsorectal"),
+    ("DVB", "dorsorectal"), ("DVC", "dorsorectal"), ("PDA", "preanal"),
+    ("PDB", "preanal"), ("PVM", "ventral_cord"),
+    # TASK4: the brief's table covers only the 279 NeuronConnect neurons.
+    # These prefixes are for the 20 pharyngeal + CANL/CANR added in
+    # load_connectome (see NO_SYNAPSE_DATA_NEURONS) — without them every one
+    # of those cells falls through to the "lateral" default below, which
+    # would scatter the pharynx across the whole head instead of clustering
+    # it at the nose where it anatomically sits.
+    ("I1", "pharynx"), ("I2", "pharynx"), ("I3", "pharynx"), ("I4", "pharynx"),
+    ("I5", "pharynx"), ("I6", "pharynx"), ("M1", "pharynx"), ("M2", "pharynx"),
+    ("M3", "pharynx"), ("M4", "pharynx"), ("M5", "pharynx"), ("MC", "pharynx"),
+    ("MI", "pharynx"), ("NSM", "pharynx"),
+    ("CAN", "retrovesicular"),
+]
+
+
+def _ganglion_of(name: str) -> str:
+    for prefix, g in sorted(PREFIX_GANGLION, key=lambda kv: -len(kv[0])):
+        if name.startswith(prefix):
+            return g
+    return "lateral"
+
+
+def neuron_positions(c: Connectome) -> list[tuple[float, float, float]]:
+    """Worm-shaped point cloud: nerve ring cluster at the head, ventral cord
+    running the body, tail ganglion at the back. Deterministic — the same
+    connectome always yields the same layout, so replays line up."""
+    import hashlib, math
+    out = []
+    # Ventral-cord cells are numbered (DA1..DA9); the number IS the position.
+    cord_rank: dict[str, int] = {}
+    cord_names = sorted(n for n in c.names if _ganglion_of(n) == "ventral_cord")
+    for i, n in enumerate(cord_names):
+        cord_rank[n] = i
+    n_cord = max(len(cord_names) - 1, 1)
+
+    for name in c.names:
+        g = _ganglion_of(name)
+        if g == "ventral_cord":
+            x = 0.30 + 0.45 * (cord_rank[name] / n_cord)
+        else:
+            x = GANGLION_X[g]
+        # Deterministic radial scatter keyed on the name, so left/right pairs
+        # separate without a random seed.
+        h = int(hashlib.sha256(name.encode()).hexdigest()[:8], 16)
+        angle = (h % 3600) / 3600.0 * 2 * math.pi
+        radius = 0.35 + 0.55 * ((h >> 12) % 1000) / 1000.0
+        side = -1.0 if name.endswith("L") else (1.0 if name.endswith("R") else 0.0)
+        y = radius * math.cos(angle) + 0.25 * side
+        z = radius * math.sin(angle)
+        # Ventral cord sits ventrally, not scattered around the axis.
+        if g == "ventral_cord":
+            y, z = -0.75 + 0.1 * math.cos(angle), 0.15 * math.sin(angle)
+        out.append((x, max(-1.0, min(1.0, y)), max(-1.0, min(1.0, z))))
+    return out

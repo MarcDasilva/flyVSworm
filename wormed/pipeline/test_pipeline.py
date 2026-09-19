@@ -1,4 +1,4 @@
-from wormed.pipeline.connectome import load_connectome, assign_physiology
+from wormed.pipeline.connectome import load_connectome, assign_physiology, neuron_positions
 
 def test_connectome_has_302_neurons_and_expected_edge_counts():
     """The hermaphrodite connectome is a fixed, published quantity. If these
@@ -67,3 +67,23 @@ def test_conductance_scales_with_contact_count():
     lo = min(range(len(weights)), key=lambda i: weights[i])
     hi = max(range(len(weights)), key=lambda i: weights[i])
     assert p.chem_g[hi] > p.chem_g[lo]
+
+def test_positions_are_worm_shaped_not_a_hairball():
+    """A force-directed layout tells the viewer nothing. The point cloud must
+    be anatomically ordered: head cells anterior, tail cells posterior."""
+    c = load_connectome()
+    pos = neuron_positions(c)
+    assert len(pos) == 302
+    x = {n: pos[i][0] for i, n in enumerate(c.names)}
+    # ALM is an anterior touch cell; PLM is a posterior one. This ordering is
+    # the whole point of using real coordinates.
+    assert x["ALML"] < x["PLML"], "anterior/posterior axis is inverted or flat"
+    assert all(0.0 <= p[0] <= 1.0 for p in pos)
+    assert all(-1.0 <= p[1] <= 1.0 and -1.0 <= p[2] <= 1.0 for p in pos)
+
+def test_positions_are_spread_not_degenerate():
+    c = load_connectome()
+    pos = neuron_positions(c)
+    xs = sorted(p[0] for p in pos)
+    assert xs[-1] - xs[0] > 0.5, "all neurons collapsed onto one point"
+    assert len({round(p[0], 3) for p in pos}) > 50, "too many neurons share an x"
