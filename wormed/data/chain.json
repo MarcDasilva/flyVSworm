@@ -1,0 +1,9 @@
+{
+  "rpc": "https://rpc.alphanet.thru.org",
+  "programId": "taXILSqS99UxmqBxrvpcETPQ8j6zd-xmFmK6EQ5xFWrvgQ",
+  "behaviorAccount": "tajhrNzMu_nXNOkyERyuiS_sDP_Tb0RJILRDYrUoqV4Crn",
+  "reservoirAccount": "taRARRgTfVl7MaGLeUIycszvO26qMaaenSksc_nWRe2xuS",
+  "topologyAccount": "tarOrW5e0YnfXZ1xXHx2n2RFvl65kPL0xi6oemJ1vD8lo2",
+  "dtMs": 5,
+  "explorer": "https://scan.thru.org/tx/"
+}

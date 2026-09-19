@@ -13,6 +13,7 @@ payload, not the topology chunks).
 """
 import base64
 import concurrent.futures
+import functools
 import json
 import struct
 import subprocess
@@ -42,7 +43,12 @@ def _run_json(args: list[str]) -> dict:
     return json.loads(r.stdout)
 
 
+@functools.cache
 def _derive(seed: str) -> str:
+    """Cached for the life of the process. Derivation is a pure function of
+    the program id and the seed, and the relay worker (web/relay.mjs spawns
+    it) calls this six times per chain operation — uncached, that is ~2 s of
+    `thru` subprocess latency on top of every touch the demo serves."""
     d = _run_json(["program", "derive-address", _program_id(), seed])
     return d["derive_address"]["derived_address"]
 
@@ -192,6 +198,15 @@ FEE_STEP = 200
 # 3,607 CSR rows, not the 9,800 the spec budgeted for.
 FIXED_CU = 422_333
 MARGINAL_CU = 363_236
+# Measured 2026-09-19 on a 1-step run_steps(settle_every=1, emit, gap):
+# 1,338,112 CU against a pure-step prediction of 785,569, and again as
+# 11.2M over 20 settles in a 400-step run. Settlement and the trace event
+# are NOT free and the budget below MUST carry them: a step transaction
+# that requests too few units reverts with CU_EXHAUSTED (-764) AND IS STILL
+# CHARGED ITS FEE, so an undersized budget burns fee-payer balance for no
+# simulation at all.
+SETTLE_CU = 560_000
+
 REQ_COMPUTE_UNITS_MAX = 4_294_967_295  # req_compute_units is a uint32 — the
 # real per-transaction ceiling; the block-level figure (2.1e15) is not a
 # throttle a single transaction can hit.
@@ -204,6 +219,7 @@ REQ_COMPUTE_UNITS_MAX = 4_294_967_295  # req_compute_units is a uint32 — the
 STEPS_PER_TX = int((0.8 * REQ_COMPUTE_UNITS_MAX - FIXED_CU) // MARGINAL_CU)
 
 
+@functools.cache
 def _step_accounts() -> list[str]:
     """Thru sorts the ENTIRE writable account array ascending by address, so
     the three singletons interleave with the neurons wherever their
@@ -212,13 +228,19 @@ def _step_accounts() -> list[str]:
     this codebase — Python's sorted() on the raw address strings disagrees
     with the chain at effectively every position (task-9-report.md) and must
     never be substituted here, unlike the brief's literal draft of this
-    function."""
+    function.
+
+    Cached: the ordering is fixed once the 302 accounts exist, and every
+    step/stimulate/classify would otherwise pay a `thru txn sort` round trip
+    twice over. Callers MUST NOT mutate the returned list — they all share
+    the one instance."""
     addrs = json.loads((DATA / "addresses.json").read_text()) \
           + [_topology_account(), _reservoir_account(), _behavior_account()]
     order = _sort_order(addrs)
     return sorted(addrs, key=lambda a: order[a])
 
 
+@functools.cache
 def _slots() -> tuple[int, int, int]:
     """Account index of topology, reservoir, behavior in the sorted writable
     array _step_accounts() builds. Index 0 is the fee payer and index 1 is
@@ -267,7 +289,10 @@ def run_steps(n: int, settle_every: int = 0, emit: bool = False,
     # thru txn execute's own default (300,000,000) covers roughly the first
     # 824 steps; pass an explicit budget (50% margin over the measured
     # fixed+marginal cost) so larger n doesn't silently starve on CU.
-    compute_units = min(REQ_COMPUTE_UNITS_MAX, int(1.5 * (FIXED_CU + MARGINAL_CU * max(n, 1))))
+    chunks = -(-n // settle_every) if settle_every else 1
+    settle_cu = SETTLE_CU * chunks if flags & (1 | 2 | 8) else 0
+    compute_units = min(REQ_COMPUTE_UNITS_MAX,
+                        int(1.5 * (FIXED_CU + MARGINAL_CU * max(n, 1) + settle_cu)))
     out = _exec(_step_accounts(), payload.hex(), FEE_STEP, compute_units=compute_units)
     print(f"run_steps(n={n}, flags={flags}) -> {out['signature']} "
           f"cu={out['compute_units_consumed']} su={out['state_units_consumed']}")
@@ -435,3 +460,51 @@ def read_transfer_event(out: dict) -> list[tuple[int, int, int]]:
         )
         xs += [struct.unpack_from("<HHi", blob, 8 + 8 * k) for k in range(count)]
     return xs
+
+
+# --- Front-end handoff and the R19 balance preflight (Task 15) --------------
+
+# One touch costs 4 transactions (stimulate, step, classify, release) and one
+# stepper cycle costs 2, all at FEE_STEP. R19: the failure mode when the fee
+# payer runs dry is vm_error -509 INSUFFICIENT_FEE_PAYER_BALANCE, which reads
+# like a program fault three frames deep in a JSON dump — the floor exists so
+# the relay can say "run the faucet" instead. 20,000 units is ~50 touches or
+# ~4 minutes of continuous stepping: enough to finish whatever is on screen.
+BALANCE_FLOOR = 20_000
+FAUCET_REFILL = f"thru faucet withdraw {FEE_PAYER} 10000   # cap is 10,000 per call"
+
+
+def fee_payer_balance() -> int:
+    r = subprocess.run(["thru", "--json", "getbalance", FEE_PAYER],
+                       capture_output=True, text=True, check=True)
+    return int(json.loads(r.stdout)["balance"]["balance"])
+
+
+def _rpc_base_url() -> str:
+    """The browser talks to the same node the CLI does, or the demo animates
+    one chain's events while clicking buttons on another. The CLI keeps it in
+    a one-key-per-line YAML file; parsed by prefix rather than pulling in a
+    YAML dependency for a single scalar."""
+    cfg = Path.home() / ".thru" / "cli" / "config.yaml"
+    if cfg.exists():
+        for line in cfg.read_text().splitlines():
+            if line.startswith("rpc_base_url:"):
+                return line.split(":", 1)[1].strip()
+    return "https://rpc.alphanet.thru.org"
+
+
+def write_chain_config() -> None:
+    """data/chain.json is the ONLY thing the front-end needs to find the
+    chain: vite serves data/ at the URL root (web/vite.config.ts), so this
+    lands at /chain.json. Neuron identity is NOT in here — trace and transfer
+    events carry dense indices in names.json order, so the browser never
+    resolves an address."""
+    (DATA / "chain.json").write_text(json.dumps({
+        "rpc": _rpc_base_url(),
+        "programId": _program_id(),
+        "behaviorAccount": _behavior_account(),
+        "reservoirAccount": _reservoir_account(),
+        "topologyAccount": _topology_account(),
+        "dtMs": 5,
+        "explorer": "https://scan.thru.org/tx/",
+    }, indent=2) + "\n")

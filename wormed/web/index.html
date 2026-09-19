@@ -8,9 +8,16 @@
            border: 1px solid #334155; border-radius: 6px; cursor: pointer;
            font: inherit; }
   button:hover { background: #334155; }
-  #feed { position: fixed; right: 16px; top: 16px; width: 320px; height: 70vh;
-          overflow: hidden; font-size: 11px; line-height: 1.6; opacity: 0.85;
-          white-space: pre; text-align: right; pointer-events: none; }
+  #hud { position: fixed; right: 16px; top: 16px; width: 360px;
+         font-size: 11px; line-height: 1.6; opacity: 0.85;
+         white-space: pre; text-align: right; pointer-events: none; }
+  /* The signature rows are LINKS into the explorer, so this half of the
+     overlay must accept clicks where #hud must not. */
+  #feed { position: fixed; right: 16px; top: 220px; width: 360px; height: 60vh;
+          overflow: hidden; font-size: 11px; line-height: 1.7; opacity: 0.85;
+          text-align: right; }
+  #feed a { color: #7dd3fc; text-decoration: none; }
+  #feed a:hover { text-decoration: underline; }
   #hint { position: fixed; left: 16px; bottom: 16px; font-size: 11px;
           opacity: 0.55; }
 </style></head>
@@ -19,7 +26,8 @@
     <button id="touch-head">Touch head</button>
     <button id="touch-tail">Touch tail</button>
   </div>
+  <div id="hud"></div>
   <div id="feed"></div>
-  <div id="hint">drag to orbit &middot; scroll to zoom &middot; mock data, no chain</div>
+  <div id="hint">drag to orbit &middot; scroll to zoom &middot; live on Thru alphanet</div>
   <script type="module" src="/src/main.ts"></script>
 </body></html>

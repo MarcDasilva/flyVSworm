@@ -3,6 +3,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { WormBody, BEHAVIOR, type BehaviorState } from "./body.js";
 import { WormMesh } from "./worm.js";
 import { BrainCloud } from "./brain.js";
+import { ChainFeed, type Behavior, type ChainConfig, type RelayStatus } from "./chain.js";
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0b0f14);
@@ -48,130 +49,112 @@ const worm = new WormMesh(scene);
 const brain = new BrainCloud(scene, positions, names, edges);
 
 // ---------------------------------------------------------------------------
-// MOCK DRIVER. Task 15 deletes everything below the line and feeds the SAME
-// three calls — behavior, setVoltages, fireEdge — from the chain stream. It is
-// a plausible-looking animation and NOT a simulation; nothing here is a claim
-// about the connectome.
+// CHAIN DRIVER. Every number below is read off Thru: voltages and synaptic
+// transfers from the program's own events, behavior from the behavior
+// account. Nothing here invents motion — if the chain says PAUSE, the animal
+// stands still.
 // ---------------------------------------------------------------------------
-
-type Beat = { state: BehaviorState["state"]; gain: number; secs: number };
-let behavior: BehaviorState = { state: BEHAVIOR.FORWARD, gain: 1 };
-let script: Beat[] = [];
-
-/** Seconds left on the current beat. Infinity == hold this state forever. */
-let hold = Infinity;
-
-function play(beats: Beat[]): void {
-  script = beats.slice();
-  const first = script.shift();
-  if (first) behavior = { state: first.state, gain: first.gain };
-  hold = first ? first.secs : Infinity;
-}
-
-function advance(dt: number): void {
-  if (!Number.isFinite(hold)) return;
-  hold -= dt;
-  if (hold > 0) return;
-  const next = script.shift();
-  behavior = next ? { state: next.state, gain: next.gain }
-                  : { state: BEHAVIOR.FORWARD, gain: 1 };
-  hold = next ? next.secs : Infinity;
-}
+const cfg = await (await fetch("/chain.json")).json() as ChainConfig;
+const feed = new ChainFeed(cfg);
+const stop = new AbortController();
+addEventListener("beforeunload", () => stop.abort());
 
 const n = names.length;
-const mV = new Int16Array(n);
-const rest = new Float32Array(n);
-const phase = new Float32Array(n);
-const rate = new Float32Array(n);
-for (let i = 0; i < n; i++) {
-  rest[i] = -70 + (i * 7919 % 13);
-  phase[i] = (i * 2654435761 % 1000) / 1000 * Math.PI * 2;
-  rate[i] = 0.4 + (i * 104729 % 100) / 100 * 1.2;
-}
-const boost = new Float32Array(n);   // decaying depolarisation, per neuron
-let arousal = 0.12;
-let clock = 0;
+let behavior: BehaviorState = { state: BEHAVIOR.PAUSE, gain: 0 };
+let chainBehavior: Behavior | undefined;
+// A frame's mV is a VIEW over the received gRPC buffer (chain.ts), which
+// TypeScript types as ArrayBufferLike — annotate or the first assignment
+// from the chain will not fit a locally allocated Int16Array.
+let voltages: Int16Array<ArrayBufferLike> = new Int16Array(n).fill(-70);
+let status: RelayStatus | undefined;
+let frameSig = "";
+let lastFrameAt = 0;
+
+// The particle pool holds 192 and a settlement moves ~340 junctions at once,
+// so the strongest few per frame are drawn and the HUD reports the true
+// count. Drawing all of them would evict each other within one frame anyway.
+const PARTICLES_PER_FRAME = 14;
+
+feed.onBehavior(b => { chainBehavior = b; behavior = { state: b.state, gain: b.gain }; });
+feed.onStatus(s => { status = s; });
+feed.onFrame(f => {
+  voltages = f.mV;
+  frameSig = f.signature;
+  lastFrameAt = performance.now();
+  const strongest = f.transfers.length > PARTICLES_PER_FRAME
+    ? [...f.transfers].sort((a, b) => b.amount - a.amount).slice(0, PARTICLES_PER_FRAME)
+    : f.transfers;
+  for (const t of strongest) brain.fireEdge(t.pre, t.post, true);
+});
+feed.start(stop.signal);
 
 const STATE_NAME = ["PAUSE", "FORWARD", "REVERSE", "OMEGA"];
-const feed = document.getElementById("feed")!;
-const lines: string[] = [];
-let feedAt = 0;
+const hud = document.getElementById("hud")!;
+const log = document.getElementById("feed")!;
+const clicks: string[] = [];
 
-function log(msg: string): void {
-  lines.unshift(msg);
-  if (lines.length > 22) lines.pop();
+/** The stimulus amplitude belongs to the relay, so the label does NOT quote
+ * a number that can drift away from the transaction it describes. */
+async function touch(label: string, neuron: string): Promise<void> {
+  clicks.unshift(`> ${label}  stimulate ${neuron}`);
+  clicks.unshift(await feed.touch(neuron));
+  clicks.length = Math.min(clicks.length, 6);
 }
+document.getElementById("touch-head")!.onclick = () => void touch("HEAD", "ALML");
+document.getElementById("touch-tail")!.onclick = () => void touch("TAIL", "PLML");
 
-/** Lights the named neuron and animates the synapse, by name, as Task 15 will. */
-function excite(pre: string, post: string): void {
-  const a = brain.labelIndex(pre), b = brain.labelIndex(post);
-  if (a < 0 || b < 0) return;
-  boost[a] = 1; boost[b] = 1;
-  brain.fireEdge(a, b, true);
+/** Signatures and chain errors are remote strings going into innerHTML. */
+const esc = (t: string) => t.replace(/[&<>"]/g, c =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+
+/** The relay's transaction log, newest first, each linking to the explorer. */
+function drawLog(): void {
+  const rows: string[] = clicks.slice(0, 3).map(esc);
+  for (const e of status?.log ?? []) {
+    const ms = e.ms === undefined ? "" : `${(e.ms / 1000).toFixed(1)}s`;
+    const op = esc(e.op).padEnd(10);
+    // A chain error arrives as a multi-line JSON dump; one line of it is
+    // what a human standing at the screen can read.
+    if (e.error) rows.push(`${op} FAILED ${esc(e.error.replace(/\s+/g, " ")).slice(0, 60)}…`);
+    else if (e.sig) rows.push(`${op} ${ms.padStart(5)}  <a href="${esc(cfg.explorer + e.sig)}" target="_blank" rel="noreferrer">${esc(e.sig.slice(0, 22))}…</a>`);
+    else rows.push(`${op} ${ms.padStart(5)}`);
+    if (rows.length > 18) break;
+  }
+  log.innerHTML = rows.join("<br>");
 }
-
-document.getElementById("touch-head")!.onclick = () => {
-  // The escape response: reverse away from the stimulus, sweep through an
-  // omega turn, resume forward on a new heading. The named cells are the real
-  // anterior touch circuit, so the cloud lights up where a biologist expects.
-  play([{ state: BEHAVIOR.REVERSE, gain: 1.1, secs: 1.8 },
-        { state: BEHAVIOR.OMEGA, gain: 1.0, secs: 1.0 }]);
-  arousal = 1;
-  for (const [a, b] of [["ALML", "AVDL"], ["ALMR", "AVDR"], ["AVM", "AVDL"],
-                        ["AVDL", "AVAL"], ["AVDR", "AVAR"]]) excite(a, b);
-  log("> HEAD  ALM/AVM -> AVD -> AVA");
-};
-document.getElementById("touch-tail")!.onclick = () => {
-  play([{ state: BEHAVIOR.FORWARD, gain: 1.3, secs: 3.0 }]);
-  arousal = 0.8;
-  for (const [a, b] of [["PLML", "PVCL"], ["PLMR", "PVCR"],
-                        ["PVCL", "AVBL"], ["PVCR", "AVBR"]]) excite(a, b);
-  log("> TAIL  PLM -> PVC -> AVB");
-};
 
 let last = performance.now();
+let lastHud = 0;
 let fps = 60;
 
 function frame(now: number): void {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
-  clock += dt;
   fps += ((dt > 0 ? 1 / dt : 60) - fps) * 0.05;
 
-  advance(dt);
+  feed.tick();                       // paces the chain's frames onto the scene
   body.update(dt, behavior);
   worm.update(body.points);
-
-  arousal += (0.12 - arousal) * Math.min(1, dt * 0.8);
-  const decay = Math.min(1, dt * 1.1);
-  const swing = 6 + 42 * arousal;
-  for (let i = 0; i < n; i++) {
-    boost[i] -= boost[i] * decay;
-    mV[i] = Math.round(rest[i] + 55 * boost[i] +
-      swing * (0.5 + 0.5 * Math.sin(clock * 2 * Math.PI * rate[i] + phase[i])));
-  }
-  brain.setVoltages(mV);
-
-  let due = (3 + 90 * arousal) * dt;
-  while (due > 0) {
-    if (Math.random() < Math.min(1, due)) {
-      const [pre, post] = edges[(Math.random() * edges.length) | 0];
-      brain.fireEdge(pre, post, (pre + post) % 4 !== 0);
-      if (Math.random() < 0.06) log(`${names[pre]} -> ${names[post]}`);
-    }
-    due -= 1;
-  }
+  brain.setVoltages(voltages);
   brain.tick(dt);
 
-  if (clock - feedAt > 0.2) {
-    feedAt = clock;
-    feed.textContent = [
+  if (now - lastHud > 250) {
+    lastHud = now;
+    const b = chainBehavior;
+    const age = lastFrameAt ? (Math.max(0, now - lastFrameAt) / 1000).toFixed(1) : "--";
+    hud.textContent = [
       `state    ${STATE_NAME[behavior.state]}  gain ${behavior.gain.toFixed(2)}`,
-      `neurons  ${n}   edges ${edges.length}`,
-      `fps      ${fps.toFixed(0)}`,
-      "",
-      ...lines,
+      `drive    fwd ${(b?.driveFwd ?? 0).toFixed(3)}  rev ${(b?.driveRev ?? 0).toFixed(3)}`,
+      `sim step ${feed.stats.lastStep}  (${(feed.stats.lastStep * cfg.dtMs / 1000).toFixed(1)}s of worm)`,
+      `frames   ${feed.stats.frames} played, ${feed.stats.lag} queued, last ${age}s ago`,
+      `events   ${feed.stats.events} from the node, ${feed.stats.transfers} transfers`,
+      `frame tx ${frameSig ? frameSig.slice(0, 22) + "…" : "waiting"}`,
+      `brain    ${status ? (status.stepping ? "stepping" : status.awake ? "waking" : "idle — touch to wake") : "relay offline"}`,
+      `fee payer ${status ? status.balance.toLocaleString() : "?"} units` +
+        (status && status.balance < status.floor ? `  LOW: ${status.faucet}` : ""),
+      `neurons  ${n}   edges ${edges.length}   fps ${fps.toFixed(0)}`,
     ].join("\n");
+    drawLog();
   }
 
   controls.update();
