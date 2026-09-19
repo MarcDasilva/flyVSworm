@@ -1,0 +1,17 @@
+{
+  "getversion": {
+    "status": "success",
+    "thru-node": "0.0.0-local+e1bd9df9",
+    "thru-node-commit": "e1bd9df99aea6d2b3401e7d1687051df22eeb381",
+    "thru-node-commit-date": "2026-08-25T21:27:14Z",
+    "thru-rpc": "sha-e1bd9df"
+  }
+}
+thru cli: thru 0.3.16+c55cda22
+bin
+include
+lib
+libexec
+picolibc
+riscv64-unknown-elf
+share
