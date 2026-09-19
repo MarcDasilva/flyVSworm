@@ -1,0 +1,85 @@
+{
+  "protocol": "demo",
+  "seed": 0,
+  "sha256": "dfeeac129edfbc88425e53d1c0c13bf65d3146db242b5ea7fd7fd83513e3ecf8",
+  "made_with": {
+    "model": {
+      "tau": 12.97,
+      "dt": 1.0,
+      "syn_decay": 0.9451,
+      "v_thresh": 1.0,
+      "v_reset": 0.0,
+      "refrac_ticks": 2,
+      "w_ee": 0.01967,
+      "w_ed": 0.007004,
+      "w_de": 0.1097,
+      "w_ep": 0.08366,
+      "w_pe": 0.1643,
+      "noise_amp": 0.0,
+      "neuromod_gain": 1.0
+    },
+    "protocol": {
+      "landmark_current": 0.5,
+      "t3_drive_levels": [
+        0.03855,
+        0.06939,
+        0.1002
+      ],
+      "t8_drive": 0.03855,
+      "t7_noise_amp": 0.03927
+    }
+  },
+  "trading": {
+    "seed": 0,
+    "returns": "live.golden_returns()",
+    "sha256": "4bbb1bf51fc0cbf92d1d45aeb143eb22b286f70e3859e3f943d4a20e34752121",
+    "made_with": {
+      "spec": {
+        "model": {
+          "tau": 12.97,
+          "dt": 1.0,
+          "syn_decay": 0.9451,
+          "v_thresh": 1.0,
+          "v_reset": 0.0,
+          "refrac_ticks": 2,
+          "w_ee": 0.01967,
+          "w_ed": 0.007004,
+          "w_de": 0.1097,
+          "w_ep": 0.08366,
+          "w_pe": 0.1643,
+          "noise_amp": 0.0,
+          "neuromod_gain": 1.0
+        },
+        "protocol": {
+          "landmark_current": 0.5,
+          "t3_drive_levels": [
+            0.03855,
+            0.06939,
+            0.1002
+          ],
+          "t8_drive": 0.03855,
+          "t7_noise_amp": 0.03927
+        }
+      },
+      "drive": {
+        "span_bars": 40,
+        "dead_band": 0.35,
+        "full_scale": 0.8,
+        "min_drive": 0.5,
+        "max_drive": 1.3,
+        "max_step": 0.3,
+        "warmup_bars": 20
+      },
+      "readout": {
+        "window_ticks": 250,
+        "min_speed": 0.5,
+        "full_speed": 10.0,
+        "strength_floor": 0.3,
+        "strength_full": 0.8
+      },
+      "ticks_per_bar": 100,
+      "boot_ticks": 300,
+      "rate_window": 50
+    }
+  }
+}
