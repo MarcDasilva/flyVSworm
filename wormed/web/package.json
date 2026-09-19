@@ -5,13 +5,17 @@
   "type": "module",
   "description": "C. elegans front-end: body kinematics, 3D scene, chain stream",
   "scripts": {
-    "test": "tsx src/test_body.ts",
+    "dev": "vite",
+    "build": "vite build",
+    "test": "tsx src/test_body.ts && tsx src/test_scene.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/node": "^26.6.2",
+    "@types/three": "^0.186.0",
     "tsx": "^4.23.13",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0"
   },
   "dependencies": {
     "three": "^0.186.0"

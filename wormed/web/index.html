@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>C. elegans on Thru</title>
+<style>
+  body { margin: 0; overflow: hidden; background: #0b0f14;
+         font: 14px ui-monospace, SFMono-Regular, monospace; color: #cbd5e1; }
+  #ui { position: fixed; top: 16px; left: 16px; display: flex; gap: 8px; }
+  button { padding: 10px 16px; background: #1e293b; color: #e2e8f0;
+           border: 1px solid #334155; border-radius: 6px; cursor: pointer;
+           font: inherit; }
+  button:hover { background: #334155; }
+  #feed { position: fixed; right: 16px; top: 16px; width: 320px; height: 70vh;
+          overflow: hidden; font-size: 11px; line-height: 1.6; opacity: 0.85;
+          white-space: pre; text-align: right; pointer-events: none; }
+  #hint { position: fixed; left: 16px; bottom: 16px; font-size: 11px;
+          opacity: 0.55; }
+</style></head>
+<body>
+  <div id="ui">
+    <button id="touch-head">Touch head</button>
+    <button id="touch-tail">Touch tail</button>
+  </div>
+  <div id="feed"></div>
+  <div id="hint">drag to orbit &middot; scroll to zoom &middot; mock data, no chain</div>
+  <script type="module" src="/src/main.ts"></script>
+</body></html>
