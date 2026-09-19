@@ -1,236 +1,214 @@
--- KTNH Mon: catch / battle / trade / heist on the 2026 Hacker Badge.
--- A confirms, B cancels, Start arms a trade bump, HOME confirms exit.
--- Scan an NFC biome sticker, throw the badge to catch, bump to battle.
+-- KTNH Mon. Collect creatures from NFC stickers and walking, duel nearby
+-- badges on a six-type wheel, and take one of theirs when you win.
+--
+-- Structure: every screen is a full-screen container box built ONCE and then
+-- shown or hidden. Widgets are never created after startup and never
+-- deleted, because the 512-widget cap is hard and churn is what blows it.
+local dex = require("dex")
+local own = require("own")
 
-local monster = require("monster")
-local fsm = require("fsm")
-local throw = require("throw")
+local W, H = 320, 240
+local BUILD_BATCH = 10        -- widgets per tick during staged construction
+local LED_MS = 80             -- LED frames are expensive; 12 fps is plenty
 
-local TYPE_NAME = {
-  [0] = "Normal", "Fire", "Water", "Grass", "Electric", "Ice",
-  "Fighting", "Poison", "Ground", "Flying", "Psychic",
-  "Bug", "Rock", "Ghost", "Dragon", "Dark",
-}
+screens = {}
+SCREEN_ORDER = {"TITLE", "EGG", "STARTER", "MAP", "WALK",
+                "ENCOUNTER", "DEX", "COLLECTION", "PAIR", "DUEL"}
 
-local BIOME_TYPE = {
-  [0] = monster.TYPE.NORMAL,
-  [1] = monster.TYPE.GRASS,
-  [2] = monster.TYPE.WATER,
-  [3] = monster.TYPE.FIRE,
-  [4] = monster.TYPE.ELECTRIC,
-  [5] = monster.TYPE.ROCK,
-}
+local cur = nil
+local queue = {}
+local qhead = 1
+local is_ready = false
+local scene = "title"
+local last_led = 0
+local last_tick_ms = 0
+local did_resume = false
+local dex_ok = false
+-- TRUF: on_enter assigns this; build_root reads it. Declared local HERE
+-- (rather than where the brief's later task introduces it) so it is never
+-- an accidental global in the ticks between this task and that one.
+local screens_parent = nil
 
-local state
-local ui = {}
-local last_nfc_uid = ""
-local last_status = "scan a sticker or bump"
-local party = {}
-local last_led_ms = 0
+art_pool = nil
 
-local function now()
-  return badge.sys.ms()
+-- ---------------------------------------------------------------- helpers
+
+local function label(parent, text, font, colour)
+  local l = badge.ui.label(parent, text)
+  l:style({text_font = font or 16, text_color = colour or 0xF5F5F5})
+  return l
 end
 
-local function spawn_wild(biome)
-  local typ = BIOME_TYPE[biome] or monster.TYPE.NORMAL
-  local species = 1 + (biome % 15)
-  local level = 5 + (badge.sys.random(10))
-  local shiny = badge.sys.random(64) == 0
-  local hp = badge.sys.random(8)
-  local atk = badge.sys.random(16)
-  local def = badge.sys.random(16)
-  return monster.init(species, level, typ, shiny, false, hp, atk, def, 3)
+local function panel(parent, w, h, colour)
+  local b = badge.ui.box(parent, w, h)
+  b:style({bg_color = colour or 0x1E2530})
+  return b
 end
 
-local function describe(n)
-  if monster.is_empty(n) then return "empty" end
-  local shiny = monster.is_shiny(n) and "* " or ""
-  return string.format("%s#%d  Lv%d  %s",
-    shiny, monster.species(n), monster.level(n),
-    TYPE_NAME[monster.type(n)] or "?")
+function defer(fn)
+  queue[#queue + 1] = fn
 end
 
-local function set_status(msg)
-  last_status = msg
-  if ui.status then ui.status:set_text(msg) end
+function ready()
+  return is_ready
 end
 
-local function paint_mode()
-  local mode = fsm.MODE_NAME[state.mode] or "?"
-  ui.mode:set_text(string.upper(mode))
-  if state.mode == fsm.ENCOUNTER then
-    ui.detail:set_text(describe(state.wild))
-    ui.hint:set_text("throw the badge to catch   B cancel")
-  elseif state.mode == fsm.BATTLE then
-    ui.detail:set_text("peer battle")
-    ui.hint:set_text("A finish   B flee")
-  elseif state.mode == fsm.TRADE then
-    ui.detail:set_text("acks " .. tostring(state.trade_acks) .. "/2")
-    ui.hint:set_text("A confirm   B cancel")
-  elseif state.mode == fsm.HEIST then
-    ui.detail:set_text("shake to break the siphon")
-    ui.hint:set_text("10s or you lose a monster")
-  else
-    ui.detail:set_text("party " .. tostring(#party))
-    ui.hint:set_text("NFC catch   bump battle   Start+bump trade")
-  end
+function resumed()
+  return did_resume
 end
 
-local function leds_for_mode(t)
+function current()
+  return cur
+end
+
+function show(name)
+  local s = screens[name]
+  if not s then return end
+  if cur and screens[cur] then screens[cur].root:hidden(true) end
+  cur = name
+  s.root:hidden(false)
+  if s.enter then s.enter() end
+end
+
+function led_scene(name)
+  scene = name
+end
+
+-- ------------------------------------------------------------ LED scenes
+
+-- Every scene derives its phase from badge.sys.ms(), never from a counter.
+-- Ticks pause during the HOME confirmation while the clock keeps running; a
+-- counter-driven animation freezes and then jumps, a clock-driven one does
+-- not.
+local function breathe(t, period)
+  local p = (t % period) / period
+  if p > 0.5 then p = 1 - p end
+  return math.floor(p * 2 * 255)
+end
+
+local LED = {}
+
+function LED.title(t)
+  local r, g, b = badge.me.color()
+  local k = breathe(t, 3000)
+  badge.led.set_all(math.floor((r or 40) * k / 255),
+                    math.floor((g or 180) * k / 255),
+                    math.floor((b or 80) * k / 255))
+end
+
+function LED.map_idle(t)
+  local k = breathe(t, 4000)
+  badge.led.set_all(math.floor(20 * k / 255), math.floor(90 * k / 255),
+                    math.floor(60 * k / 255))
+end
+
+function LED.off(t) end
+
+local function draw_leds(t)
   badge.led.clear()
-  if state.mode == fsm.ENCOUNTER then
-    local pulse = 80 + math.floor((math.sin(t / 180) + 1) * 70)
-    badge.led.set(1, 40, pulse, 40)
-    badge.led.set(2, 40, pulse, 40)
-  elseif state.mode == fsm.BATTLE then
-    badge.led.set(1, 220, 40, 40)
-    badge.led.set(6, 220, 40, 40)
-    badge.led.set(5, 220, 40, 40)
-    badge.led.set(2, 40, 80, 220)
-    badge.led.set(3, 40, 80, 220)
-    badge.led.set(4, 40, 80, 220)
-  elseif state.mode == fsm.TRADE then
-    badge.led.set_all(40, 180, 80)
-  elseif state.mode == fsm.HEIST then
-    local on = math.floor(t / 120) % 2 == 0
-    if on then badge.led.set_all(220, 30, 30) end
-  else
-    local r, g, b = badge.me.color()
-    r = r or 40
-    g = g or 180
-    b = b or 80
-    badge.led.set(1, r, g, b)
-    badge.led.set(2, r, g, b)
-  end
+  local fn = LED[scene] or LED.off
+  fn(t)
   badge.led.show()
 end
 
-local function catch_roll(grade)
-  local base = 40
-  local m = throw.multiplier_tenths(grade)
-  return badge.sys.random(100) < math.floor(base * m / 10)
+-- ------------------------------------------------------- screen builders
+
+local function build_root(name)
+  local b = badge.ui.box(screens_parent, W, H)
+  b:set_pos(0, 0)
+  b:style({bg_color = 0x101418})
+  b:hidden(true)
+  screens[name] = {root = b}
+  return b
 end
 
+local function build_title()
+  local root = build_root("TITLE")
+  local t = label(root, "KTNH MON", 24, 0x7CFF9A)
+  t:align("center", 0, -50)
+  local who = label(root, badge.me.name() or "TRAINER", 18)
+  who:align("center", 0, -10)
+  screens.TITLE.status = label(root, "Loading...", 14, 0x8899AA)
+  screens.TITLE.status:align("center", 0, 30)
+  local hint = label(root, "A start", 14, 0x8899AA)
+  hint:align("bottom_mid", 0, -18)
+  screens.TITLE.hint = hint
+end
+
+-- Placeholder builders. Tasks 8 through 24 replace each body; the router and
+-- the staged construction contract do not change when they do.
+local function build_stub(name)
+  return function()
+    local root = build_root(name)
+    local l = label(root, name, 20)
+    l:align("center", 0, 0)
+  end
+end
+
+-- ------------------------------------------------------------- lifecycle
+
 function on_enter(root)
-  party = {}
-  state = fsm.init(now())
-  local thrower = throw.init()
-  state.thrower = thrower
+  screens_parent = root
+  last_tick_ms = badge.sys.ms()
 
-  local bg = badge.ui.box(root, 320, 240)
-  bg:set_pos(0, 0)
-  bg:style({ bg_color = 0x101418 })
+  dex_ok = dex.load()
+  own.load()
 
-  local title = badge.ui.label(root, "KTNH MON")
-  title:style({ text_font = 20, text_color = 0x7CFF9A })
-  title:align("top_mid", 0, 10)
+  -- The title screen IS the loading screen: build it now, queue everything
+  -- else. This is the pattern the guide prescribes for large boards, and it
+  -- is what keeps on_enter inside even the 250 ms old-firmware budget.
+  build_title()
+  show("TITLE")
 
-  ui.mode = badge.ui.label(root, "IDLE")
-  ui.mode:style({ text_font = 24 })
-  ui.mode:align("top_mid", 0, 42)
-
-  ui.detail = badge.ui.label(root, "party 0")
-  ui.detail:align("center", 0, -8)
-
-  ui.status = badge.ui.label(root, last_status)
-  ui.status:style({ text_color = 0xAABBCC, text_font = 14 })
-  ui.status:align("center", 0, 28)
-
-  ui.hint = badge.ui.label(root, "NFC catch   bump battle")
-  ui.hint:style({ text_color = 0x8899AA, text_font = 14 })
-  ui.hint:align("bottom_mid", 0, -18)
-
-  badge.nfc.enable()
-  badge.radio.enable()
-  badge.radio.on_recv(function(_, _, payload)
-    if type(payload) ~= "string" or #payload < 2 then return end
-    if payload:sub(1, 2) == "B:" then
-      fsm.dispatch(state, fsm.EVT_BUMP, 0, now())
-      paint_mode()
-    elseif payload:sub(1, 2) == "T:" then
-      fsm.dispatch(state, fsm.EVT_BUMP_TRADE, 0, now())
-      paint_mode()
-    end
+  -- TRUF R4: 64 boxes, not 48 - Task 5 sized the shared pool contract at 64
+  -- and measured the worst-case creature (34 runs) against it.
+  defer(function() art_pool = dex.new_pool(screens_parent, 64) end)
+  for i = 2, #SCREEN_ORDER do
+    local name = SCREEN_ORDER[i]
+    defer(build_stub(name))
+  end
+  defer(function()
+    is_ready = true
+    screens.TITLE.status:set_text(dex_ok and "Ready" or "dex.txt missing")
   end)
-
-  paint_mode()
-  leds_for_mode(now())
 end
 
 function on_tick()
-  local t = now()
-  fsm.tick(state, t)
+  local now = badge.sys.ms()
 
-  local ax, ay, az = badge.sensor.accel()
-  if ax then
-    if throw.feed(state.thrower, ax, ay, az) then
-      local grade = state.thrower.last_grade
-      if state.mode == fsm.ENCOUNTER then
-        if catch_roll(grade) then
-          party[#party + 1] = state.wild
-          set_status("caught " .. throw.GRADE_NAME[grade])
-          fsm.dispatch(state, fsm.EVT_THROW_RESOLVE, grade, t)
-        else
-          set_status("broke free (" .. throw.GRADE_NAME[grade] .. ")")
-          fsm.dispatch(state, fsm.EVT_THROW_RESOLVE, 0, t)
-        end
-        paint_mode()
-      end
+  -- A gap this large means ticks were paused - almost always the HOME
+  -- confirmation dialog, which does not notify Lua when it closes. Anything
+  -- timing-sensitive must restart rather than fast-forward.
+  did_resume = (now - last_tick_ms) > 300
+  last_tick_ms = now
+
+  if not is_ready then
+    local built = 0
+    while qhead <= #queue and built < BUILD_BATCH do
+      queue[qhead]()
+      qhead = qhead + 1
+      built = built + 1
     end
   end
 
-  if badge.sensor.shake() then
-    fsm.dispatch(state, fsm.EVT_SHAKE, 0, t)
-    set_status("heist broken")
-    paint_mode()
-  end
+  local s = screens[cur]
+  if s and s.tick then s.tick(now) end
 
-  local card = badge.nfc.card()
-  if card and card.uid and card.uid ~= last_nfc_uid then
-    last_nfc_uid = card.uid
-    local text = badge.nfc.read_text()
-    if text and string.find(string.lower(text), "rocket", 1, true) then
-      fsm.dispatch(state, fsm.EVT_NFC_ROCKET, 0, t)
-      set_status("rocket armed")
-    else
-      local biome = 0
-      if text then biome = (#text + #card.uid) % 6 end
-      state.wild = spawn_wild(biome)
-      fsm.dispatch(state, fsm.EVT_NFC_BIOME, biome, t)
-      set_status("wild appeared")
-    end
-    paint_mode()
-  end
-
-  if t - last_led_ms >= 80 then
-    last_led_ms = t
-    leds_for_mode(t)
+  if now - last_led >= LED_MS then
+    last_led = now
+    draw_leds(now)
   end
 end
 
-function on_button(button, kind)
+function on_button(b, kind)
   if kind ~= badge.input.KIND.PRESSED then return end
-  local B = badge.input.BUTTON
-  local t = now()
-  if button == B.A then
-    fsm.dispatch(state, fsm.EVT_CONFIRM, 0, t)
-    paint_mode()
-  elseif button == B.B then
-    fsm.dispatch(state, fsm.EVT_CANCEL, 0, t)
-    set_status("cancelled")
-    paint_mode()
-  elseif button == B.START then
-    badge.radio.send("T:1")
-    set_status("trade ping sent")
-  elseif button == B.UP then
-    badge.radio.send("B:1")
-    set_status("battle ping sent")
-  end
+  if not is_ready then return end
+  local s = screens[cur]
+  if s and s.button then s.button(b) end
 end
 
 function on_exit()
+  own.save()
   badge.led.clear()
   badge.led.show()
-  badge.store.set_int("party", #party)
 end
