@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+/* always dark: the launcher and the brain view are both dark scenes */
+:root {
+  --background: #07090d;
+  --foreground: #ededed;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}

@@ -1,0 +1,2304 @@
+{
+ "version": 1,
+ "spec": "spec/params_hemibrain_avg.json",
+ "connectome": {
+  "source": "hemibrain_averaged",
+  "file": "data/cx_averaged.npz",
+  "sha256": "f25b026bf45b43b54ed2fbc06c34c0a77d900d5e4d650956237bfe0f32b36970"
+ },
+ "anatomy_vs_simulation": "meshes and synapses are the measured hemibrain anatomy (cx_model.npz wiring); the simulation runs the spec's connectome, which for hemibrain_averaged is a smoothed ring wired the same at every heading. A synapse lights when its presynaptic neuron spikes in the simulation.",
+ "units": "micrometres, JRC2018F template, centred; x = template x, y = -template y (dorsal up), z = -template z (anterior toward +z)",
+ "neurons": [
+  {
+   "index": 0,
+   "node": "n000",
+   "body_id": 541118908,
+   "pop": "EPG",
+   "wedge": 0,
+   "type": "EPG",
+   "instance": "EPG(PB08)_R3"
+  },
+  {
+   "index": 1,
+   "node": "n001",
+   "body_id": 478375456,
+   "pop": "EPG",
+   "wedge": 0,
+   "type": "EPG",
+   "instance": "EPG(PB08)_R3"
+  },
+  {
+   "index": 2,
+   "node": "n002",
+   "body_id": 912601268,
+   "pop": "EPG",
+   "wedge": 0,
+   "type": "EPG",
+   "instance": "EPG(PB08)_L6"
+  },
+  {
+   "index": 3,
+   "node": "n003",
+   "body_id": 541870397,
+   "pop": "EPG",
+   "wedge": 1,
+   "type": "EPG",
+   "instance": "EPG(PB08)_L6"
+  },
+  {
+   "index": 4,
+   "node": "n004",
+   "body_id": 788794171,
+   "pop": "EPG",
+   "wedge": 1,
+   "type": "EPG",
+   "instance": "EPG(PB08)_L6"
+  },
+  {
+   "index": 5,
+   "node": "n005",
+   "body_id": 416642425,
+   "pop": "EPG",
+   "wedge": 1,
+   "type": "EPG",
+   "instance": "EPG(PB08)_R4"
+  },
+  {
+   "index": 6,
+   "node": "n006",
+   "body_id": 633546217,
+   "pop": "EPG",
+   "wedge": 2,
+   "type": "EPG",
+   "instance": "EPG(PB08)_R4"
+  },
+  {
+   "index": 7,
+   "node": "n007",
+   "body_id": 695956656,
+   "pop": "EPG",
+   "wedge": 2,
+   "type": "EPG",
+   "instance": "EPG(PB08)_R4"
+  },
+  {
+   "index": 8,
+   "node": "n008",
+   "body_id": 696362840,
+   "pop": "EPG",
+   "wedge": 2,
+   "type": "EPG",
+   "instance": "EPG(PB08)_L5"
+  },
+  {
+   "index": 9,
+   "node": "n009",
+   "body_id": 819828986,
+   "pop": "EPG",
+   "wedge": 3,
+   "type": "EPG",
+   "instance": "EPG(PB08)_L5"
+  },
+  {
+   "index": 10,
+   "node": "n010",
+   "body_id": 789126240,
+   "pop": "EPG",
+   "wedge": 3,
+   "type": "EPG",
+   "instance": "EPG(PB08)_L5"
+  },
+  {
+   "index": 11,
+   "node": "n011",
+   "body_id": 5813027103,
+   "pop": "EPG",
+   "wedge": 3,
+   "type": "EPG",
+   "instance": "EPG(PB08)_R5"
+  },
+  {
+   "index": 12,
+   "node": "n012",
+   "body_id": 725951521,
+   "pop": "EPG",
+   "wedge": 4,
+   "type": "EPG",
+   "instance": "EPG(PB08)_R5"
+  },
+  {
+   "index": 13,
+   "node": "n013",
+   "body_id": 694920753,
+   "pop": "EPG",
+   "wedge": 4,
+   "type": "EPG",
+   "instance": "EPG(PB08)_R5"
+  },
+  {
+   "index": 14,
+   "node": "n014",
+   "body_id": 634962055,
+   "pop": "EPG",
+   "wedge": 4,
+   "type": "EPG",
+   "instance": "EPG(PB08)_L4"
+  },
+  {
+   "index": 15,
+   "node": "n015",
+   "body_id": 5813022281,
+   "pop": "EPG",
+   "wedge": 5,
+   "type": "EPG",
+   "instance": "EPG(PB08)_L4"
+  },
+  {
+   "index": 16,
+   "node": "n016",
+   "body_id": 665314820,
+   "pop": "EPG",
+   "wedge": 5,
+   "type": "EPG",
+   "instance": "EPG(PB08)_L4"
+  },
+  {
+   "index": 17,
+   "node": "n017",
+   "body_id": 941132434,
+   "pop": "EPG",
+   "wedge": 5,
+   "type": "EPG",
+   "instance": "EPG(PB08)_R6"
+  },
+  {
+   "index": 18,
+   "node": "n018",
+   "body_id": 942491983,
+   "pop": "EPG",
+   "wedge": 6,
+   "type": "EPG",
+   "instance": "EPG(PB08)_R6"
+  },
+  {
+   "index": 19,
+   "node": "n019",
+   "body_id": 910438331,
+   "pop": "EPG",
+   "wedge": 6,
+   "type": "EPG",
+   "instance": "EPG(PB08)_R6"
+  },
+  {
+   "index": 20,
+   "node": "n020",
+   "body_id": 758419409,
+   "pop": "EPG",
+   "wedge": 6,
+   "type": "EPG",
+   "instance": "EPG(PB08)_L3"
+  },
+  {
+   "index": 21,
+   "node": "n021",
+   "body_id": 449438847,
+   "pop": "EPG",
+   "wedge": 6,
+   "type": "EPG",
+   "instance": "EPG(PB08)_L3"
+  },
+  {
+   "index": 22,
+   "node": "n022",
+   "body_id": 387364605,
+   "pop": "EPG",
+   "wedge": 7,
+   "type": "EPG",
+   "instance": "EPG(PB08)_L3"
+  },
+  {
+   "index": 23,
+   "node": "n023",
+   "body_id": 1034219901,
+   "pop": "EPG",
+   "wedge": 7,
+   "type": "EPG",
+   "instance": "EPG(PB08)_R7"
+  },
+  {
+   "index": 24,
+   "node": "n024",
+   "body_id": 1002507159,
+   "pop": "EPG",
+   "wedge": 7,
+   "type": "EPG",
+   "instance": "EPG(PB08)_R7"
+  },
+  {
+   "index": 25,
+   "node": "n025",
+   "body_id": 1002852791,
+   "pop": "EPG",
+   "wedge": 8,
+   "type": "EPG",
+   "instance": "EPG(PB08)_R7"
+  },
+  {
+   "index": 26,
+   "node": "n026",
+   "body_id": 912545106,
+   "pop": "EPG",
+   "wedge": 8,
+   "type": "EPG",
+   "instance": "EPG(PB08)_L2"
+  },
+  {
+   "index": 27,
+   "node": "n027",
+   "body_id": 697001770,
+   "pop": "EPG",
+   "wedge": 8,
+   "type": "EPG",
+   "instance": "EPG(PB08)_L2"
+  },
+  {
+   "index": 28,
+   "node": "n028",
+   "body_id": 1126647624,
+   "pop": "EPG",
+   "wedge": 9,
+   "type": "EPG",
+   "instance": "EPG(PB08)_R8"
+  },
+  {
+   "index": 29,
+   "node": "n029",
+   "body_id": 5813061251,
+   "pop": "EPG",
+   "wedge": 9,
+   "type": "EPG",
+   "instance": "EPG(PB08)_R8"
+  },
+  {
+   "index": 30,
+   "node": "n030",
+   "body_id": 1125964814,
+   "pop": "EPG",
+   "wedge": 9,
+   "type": "EPG",
+   "instance": "EPG(PB08)_R8"
+  },
+  {
+   "index": 31,
+   "node": "n031",
+   "body_id": 5813040233,
+   "pop": "EPG",
+   "wedge": 10,
+   "type": "EPG",
+   "instance": "EPG(PB08)_R8"
+  },
+  {
+   "index": 32,
+   "node": "n032",
+   "body_id": 1168659995,
+   "pop": "EPG",
+   "wedge": 10,
+   "type": "EPGt",
+   "instance": "EPGt(PB09)_R9"
+  },
+  {
+   "index": 33,
+   "node": "n033",
+   "body_id": 1447576662,
+   "pop": "EPG",
+   "wedge": 10,
+   "type": "EPG",
+   "instance": "EPG(PB08)_L1"
+  },
+  {
+   "index": 34,
+   "node": "n034",
+   "body_id": 572870540,
+   "pop": "EPG",
+   "wedge": 11,
+   "type": "EPG",
+   "instance": "EPG(PB08)_L1"
+  },
+  {
+   "index": 35,
+   "node": "n035",
+   "body_id": 1219069439,
+   "pop": "EPG",
+   "wedge": 11,
+   "type": "EPGt",
+   "instance": "EPGt(PB09)_R9"
+  },
+  {
+   "index": 36,
+   "node": "n036",
+   "body_id": 5813014873,
+   "pop": "EPG",
+   "wedge": 11,
+   "type": "EPG",
+   "instance": "EPG(PB08)_R1"
+  },
+  {
+   "index": 37,
+   "node": "n037",
+   "body_id": 5813077544,
+   "pop": "EPG",
+   "wedge": 12,
+   "type": "EPG",
+   "instance": "EPG(PB08)_R1"
+  },
+  {
+   "index": 38,
+   "node": "n038",
+   "body_id": 1168660239,
+   "pop": "EPG",
+   "wedge": 12,
+   "type": "EPGt",
+   "instance": "EPGt(PB09)_L9"
+  },
+  {
+   "index": 39,
+   "node": "n039",
+   "body_id": 1168664495,
+   "pop": "EPG",
+   "wedge": 12,
+   "type": "EPG",
+   "instance": "EPG(PB08)_L8"
+  },
+  {
+   "index": 40,
+   "node": "n040",
+   "body_id": 1167995070,
+   "pop": "EPG",
+   "wedge": 13,
+   "type": "EPG",
+   "instance": "EPG(PB08)_L8"
+  },
+  {
+   "index": 41,
+   "node": "n041",
+   "body_id": 1168664447,
+   "pop": "EPG",
+   "wedge": 13,
+   "type": "EPGt",
+   "instance": "EPGt(PB09)_L9"
+  },
+  {
+   "index": 42,
+   "node": "n042",
+   "body_id": 1127476096,
+   "pop": "EPG",
+   "wedge": 13,
+   "type": "EPG",
+   "instance": "EPG(PB08)_L8"
+  },
+  {
+   "index": 43,
+   "node": "n043",
+   "body_id": 1065410141,
+   "pop": "EPG",
+   "wedge": 14,
+   "type": "EPG",
+   "instance": "EPG(PB08)_L8"
+  },
+  {
+   "index": 44,
+   "node": "n044",
+   "body_id": 695629525,
+   "pop": "EPG",
+   "wedge": 14,
+   "type": "EPG",
+   "instance": "EPG(PB08)_R2"
+  },
+  {
+   "index": 45,
+   "node": "n045",
+   "body_id": 632544268,
+   "pop": "EPG",
+   "wedge": 14,
+   "type": "EPG",
+   "instance": "EPG(PB08)_R2"
+  },
+  {
+   "index": 46,
+   "node": "n046",
+   "body_id": 5813012006,
+   "pop": "EPG",
+   "wedge": 14,
+   "type": "EPG",
+   "instance": "EPG(PB08)_L7"
+  },
+  {
+   "index": 47,
+   "node": "n047",
+   "body_id": 1035045015,
+   "pop": "EPG",
+   "wedge": 15,
+   "type": "EPG",
+   "instance": "EPG(PB08)_L7"
+  },
+  {
+   "index": 48,
+   "node": "n048",
+   "body_id": 1004017998,
+   "pop": "EPG",
+   "wedge": 15,
+   "type": "EPG",
+   "instance": "EPG(PB08)_L7"
+  },
+  {
+   "index": 49,
+   "node": "n049",
+   "body_id": 5813080838,
+   "pop": "EPG",
+   "wedge": 15,
+   "type": "EPG",
+   "instance": "EPG(PB08)_R3"
+  },
+  {
+   "index": 50,
+   "node": "n050",
+   "body_id": 508793049,
+   "pop": "PEN_L",
+   "wedge": 0,
+   "type": "PEN_a(PEN1)",
+   "instance": "PEN_a(PB06a)_L7"
+  },
+  {
+   "index": 51,
+   "node": "n051",
+   "body_id": 1318109929,
+   "pop": "PEN_L",
+   "wedge": 0,
+   "type": "PEN_b(PEN2)",
+   "instance": "PEN_b(PB06b)_L7"
+  },
+  {
+   "index": 52,
+   "node": "n052",
+   "body_id": 879183317,
+   "pop": "PEN_L",
+   "wedge": 1,
+   "type": "PEN_b(PEN2)",
+   "instance": "PEN_b(PB06b)_L6"
+  },
+  {
+   "index": 53,
+   "node": "n053",
+   "body_id": 664650297,
+   "pop": "PEN_L",
+   "wedge": 2,
+   "type": "PEN_b(PEN2)",
+   "instance": "PEN_b(PB06b)_L6"
+  },
+  {
+   "index": 54,
+   "node": "n054",
+   "body_id": 664645558,
+   "pop": "PEN_L",
+   "wedge": 3,
+   "type": "PEN_a(PEN1)",
+   "instance": "PEN_a(PB06a)_L6"
+  },
+  {
+   "index": 55,
+   "node": "n055",
+   "body_id": 1380495496,
+   "pop": "PEN_L",
+   "wedge": 3,
+   "type": "PEN_a(PEN1)",
+   "instance": "PEN_a(PB06a)_L6"
+  },
+  {
+   "index": 56,
+   "node": "n056",
+   "body_id": 1631450739,
+   "pop": "PEN_L",
+   "wedge": 4,
+   "type": "PEN_b(PEN2)",
+   "instance": "PEN_b(PB06b)_L5"
+  },
+  {
+   "index": 57,
+   "node": "n057",
+   "body_id": 5813080979,
+   "pop": "PEN_L",
+   "wedge": 5,
+   "type": "PEN_a(PEN1)",
+   "instance": "PEN_a(PB06a)_L5"
+  },
+  {
+   "index": 58,
+   "node": "n058",
+   "body_id": 387023620,
+   "pop": "PEN_L",
+   "wedge": 6,
+   "type": "PEN_b(PEN2)",
+   "instance": "PEN_b(PB06b)_L4"
+  },
+  {
+   "index": 59,
+   "node": "n059",
+   "body_id": 539462336,
+   "pop": "PEN_L",
+   "wedge": 6,
+   "type": "PEN_b(PEN2)",
+   "instance": "PEN_b(PB06b)_L4"
+  },
+  {
+   "index": 60,
+   "node": "n060",
+   "body_id": 757055317,
+   "pop": "PEN_L",
+   "wedge": 7,
+   "type": "PEN_a(PEN1)",
+   "instance": "PEN_a(PB06a)_L4"
+  },
+  {
+   "index": 61,
+   "node": "n061",
+   "body_id": 849482511,
+   "pop": "PEN_L",
+   "wedge": 8,
+   "type": "PEN_a(PEN1)",
+   "instance": "PEN_a(PB06a)_L4"
+  },
+  {
+   "index": 62,
+   "node": "n062",
+   "body_id": 5813070465,
+   "pop": "PEN_L",
+   "wedge": 9,
+   "type": "PEN_b(PEN2)",
+   "instance": "PEN_b(PB06b)_L3"
+  },
+  {
+   "index": 63,
+   "node": "n063",
+   "body_id": 1508334312,
+   "pop": "PEN_L",
+   "wedge": 9,
+   "type": "PEN_a(PEN1)",
+   "instance": "PEN_a(PB06a)_L3"
+  },
+  {
+   "index": 64,
+   "node": "n064",
+   "body_id": 634608104,
+   "pop": "PEN_L",
+   "wedge": 10,
+   "type": "PEN_a(PEN1)",
+   "instance": "PEN_a(PB06a)_L2"
+  },
+  {
+   "index": 65,
+   "node": "n065",
+   "body_id": 5813047157,
+   "pop": "PEN_L",
+   "wedge": 11,
+   "type": "PEN_b(PEN2)",
+   "instance": "PEN_b(PB06b)_L2"
+  },
+  {
+   "index": 66,
+   "node": "n066",
+   "body_id": 1220584946,
+   "pop": "PEN_L",
+   "wedge": 12,
+   "type": "PEN_b(PEN2)",
+   "instance": "PEN_b(PB06b)_L9"
+  },
+  {
+   "index": 67,
+   "node": "n067",
+   "body_id": 1600083889,
+   "pop": "PEN_L",
+   "wedge": 12,
+   "type": "PEN_b(PEN2)",
+   "instance": "PEN_b(PB06b)_L9"
+  },
+  {
+   "index": 68,
+   "node": "n068",
+   "body_id": 1220576923,
+   "pop": "PEN_L",
+   "wedge": 13,
+   "type": "PEN_a(PEN1)",
+   "instance": "PEN_a(PB06a)_L9"
+  },
+  {
+   "index": 69,
+   "node": "n069",
+   "body_id": 1353544607,
+   "pop": "PEN_L",
+   "wedge": 14,
+   "type": "PEN_b(PEN2)",
+   "instance": "PEN_b(PB06b)_L8"
+  },
+  {
+   "index": 70,
+   "node": "n070",
+   "body_id": 1127471692,
+   "pop": "PEN_L",
+   "wedge": 15,
+   "type": "PEN_a(PEN1)",
+   "instance": "PEN_a(PB06a)_L8"
+  },
+  {
+   "index": 71,
+   "node": "n071",
+   "body_id": 509410587,
+   "pop": "PEN_R",
+   "wedge": 0,
+   "type": "PEN_a(PEN1)",
+   "instance": "PEN_a(PB06a)_R4"
+  },
+  {
+   "index": 72,
+   "node": "n072",
+   "body_id": 663562172,
+   "pop": "PEN_R",
+   "wedge": 1,
+   "type": "PEN_b(PEN2)",
+   "instance": "PEN_b(PB06b)_R4"
+  },
+  {
+   "index": 73,
+   "node": "n073",
+   "body_id": 910447075,
+   "pop": "PEN_R",
+   "wedge": 1,
+   "type": "PEN_a(PEN1)",
+   "instance": "PEN_a(PB06a)_R5"
+  },
+  {
+   "index": 74,
+   "node": "n074",
+   "body_id": 849421763,
+   "pop": "PEN_R",
+   "wedge": 2,
+   "type": "PEN_b(PEN2)",
+   "instance": "PEN_b(PB06b)_R5"
+  },
+  {
+   "index": 75,
+   "node": "n075",
+   "body_id": 847336755,
+   "pop": "PEN_R",
+   "wedge": 3,
+   "type": "PEN_a(PEN1)",
+   "instance": "PEN_a(PB06a)_R6"
+  },
+  {
+   "index": 76,
+   "node": "n076",
+   "body_id": 1197993940,
+   "pop": "PEN_R",
+   "wedge": 4,
+   "type": "PEN_b(PEN2)",
+   "instance": "PEN_b(PB06b)_R6"
+  },
+  {
+   "index": 77,
+   "node": "n077",
+   "body_id": 663190769,
+   "pop": "PEN_R",
+   "wedge": 4,
+   "type": "PEN_a(PEN1)",
+   "instance": "PEN_a(PB06a)_R6"
+  },
+  {
+   "index": 78,
+   "node": "n078",
+   "body_id": 941123755,
+   "pop": "PEN_R",
+   "wedge": 5,
+   "type": "PEN_b(PEN2)",
+   "instance": "PEN_b(PB06b)_R6"
+  },
+  {
+   "index": 79,
+   "node": "n079",
+   "body_id": 1002507131,
+   "pop": "PEN_R",
+   "wedge": 6,
+   "type": "PEN_a(PEN1)",
+   "instance": "PEN_a(PB06a)_R7"
+  },
+  {
+   "index": 80,
+   "node": "n080",
+   "body_id": 693755250,
+   "pop": "PEN_R",
+   "wedge": 7,
+   "type": "PEN_b(PEN2)",
+   "instance": "PEN_b(PB06b)_R7"
+  },
+  {
+   "index": 81,
+   "node": "n081",
+   "body_id": 1062526223,
+   "pop": "PEN_R",
+   "wedge": 8,
+   "type": "PEN_b(PEN2)",
+   "instance": "PEN_b(PB06b)_R8"
+  },
+  {
+   "index": 82,
+   "node": "n082",
+   "body_id": 1125964630,
+   "pop": "PEN_R",
+   "wedge": 8,
+   "type": "PEN_a(PEN1)",
+   "instance": "PEN_a(PB06a)_R8"
+  },
+  {
+   "index": 83,
+   "node": "n083",
+   "body_id": 1601771527,
+   "pop": "PEN_R",
+   "wedge": 9,
+   "type": "PEN_b(PEN2)",
+   "instance": "PEN_b(PB06b)_R9"
+  },
+  {
+   "index": 84,
+   "node": "n084",
+   "body_id": 1218728570,
+   "pop": "PEN_R",
+   "wedge": 10,
+   "type": "PEN_b(PEN2)",
+   "instance": "PEN_b(PB06b)_R9"
+  },
+  {
+   "index": 85,
+   "node": "n085",
+   "body_id": 1218732640,
+   "pop": "PEN_R",
+   "wedge": 11,
+   "type": "PEN_a(PEN1)",
+   "instance": "PEN_a(PB06a)_R9"
+  },
+  {
+   "index": 86,
+   "node": "n086",
+   "body_id": 972892437,
+   "pop": "PEN_R",
+   "wedge": 11,
+   "type": "PEN_a(PEN1)",
+   "instance": "PEN_a(PB06a)_R2"
+  },
+  {
+   "index": 87,
+   "node": "n087",
+   "body_id": 724280817,
+   "pop": "PEN_R",
+   "wedge": 12,
+   "type": "PEN_b(PEN2)",
+   "instance": "PEN_b(PB06b)_R2"
+  },
+  {
+   "index": 88,
+   "node": "n088",
+   "body_id": 570461892,
+   "pop": "PEN_R",
+   "wedge": 13,
+   "type": "PEN_a(PEN1)",
+   "instance": "PEN_a(PB06a)_R3"
+  },
+  {
+   "index": 89,
+   "node": "n089",
+   "body_id": 973566036,
+   "pop": "PEN_R",
+   "wedge": 14,
+   "type": "PEN_b(PEN2)",
+   "instance": "PEN_b(PB06b)_R3"
+  },
+  {
+   "index": 90,
+   "node": "n090",
+   "body_id": 5813056953,
+   "pop": "PEN_R",
+   "wedge": 14,
+   "type": "PEN_a(PEN1)",
+   "instance": "PEN_a(PB06a)_R4"
+  },
+  {
+   "index": 91,
+   "node": "n091",
+   "body_id": 569775058,
+   "pop": "PEN_R",
+   "wedge": 15,
+   "type": "PEN_b(PEN2)",
+   "instance": "PEN_b(PB06b)_R4"
+  },
+  {
+   "index": 92,
+   "node": "n092",
+   "body_id": 942522378,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L2R7_R"
+  },
+  {
+   "index": 93,
+   "node": "n093",
+   "body_id": 911911699,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L2R7_R"
+  },
+  {
+   "index": 94,
+   "node": "n094",
+   "body_id": 911578496,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L2R7_R"
+  },
+  {
+   "index": 95,
+   "node": "n095",
+   "body_id": 911574041,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L2R7_R"
+  },
+  {
+   "index": 96,
+   "node": "n096",
+   "body_id": 911470352,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L2R7_R"
+  },
+  {
+   "index": 97,
+   "node": "n097",
+   "body_id": 911574261,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L1L9R8_R"
+  },
+  {
+   "index": 98,
+   "node": "n098",
+   "body_id": 5813061383,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L1L9R8_R"
+  },
+  {
+   "index": 99,
+   "node": "n099",
+   "body_id": 911911004,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L1L9R8_R"
+  },
+  {
+   "index": 100,
+   "node": "n100",
+   "body_id": 881221166,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L1L9R8_R"
+  },
+  {
+   "index": 101,
+   "node": "n101",
+   "body_id": 911919917,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L1L9R8_R"
+  },
+  {
+   "index": 102,
+   "node": "n102",
+   "body_id": 911911193,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L8R1R9_L"
+  },
+  {
+   "index": 103,
+   "node": "n103",
+   "body_id": 910783883,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L8R1R9_L"
+  },
+  {
+   "index": 104,
+   "node": "n104",
+   "body_id": 911578595,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L8R1R9_L"
+  },
+  {
+   "index": 105,
+   "node": "n105",
+   "body_id": 910783731,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L8R1R9_L"
+  },
+  {
+   "index": 106,
+   "node": "n106",
+   "body_id": 910442752,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L8R1R9_L"
+  },
+  {
+   "index": 107,
+   "node": "n107",
+   "body_id": 912243353,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L7R2_L"
+  },
+  {
+   "index": 108,
+   "node": "n108",
+   "body_id": 911129204,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L7R2_L"
+  },
+  {
+   "index": 109,
+   "node": "n109",
+   "body_id": 1158747783,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L7R2_L"
+  },
+  {
+   "index": 110,
+   "node": "n110",
+   "body_id": 941482720,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L6R3_L"
+  },
+  {
+   "index": 111,
+   "node": "n111",
+   "body_id": 941810314,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L7R3_L"
+  },
+  {
+   "index": 112,
+   "node": "n112",
+   "body_id": 973959177,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L6R3_L"
+  },
+  {
+   "index": 113,
+   "node": "n113",
+   "body_id": 911919044,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L6R3_L"
+  },
+  {
+   "index": 114,
+   "node": "n114",
+   "body_id": 941814787,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L6R3_L"
+  },
+  {
+   "index": 115,
+   "node": "n115",
+   "body_id": 734581598,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L6R3_L"
+  },
+  {
+   "index": 116,
+   "node": "n116",
+   "body_id": 911241750,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L6R4_L"
+  },
+  {
+   "index": 117,
+   "node": "n117",
+   "body_id": 911211196,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L6R4_L"
+  },
+  {
+   "index": 118,
+   "node": "n118",
+   "body_id": 910801332,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L5R4_L"
+  },
+  {
+   "index": 119,
+   "node": "n119",
+   "body_id": 880875736,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L5R4_L"
+  },
+  {
+   "index": 120,
+   "node": "n120",
+   "body_id": 5813048042,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L5R4_L"
+  },
+  {
+   "index": 121,
+   "node": "n121",
+   "body_id": 880530613,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L5R4_L"
+  },
+  {
+   "index": 122,
+   "node": "n122",
+   "body_id": 910796989,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L5R4_L"
+  },
+  {
+   "index": 123,
+   "node": "n123",
+   "body_id": 910442723,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L4R5_R"
+  },
+  {
+   "index": 124,
+   "node": "n124",
+   "body_id": 880880259,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L4R5_R"
+  },
+  {
+   "index": 125,
+   "node": "n125",
+   "body_id": 911138168,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L4R5_R"
+  },
+  {
+   "index": 126,
+   "node": "n126",
+   "body_id": 911134009,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L4R5_R"
+  },
+  {
+   "index": 127,
+   "node": "n127",
+   "body_id": 911129339,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L4R5_R"
+  },
+  {
+   "index": 128,
+   "node": "n128",
+   "body_id": 941469087,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L3R6_R"
+  },
+  {
+   "index": 129,
+   "node": "n129",
+   "body_id": 910442782,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L4R6_R"
+  },
+  {
+   "index": 130,
+   "node": "n130",
+   "body_id": 911901802,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L4R6_R"
+  },
+  {
+   "index": 131,
+   "node": "n131",
+   "body_id": 911565419,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L3R6_R"
+  },
+  {
+   "index": 132,
+   "node": "n132",
+   "body_id": 910783961,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L3R6_R"
+  },
+  {
+   "index": 133,
+   "node": "n133",
+   "body_id": 911906936,
+   "pop": "D7",
+   "wedge": -1,
+   "type": "Delta7",
+   "instance": "Delta7(PB15)_L3R6_R"
+  }
+ ],
+ "populations": {
+  "EPG": {
+   "color": "#2a78d6"
+  },
+  "PEN_L": {
+   "color": "#eb6834"
+  },
+  "PEN_R": {
+   "color": "#1baf7a"
+  },
+  "D7": {
+   "color": "#eda100"
+  }
+ },
+ "context": [
+  {
+   "node": "c858587718",
+   "body_id": 858587718,
+   "type": "ExR6",
+   "instance": "ExR6(ring)_R",
+   "synapses_with_circuit": 9840,
+   "why": "partner"
+  },
+  {
+   "node": "c1095275456",
+   "body_id": 1095275456,
+   "type": "LPsP",
+   "instance": "LPsP(PB13)_L",
+   "synapses_with_circuit": 7770,
+   "why": "partner"
+  },
+  {
+   "node": "c881217171",
+   "body_id": 881217171,
+   "type": "LPsP",
+   "instance": "LPsP(PB13)_R",
+   "synapses_with_circuit": 7520,
+   "why": "partner"
+  },
+  {
+   "node": "c1228692168",
+   "body_id": 1228692168,
+   "type": "ExR6",
+   "instance": "ExR6(ring)_L",
+   "synapses_with_circuit": 7331,
+   "why": "partner"
+  },
+  {
+   "node": "c1730608428",
+   "body_id": 1730608428,
+   "type": "ExR4",
+   "instance": "ExR4(ring)_R",
+   "synapses_with_circuit": 5184,
+   "why": "partner"
+  },
+  {
+   "node": "c1198330641",
+   "body_id": 1198330641,
+   "type": "ExR4",
+   "instance": "ExR4(ring)_L",
+   "synapses_with_circuit": 4124,
+   "why": "partner"
+  },
+  {
+   "node": "c1600420555",
+   "body_id": 1600420555,
+   "type": "GLNO",
+   "instance": "GLNO(LAL-NO1)_R",
+   "synapses_with_circuit": 2909,
+   "why": "partner"
+  },
+  {
+   "node": "c1539994995",
+   "body_id": 1539994995,
+   "type": "GLNO",
+   "instance": "GLNO(LAL-NO1)_R",
+   "synapses_with_circuit": 2830,
+   "why": "partner"
+  },
+  {
+   "node": "c1509439784",
+   "body_id": 1509439784,
+   "type": "GLNO",
+   "instance": "GLNO(LAL-NO1)_L",
+   "synapses_with_circuit": 2583,
+   "why": "partner"
+  },
+  {
+   "node": "c1509098829",
+   "body_id": 1509098829,
+   "type": "GLNO",
+   "instance": "GLNO(LAL-NO1)_L",
+   "synapses_with_circuit": 2293,
+   "why": "partner"
+  },
+  {
+   "node": "c5813053866",
+   "body_id": 5813053866,
+   "type": "ER4m",
+   "instance": "ER4m(ring)_R",
+   "synapses_with_circuit": 2024,
+   "why": "partner"
+  },
+  {
+   "node": "c1167977970",
+   "body_id": 1167977970,
+   "type": "ER4m",
+   "instance": "ER4m(ring)_L",
+   "synapses_with_circuit": 1950,
+   "why": "partner"
+  },
+  {
+   "node": "c5813050767",
+   "body_id": 5813050767,
+   "type": "ER4m",
+   "instance": "ER4m(ring)_R",
+   "synapses_with_circuit": 1867,
+   "why": "partner"
+  },
+  {
+   "node": "c1292847181",
+   "body_id": 1292847181,
+   "type": "ER4m",
+   "instance": "ER4m(ring)_R",
+   "synapses_with_circuit": 1866,
+   "why": "partner"
+  },
+  {
+   "node": "c5813049948",
+   "body_id": 5813049948,
+   "type": "ER4m",
+   "instance": "ER4m(ring)_L",
+   "synapses_with_circuit": 1798,
+   "why": "partner"
+  },
+  {
+   "node": "c1167645442",
+   "body_id": 1167645442,
+   "type": "ER4m",
+   "instance": "ER4m(ring)_R",
+   "synapses_with_circuit": 1797,
+   "why": "partner"
+  },
+  {
+   "node": "c5813047793",
+   "body_id": 5813047793,
+   "type": "ER4m",
+   "instance": "ER4m(ring)_L",
+   "synapses_with_circuit": 1793,
+   "why": "partner"
+  },
+  {
+   "node": "c1198326456",
+   "body_id": 1198326456,
+   "type": "ER4m",
+   "instance": "ER4m(ring)_R",
+   "synapses_with_circuit": 1789,
+   "why": "partner"
+  },
+  {
+   "node": "c1198671494",
+   "body_id": 1198671494,
+   "type": "ER4m",
+   "instance": "ER4m(ring)_L",
+   "synapses_with_circuit": 1767,
+   "why": "partner"
+  },
+  {
+   "node": "c1167641412",
+   "body_id": 1167641412,
+   "type": "ER4m",
+   "instance": "ER4m(ring)_L",
+   "synapses_with_circuit": 1752,
+   "why": "partner"
+  },
+  {
+   "node": "c725942718",
+   "body_id": 725942718,
+   "type": "EL",
+   "instance": "EL(EQ5)_R",
+   "synapses_with_circuit": 1735,
+   "why": "partner"
+  },
+  {
+   "node": "c696682163",
+   "body_id": 696682163,
+   "type": "EL",
+   "instance": "EL(EQ5)_L",
+   "synapses_with_circuit": 1686,
+   "why": "partner"
+  },
+  {
+   "node": "c1100792636",
+   "body_id": 1100792636,
+   "type": "FB4Y",
+   "instance": "FB4Y(EB/NO1)_L",
+   "synapses_with_circuit": 1640,
+   "why": "partner"
+  },
+  {
+   "node": "c1105882358",
+   "body_id": 1105882358,
+   "type": "ExR7",
+   "instance": "ExR7(ring)_R",
+   "synapses_with_circuit": 1597,
+   "why": "partner"
+  },
+  {
+   "node": "c725951660",
+   "body_id": 725951660,
+   "type": "EL",
+   "instance": "EL(EQ5)_R",
+   "synapses_with_circuit": 1578,
+   "why": "partner"
+  },
+  {
+   "node": "c820144012",
+   "body_id": 820144012,
+   "type": "EL",
+   "instance": "EL(EQ5)_L",
+   "synapses_with_circuit": 1532,
+   "why": "partner"
+  },
+  {
+   "node": "c5812983734",
+   "body_id": 5812983734,
+   "type": "ER6",
+   "instance": "ER6(ring)_R",
+   "synapses_with_circuit": 1517,
+   "why": "partner"
+  },
+  {
+   "node": "c1137288015",
+   "body_id": 1137288015,
+   "type": "EL",
+   "instance": "EL(EQ5)_L",
+   "synapses_with_circuit": 1489,
+   "why": "partner"
+  },
+  {
+   "node": "c918334668",
+   "body_id": 918334668,
+   "type": "ExR1",
+   "instance": "ExR1(ring)_L",
+   "synapses_with_circuit": 1483,
+   "why": "type"
+  },
+  {
+   "node": "c1324430237",
+   "body_id": 1324430237,
+   "type": "ER6",
+   "instance": "ER6(ring)_R",
+   "synapses_with_circuit": 1483,
+   "why": "partner"
+  },
+  {
+   "node": "c727350004",
+   "body_id": 727350004,
+   "type": "EL",
+   "instance": "EL(EQ5)_L",
+   "synapses_with_circuit": 1477,
+   "why": "partner"
+  },
+  {
+   "node": "c1136865339",
+   "body_id": 1136865339,
+   "type": "ExR2",
+   "instance": "ExR2(PPM3-EB-DAN/ring)_L",
+   "synapses_with_circuit": 1466,
+   "why": "partner"
+  },
+  {
+   "node": "c1036753721",
+   "body_id": 1036753721,
+   "type": "EL",
+   "instance": "EL(EQ5)_L",
+   "synapses_with_circuit": 1455,
+   "why": "partner"
+  },
+  {
+   "node": "c787762461",
+   "body_id": 787762461,
+   "type": "ExR2",
+   "instance": "ExR2(PPM3-EB-DAN/ring)_L",
+   "synapses_with_circuit": 1450,
+   "why": "partner"
+  },
+  {
+   "node": "c5812987684",
+   "body_id": 5812987684,
+   "type": "ExR7",
+   "instance": "ExR7(ring)_L",
+   "synapses_with_circuit": 1441,
+   "why": "partner"
+  },
+  {
+   "node": "c5813027016",
+   "body_id": 5813027016,
+   "type": "FB4Y",
+   "instance": "FB4Y(EB/NO1)_R",
+   "synapses_with_circuit": 1439,
+   "why": "partner"
+  },
+  {
+   "node": "c1043825714",
+   "body_id": 1043825714,
+   "type": "ExR5",
+   "instance": "ExR5(ring)_R",
+   "synapses_with_circuit": 1437,
+   "why": "partner"
+  },
+  {
+   "node": "c1192152791",
+   "body_id": 1192152791,
+   "type": "EL",
+   "instance": "EL(EQ5)_R",
+   "synapses_with_circuit": 1423,
+   "why": "partner"
+  },
+  {
+   "node": "c1449247522",
+   "body_id": 1449247522,
+   "type": "ExR2",
+   "instance": "ExR2(PPM3-EB-DAN/ring)_R",
+   "synapses_with_circuit": 1411,
+   "why": "partner"
+  },
+  {
+   "node": "c541127846",
+   "body_id": 541127846,
+   "type": "ExR5",
+   "instance": "ExR5(ring)_L",
+   "synapses_with_circuit": 1397,
+   "why": "partner"
+  },
+  {
+   "node": "c1259386264",
+   "body_id": 1259386264,
+   "type": "ExR7",
+   "instance": "ExR7(ring)_R",
+   "synapses_with_circuit": 1392,
+   "why": "partner"
+  },
+  {
+   "node": "c948709216",
+   "body_id": 948709216,
+   "type": "ExR1",
+   "instance": "ExR1(ring)_R",
+   "synapses_with_circuit": 1390,
+   "why": "type"
+  },
+  {
+   "node": "c1198330286",
+   "body_id": 1198330286,
+   "type": "ExR2",
+   "instance": "ExR2(PPM3-EB-DAN/ring)_R",
+   "synapses_with_circuit": 1380,
+   "why": "partner"
+  },
+  {
+   "node": "c1034220115",
+   "body_id": 1034220115,
+   "type": "EL",
+   "instance": "EL(EQ5)_R",
+   "synapses_with_circuit": 1368,
+   "why": "partner"
+  },
+  {
+   "node": "c1008378448",
+   "body_id": 1008378448,
+   "type": "FB4Y",
+   "instance": "FB4Y(EB/NO1)_R",
+   "synapses_with_circuit": 1361,
+   "why": "partner"
+  },
+  {
+   "node": "c1508369047",
+   "body_id": 1508369047,
+   "type": "EL",
+   "instance": "EL(EQ5)_R",
+   "synapses_with_circuit": 1352,
+   "why": "partner"
+  },
+  {
+   "node": "c1168340507",
+   "body_id": 1168340507,
+   "type": "EL",
+   "instance": "EL(EQ5)_L",
+   "synapses_with_circuit": 1347,
+   "why": "partner"
+  },
+  {
+   "node": "c978733459",
+   "body_id": 978733459,
+   "type": "ExR5",
+   "instance": "ExR5(ring)_L",
+   "synapses_with_circuit": 1346,
+   "why": "partner"
+  },
+  {
+   "node": "c912596952",
+   "body_id": 912596952,
+   "type": "EL",
+   "instance": "EL(EQ5)_L",
+   "synapses_with_circuit": 1335,
+   "why": "partner"
+  },
+  {
+   "node": "c5813057274",
+   "body_id": 5813057274,
+   "type": "FB4Y",
+   "instance": "FB4Y(EB/NO1)_L",
+   "synapses_with_circuit": 1325,
+   "why": "partner"
+  },
+  {
+   "node": "c1066088381",
+   "body_id": 1066088381,
+   "type": "EL",
+   "instance": "EL(EQ5)_L",
+   "synapses_with_circuit": 1315,
+   "why": "partner"
+  },
+  {
+   "node": "c917647959",
+   "body_id": 917647959,
+   "type": "ExR1",
+   "instance": "ExR1(ring)_L",
+   "synapses_with_circuit": 1308,
+   "why": "type"
+  },
+  {
+   "node": "c1005308608",
+   "body_id": 1005308608,
+   "type": "EL",
+   "instance": "EL(EQ5)_L",
+   "synapses_with_circuit": 1291,
+   "why": "partner"
+  },
+  {
+   "node": "c1321140852",
+   "body_id": 1321140852,
+   "type": "EL",
+   "instance": "EL(EQ5)_R",
+   "synapses_with_circuit": 1280,
+   "why": "partner"
+  },
+  {
+   "node": "c1005710800",
+   "body_id": 1005710800,
+   "type": "ExR7",
+   "instance": "ExR7(ring)_L",
+   "synapses_with_circuit": 1262,
+   "why": "partner"
+  },
+  {
+   "node": "c1167965225",
+   "body_id": 1167965225,
+   "type": "EL",
+   "instance": "EL(EQ5)_R",
+   "synapses_with_circuit": 1226,
+   "why": "partner"
+  },
+  {
+   "node": "c949710555",
+   "body_id": 949710555,
+   "type": "ExR1",
+   "instance": "ExR1(ring)_R",
+   "synapses_with_circuit": 1216,
+   "why": "type"
+  },
+  {
+   "node": "c1447253749",
+   "body_id": 1447253749,
+   "type": "EL",
+   "instance": "EL(EQ5)_R",
+   "synapses_with_circuit": 1153,
+   "why": "partner"
+  },
+  {
+   "node": "c1292882359",
+   "body_id": 1292882359,
+   "type": "EL",
+   "instance": "EL(EQ5)_R",
+   "synapses_with_circuit": 1151,
+   "why": "partner"
+  },
+  {
+   "node": "c942587380",
+   "body_id": 942587380,
+   "type": "PEG",
+   "instance": "PEG(PB07)_L4",
+   "synapses_with_circuit": 1107,
+   "why": "partner"
+  },
+  {
+   "node": "c5813060726",
+   "body_id": 5813060726,
+   "type": "ExR5",
+   "instance": "ExR5(ring)_R",
+   "synapses_with_circuit": 1072,
+   "why": "partner"
+  },
+  {
+   "node": "c974239375",
+   "body_id": 974239375,
+   "type": "PEG",
+   "instance": "PEG(PB07)_R3",
+   "synapses_with_circuit": 1067,
+   "why": "partner"
+  },
+  {
+   "node": "c974300015",
+   "body_id": 974300015,
+   "type": "PEG",
+   "instance": "PEG(PB07)_L3",
+   "synapses_with_circuit": 971,
+   "why": "partner"
+  },
+  {
+   "node": "c880875861",
+   "body_id": 880875861,
+   "type": "PEG",
+   "instance": "PEG(PB07)_L5",
+   "synapses_with_circuit": 934,
+   "why": "partner"
+  },
+  {
+   "node": "c1190171884",
+   "body_id": 1190171884,
+   "type": "PEG",
+   "instance": "PEG(PB07)_L2",
+   "synapses_with_circuit": 926,
+   "why": "partner"
+  },
+  {
+   "node": "c850194651",
+   "body_id": 850194651,
+   "type": "PFL2",
+   "instance": "PFL2(PB12b)_L4_C8",
+   "synapses_with_circuit": 909,
+   "why": "partner"
+  },
+  {
+   "node": "c1228683492",
+   "body_id": 1228683492,
+   "type": "ExR8",
+   "instance": "ExR8(ring)_L",
+   "synapses_with_circuit": 896,
+   "why": "partner"
+  },
+  {
+   "node": "c942173776",
+   "body_id": 942173776,
+   "type": "PEG",
+   "instance": "PEG(PB07)_R4",
+   "synapses_with_circuit": 884,
+   "why": "partner"
+  },
+  {
+   "node": "c1291094620",
+   "body_id": 1291094620,
+   "type": "ER1_b",
+   "instance": "ER1_b(ring)_R",
+   "synapses_with_circuit": 851,
+   "why": "partner"
+  },
+  {
+   "node": "c5813014882",
+   "body_id": 5813014882,
+   "type": "PEG",
+   "instance": "PEG(PB07)_R5",
+   "synapses_with_circuit": 850,
+   "why": "partner"
+  },
+  {
+   "node": "c1259718093",
+   "body_id": 1259718093,
+   "type": "ExR8",
+   "instance": "ExR8(ring)_R",
+   "synapses_with_circuit": 833,
+   "why": "partner"
+  },
+  {
+   "node": "c1167645658",
+   "body_id": 1167645658,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_R",
+   "synapses_with_circuit": 828,
+   "why": "partner"
+  },
+  {
+   "node": "c1199712272",
+   "body_id": 1199712272,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_L",
+   "synapses_with_circuit": 821,
+   "why": "partner"
+  },
+  {
+   "node": "c912147912",
+   "body_id": 912147912,
+   "type": "PEG",
+   "instance": "PEG(PB07)_R6",
+   "synapses_with_circuit": 811,
+   "why": "partner"
+  },
+  {
+   "node": "c911565408",
+   "body_id": 911565408,
+   "type": "P1-9",
+   "instance": "P1-9(PB19)_L",
+   "synapses_with_circuit": 805,
+   "why": "partner"
+  },
+  {
+   "node": "c5813047647",
+   "body_id": 5813047647,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_R",
+   "synapses_with_circuit": 803,
+   "why": "partner"
+  },
+  {
+   "node": "c1294082002",
+   "body_id": 1294082002,
+   "type": "ER1_b",
+   "instance": "ER1_b(ring)_R",
+   "synapses_with_circuit": 797,
+   "why": "partner"
+  },
+  {
+   "node": "c1167895489",
+   "body_id": 1167895489,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_R",
+   "synapses_with_circuit": 796,
+   "why": "partner"
+  },
+  {
+   "node": "c5813059834",
+   "body_id": 5813059834,
+   "type": "PEG",
+   "instance": "PEG(PB07)_R8",
+   "synapses_with_circuit": 795,
+   "why": "partner"
+  },
+  {
+   "node": "c1105834722",
+   "body_id": 1105834722,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_R",
+   "synapses_with_circuit": 792,
+   "why": "partner"
+  },
+  {
+   "node": "c1198667367",
+   "body_id": 1198667367,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_L",
+   "synapses_with_circuit": 782,
+   "why": "partner"
+  },
+  {
+   "node": "c1601715638",
+   "body_id": 1601715638,
+   "type": "ExR8",
+   "instance": "ExR8(ring)_R",
+   "synapses_with_circuit": 780,
+   "why": "partner"
+  },
+  {
+   "node": "c1199699496",
+   "body_id": 1199699496,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_L",
+   "synapses_with_circuit": 774,
+   "why": "partner"
+  },
+  {
+   "node": "c1230480261",
+   "body_id": 1230480261,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_L",
+   "synapses_with_circuit": 772,
+   "why": "partner"
+  },
+  {
+   "node": "c972555509",
+   "body_id": 972555509,
+   "type": "PEG",
+   "instance": "PEG(PB07)_R2",
+   "synapses_with_circuit": 771,
+   "why": "partner"
+  },
+  {
+   "node": "c1167282562",
+   "body_id": 1167282562,
+   "type": "PFL2",
+   "instance": "PFL2(PB12b)_R4_C2",
+   "synapses_with_circuit": 760,
+   "why": "partner"
+  },
+  {
+   "node": "c881898734",
+   "body_id": 881898734,
+   "type": "PEG",
+   "instance": "PEG(PB07)_L6",
+   "synapses_with_circuit": 757,
+   "why": "partner"
+  },
+  {
+   "node": "c1168059800",
+   "body_id": 1168059800,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_L",
+   "synapses_with_circuit": 743,
+   "why": "partner"
+  },
+  {
+   "node": "c1291435693",
+   "body_id": 1291435693,
+   "type": "ER1_b",
+   "instance": "ER1_b(ring)_R",
+   "synapses_with_circuit": 743,
+   "why": "partner"
+  },
+  {
+   "node": "c1168064774",
+   "body_id": 1168064774,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_L",
+   "synapses_with_circuit": 742,
+   "why": "partner"
+  },
+  {
+   "node": "c5813020409",
+   "body_id": 5813020409,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_R",
+   "synapses_with_circuit": 738,
+   "why": "partner"
+  },
+  {
+   "node": "c5813048896",
+   "body_id": 5813048896,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_R",
+   "synapses_with_circuit": 732,
+   "why": "partner"
+  },
+  {
+   "node": "c1198680122",
+   "body_id": 1198680122,
+   "type": "ER2_a",
+   "instance": "ER2_a(ring)_L",
+   "synapses_with_circuit": 730,
+   "why": "partner"
+  },
+  {
+   "node": "c1128088594",
+   "body_id": 1128088594,
+   "type": "PEG",
+   "instance": "PEG(PB07)_L1",
+   "synapses_with_circuit": 729,
+   "why": "partner"
+  },
+  {
+   "node": "c1002848661",
+   "body_id": 1002848661,
+   "type": "PEG",
+   "instance": "PEG(PB07)_R7",
+   "synapses_with_circuit": 720,
+   "why": "partner"
+  },
+  {
+   "node": "c1106180107",
+   "body_id": 1106180107,
+   "type": "ER2_a",
+   "instance": "ER2_a(ring)_R",
+   "synapses_with_circuit": 720,
+   "why": "partner"
+  },
+  {
+   "node": "c1167896065",
+   "body_id": 1167896065,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_R",
+   "synapses_with_circuit": 720,
+   "why": "partner"
+  },
+  {
+   "node": "c1167904437",
+   "body_id": 1167904437,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_R",
+   "synapses_with_circuit": 718,
+   "why": "partner"
+  },
+  {
+   "node": "c1322133891",
+   "body_id": 1322133891,
+   "type": "ER1_b",
+   "instance": "ER1_b(ring)_L",
+   "synapses_with_circuit": 718,
+   "why": "partner"
+  },
+  {
+   "node": "c5813041365",
+   "body_id": 5813041365,
+   "type": "PFL1",
+   "instance": "PFL1(PB12a)_L4_C5",
+   "synapses_with_circuit": 717,
+   "why": "partner"
+  },
+  {
+   "node": "c880875840",
+   "body_id": 880875840,
+   "type": "PFL2",
+   "instance": "PFL2(PB12b)_L5_C9",
+   "synapses_with_circuit": 714,
+   "why": "partner"
+  },
+  {
+   "node": "c1198671672",
+   "body_id": 1198671672,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_L",
+   "synapses_with_circuit": 714,
+   "why": "partner"
+  },
+  {
+   "node": "c1322138079",
+   "body_id": 1322138079,
+   "type": "ER1_b",
+   "instance": "ER1_b(ring)_R",
+   "synapses_with_circuit": 713,
+   "why": "partner"
+  },
+  {
+   "node": "c5813047446",
+   "body_id": 5813047446,
+   "type": "ER2_a",
+   "instance": "ER2_a(ring)_L",
+   "synapses_with_circuit": 713,
+   "why": "partner"
+  },
+  {
+   "node": "c1137210821",
+   "body_id": 1137210821,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_R",
+   "synapses_with_circuit": 710,
+   "why": "partner"
+  },
+  {
+   "node": "c1136861363",
+   "body_id": 1136861363,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_R",
+   "synapses_with_circuit": 707,
+   "why": "partner"
+  },
+  {
+   "node": "c481121605",
+   "body_id": 481121605,
+   "type": "PFL1",
+   "instance": "PFL1(PB12a)_L2_C3",
+   "synapses_with_circuit": 706,
+   "why": "partner"
+  },
+  {
+   "node": "c1168241257",
+   "body_id": 1168241257,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_R",
+   "synapses_with_circuit": 706,
+   "why": "partner"
+  },
+  {
+   "node": "c1199712167",
+   "body_id": 1199712167,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_L",
+   "synapses_with_circuit": 703,
+   "why": "partner"
+  },
+  {
+   "node": "c1291094742",
+   "body_id": 1291094742,
+   "type": "ER1_b",
+   "instance": "ER1_b(ring)_L",
+   "synapses_with_circuit": 700,
+   "why": "partner"
+  },
+  {
+   "node": "c1322133531",
+   "body_id": 1322133531,
+   "type": "ER1_b",
+   "instance": "ER1_b(ring)_L",
+   "synapses_with_circuit": 700,
+   "why": "partner"
+  },
+  {
+   "node": "c1198675740",
+   "body_id": 1198675740,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_L",
+   "synapses_with_circuit": 699,
+   "why": "partner"
+  },
+  {
+   "node": "c1322129730",
+   "body_id": 1322129730,
+   "type": "ER1_b",
+   "instance": "ER1_b(ring)_L",
+   "synapses_with_circuit": 698,
+   "why": "partner"
+  },
+  {
+   "node": "c5813020585",
+   "body_id": 5813020585,
+   "type": "ER3p_a",
+   "instance": "ER3p_a(ring)_R",
+   "synapses_with_circuit": 698,
+   "why": "partner"
+  },
+  {
+   "node": "c881458181",
+   "body_id": 881458181,
+   "type": "PFL1",
+   "instance": "PFL1(PB12a)_R3_C6",
+   "synapses_with_circuit": 697,
+   "why": "partner"
+  },
+  {
+   "node": "c1322129610",
+   "body_id": 1322129610,
+   "type": "ER1_b",
+   "instance": "ER1_b(ring)_R",
+   "synapses_with_circuit": 691,
+   "why": "partner"
+  },
+  {
+   "node": "c1198257581",
+   "body_id": 1198257581,
+   "type": "ER2_a",
+   "instance": "ER2_a(ring)_R",
+   "synapses_with_circuit": 689,
+   "why": "partner"
+  },
+  {
+   "node": "c1198680249",
+   "body_id": 1198680249,
+   "type": "ER2_a",
+   "instance": "ER2_a(ring)_L",
+   "synapses_with_circuit": 682,
+   "why": "partner"
+  },
+  {
+   "node": "c1198943369",
+   "body_id": 1198943369,
+   "type": "ER2_d",
+   "instance": "ER2_d(ring)_R",
+   "synapses_with_circuit": 682,
+   "why": "partner"
+  },
+  {
+   "node": "c1198684596",
+   "body_id": 1198684596,
+   "type": "ER2_a",
+   "instance": "ER2_a(ring)_L",
+   "synapses_with_circuit": 678,
+   "why": "partner"
+  },
+  {
+   "node": "c1198680441",
+   "body_id": 1198680441,
+   "type": "ER2_d",
+   "instance": "ER2_d(ring)_L",
+   "synapses_with_circuit": 670,
+   "why": "partner"
+  },
+  {
+   "node": "c848761388",
+   "body_id": 848761388,
+   "type": "PEG",
+   "instance": "PEG(PB07)_R1",
+   "synapses_with_circuit": 668,
+   "why": "partner"
+  },
+  {
+   "node": "c5813058389",
+   "body_id": 5813058389,
+   "type": "P6-8P9",
+   "instance": "P6-8P9(PB14)_R",
+   "synapses_with_circuit": 665,
+   "why": "partner"
+  },
+  {
+   "node": "c1198334861",
+   "body_id": 1198334861,
+   "type": "ER2_a",
+   "instance": "ER2_a(ring)_L",
+   "synapses_with_circuit": 662,
+   "why": "partner"
+  }
+ ],
+ "rois": [
+  {
+   "node": "roi_EB",
+   "name": "EB"
+  },
+  {
+   "node": "roi_PB",
+   "name": "PB"
+  },
+  {
+   "node": "roi_FB",
+   "name": "FB"
+  },
+  {
+   "node": "roi_NO",
+   "name": "NO"
+  }
+ ],
+ "outline": {
+  "node": "brain",
+  "source": "flybrains JRC2018F template surface"
+ },
+ "synapses": {
+  "file": "synapses.bin",
+  "count": 114823,
+  "layout": "float32 xyz[count][3], uint16 pre[count], uint16 post[count]; little-endian",
+  "dropped_not_in_model": 31
+ },
+ "views": {
+  "brain": {
+   "target": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "radius": 325.62
+  },
+  "cx": {
+   "target": [
+    -0.7799999713897705,
+    46.33000183105469,
+    -21.389999389648438
+   ],
+   "radius": 83.16
+  }
+ },
+ "faces": {
+  "total": 763420,
+  "per_simulated_neuron": 4000,
+  "per_context_neuron": 1500
+ },
+ "provenance": {
+  "baked_utc": "2026-09-19T20:02:39+00:00",
+  "meshes": "precomputed://gs://neuroglancer-janelia-flyem-hemibrain/v1.2/segmentation (lod 2, simplified)",
+  "synapses": {
+   "server": "neuprint.janelia.org",
+   "dataset": "hemibrain:v1.2.1",
+   "neuprint_python": "0.6.3",
+   "fetched_utc": "2026-09-19T19:14:45+00:00",
+   "circuit_neurons": 134,
+   "synapses": 114854,
+   "units": "hemibrain voxels (8 nm)",
+   "partner_min_synapses": 200,
+   "context_types": [
+    "ExR1"
+   ],
+   "rois": [
+    "EB",
+    "PB",
+    "FB",
+    "NO"
+   ]
+  },
+  "transform": "navis.xform_brain JRCFIB2018F -> JRC2018F (flybrains, Saalfeld lab H5)",
+  "context_rule": "top 120 partners by synapses with the circuit, plus every ExR1",
+  "credits": "Hemibrain v1.2.1 (Scheffer et al. 2020, Janelia FlyEM); JRC2018 templates (Bogovic et al. 2020); bridging transforms by the Saalfeld lab"
+ }
+}
