@@ -475,6 +475,31 @@ mechanism.
 
 A nest's family is fixed by its UID; stage and level vary per visit.
 
+### Only real stickers count
+
+Hashing the UID of "any tag" is an infinite-reward exploit as written. **Many
+payment cards and every phone emitting HCE present a randomized UID on each
+tap**, so one credit card waved repeatedly reads as an endless supply of
+brand-new Pokestops. The step cooldown does not help, because each tap looks
+like a different tag.
+
+`badge.nfc.card()` already returns the two fields that settle this. Accept a
+tag as game content ONLY when:
+
+- `sak == 0` and the UID is 7 bytes - the NTAG and Ultralight family, which
+  is what event stickers are.
+- The UID does not begin with `08`, the ISO 14443-3 marker for a randomly
+  generated identifier.
+
+Everything else - payment cards, transit passes, phones, hotel keys - reads
+as "not a Pokestop" with a short message rather than silently minting
+rewards. This costs four lines and closes the only unbounded economy in the
+game.
+
+Calibrate on the real stickers before trusting it: read one with the guide's
+NFC Card Viewer example, confirm its SAK and UID length, and widen the filter
+if the venue used something other than NTAG.
+
 ### Cooldowns without a clock
 
 `badge.sys.ms()` is monotonic since boot and resets on reboot, so a
