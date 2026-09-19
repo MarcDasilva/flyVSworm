@@ -1,4 +1,4 @@
-from wormed.pipeline.connectome import load_connectome
+from wormed.pipeline.connectome import load_connectome, assign_physiology
 
 def test_connectome_has_302_neurons_and_expected_edge_counts():
     """The hermaphrodite connectome is a fixed, published quantity. If these
@@ -37,3 +37,33 @@ def test_edge_indices_are_in_range():
         assert 0 <= pre < n and 0 <= post < n and w > 0
     for a, b, w in c.gap:
         assert 0 <= a < n and 0 <= b < n and w > 0
+
+def test_gaba_neurons_get_inhibitory_reversal_potential():
+    """Sign is not in the connectome. If GABAergic cells come out excitatory,
+    the reflex circuit has no brake and every drive saturates."""
+    c = load_connectome()
+    p = assign_physiology(c)
+    gaba_idx = {c.names.index(n) for n in ("DD1", "VD1") if n in c.names}
+    assert gaba_idx, "expected DD1/VD1 in the connectome"
+    for e, (pre, post, w) in enumerate(c.chem):
+        if pre in gaba_idx:
+            assert p.chem_E_mV[e] == -70, f"GABAergic edge {e} came out excitatory"
+
+def test_every_edge_has_physiology_and_unknowns_are_recorded():
+    c = load_connectome()
+    p = assign_physiology(c)
+    assert len(p.chem_E_mV) == len(c.chem)
+    assert len(p.chem_g) == len(c.chem)
+    assert len(p.gap_g) == len(c.gap)
+    assert len(p.params) == 302
+    assert "unknown_transmitter" in p.provenance
+
+def test_conductance_scales_with_contact_count():
+    """Edge weight is the number of synaptic contacts. A 10-contact synapse
+    must not have the same conductance as a 1-contact synapse."""
+    c = load_connectome()
+    p = assign_physiology(c)
+    weights = [w for _, _, w in c.chem]
+    lo = min(range(len(weights)), key=lambda i: weights[i])
+    hi = max(range(len(weights)), key=lambda i: weights[i])
+    assert p.chem_g[hi] > p.chem_g[lo]

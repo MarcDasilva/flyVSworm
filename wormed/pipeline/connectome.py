@@ -105,3 +105,63 @@ def load_connectome(path: Path = RAW) -> Connectome:
     for pre, post, w in gap_pairs.values():
         c.gap.append((idx[pre], idx[post], w))
     return c
+
+
+GABA_E_MV = -70
+EXCITATORY_E_MV = 0
+NT_TABLE = Path(__file__).resolve().parent.parent / "data" / "neurotransmitters.csv"
+
+
+@dataclass
+class NeuronParam:
+    g_leak: float = 1.0      # Q8.8 on the wire
+    E_leak_mV: int = -70
+    C: float = 1.0           # Q8.8 on the wire
+    V_half_mV: int = -35     # sigmoid midpoint
+    k_mV: int = 10           # sigmoid slope
+
+
+@dataclass
+class Physiology:
+    chem_E_mV: list[int] = field(default_factory=list)
+    chem_g: list[float] = field(default_factory=list)
+    gap_g: list[float] = field(default_factory=list)
+    params: list[NeuronParam] = field(default_factory=list)
+    provenance: dict = field(default_factory=dict)
+
+
+def assign_physiology(c: Connectome) -> Physiology:
+    """Synaptic sign is ASSIGNED from transmitter identity, NEVER measured —
+    the connectome data has no polarity field. GABAergic presynaptic
+    neurons get an inhibitory reversal potential; every other neuron
+    defaults to excitatory. This assumption must surface in the README via
+    `provenance`, not stay buried here."""
+    gaba = set()
+    with open(NT_TABLE, newline="") as f:
+        for r in csv.DictReader(f):
+            if r["transmitter"].strip().upper() == "GABA":
+                gaba.add(r["neuron"].strip())
+
+    known = {n for n in gaba if n in c.names}
+    unknown = sorted(set(c.names) - known)
+
+    p = Physiology()
+    p.provenance = {
+        "sign_source": "neurotransmitter identity; GABA -> inhibitory, else excitatory",
+        "gaba_neurons_matched": sorted(known),
+        "gaba_neurons_missing_from_connectome": sorted(gaba - known),
+        "unknown_transmitter": unknown,
+        "caveat": "Synaptic sign is ASSIGNED, not measured. State this in the README.",
+    }
+
+    # Conductance proxy: contact count, square-rooted to compress the long tail,
+    # then scaled so a median synapse sits near 0.1 (dimensionless, vs g_leak=1.0).
+    import math
+    for pre, post, w in c.chem:
+        p.chem_E_mV.append(GABA_E_MV if c.names[pre] in gaba else EXCITATORY_E_MV)
+        p.chem_g.append(0.1 * math.sqrt(w))
+    for a, b, w in c.gap:
+        p.gap_g.append(0.05 * math.sqrt(w))
+
+    p.params = [NeuronParam() for _ in c.names]
+    return p
