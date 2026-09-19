@@ -15,14 +15,14 @@ are live opponents.
 
 | Decision | Value |
 |---|---|
-| Species | **36**, in 12 families of 3 stages, 4 families per type |
+| Species | **36**, in 12 families of 3 stages, 2 families per type, 6 per type |
 | Art | 16x16 grid, 4 palette indices, drawn as box-widget row runs |
 | Opening flow | Title -> egg -> shake to hatch -> pick 1 of 3 starters |
 | Wild spawn sources | NFC nest stickers, and walking (step counter) |
 | Pokestops | NFC tags tagged as stops; give balls and XP on a per-tag cooldown |
 | Catch | Countdown, 5-second shake window, then an accelerometer throw graded by speed; sweeping-bar fallback |
-| Types | **Three only** - Water beats Fire beats Grass beats Water |
-| Duel teams | Exactly one Water, one Fire and one Grass. This gates dueling behind collecting |
+| Types | **Six**, on a symmetric wheel: Water, Normal, Fire, Ice, Grass, Electric |
+| Duel teams | **Any three distinct types.** Gates dueling behind collecting, without forcing specific types |
 | Duels | One round of rock paper scissors, sudden death, over radio |
 | Duel reward | Winner picks one of the loser's three and gets ONE capture attempt |
 | Duel sync | Commit-reveal, then host-authoritative result |
@@ -133,7 +133,7 @@ Ten files, plus an optional `icon.bin`, against the 16-file bundle cap.
 | `fsm.lua` | Mode state machine and timeouts | `monster` |
 | `dex.lua` | Species lookup, art decode, box-run renderer | - |
 | `monster.lua` | 5-byte packed creature record | - |
-| `battle.lua` | Team legality, commit-reveal, rock-paper-scissors resolution | `dex`, `monster` |
+| `battle.lua` | Team legality, commit-reveal, six-type wheel resolution | `dex`, `monster` |
 | `net.lua` | Radio framing, beacons, pairing, snapshots | `monster` |
 | `catch.lua` | Throw grading, bar fallback, catch probability, step counter | - |
 | `save.lua` | Load and persist to `appdata/save.dat` | `monster` |
@@ -206,11 +206,10 @@ One file, read once with `badge.fs.read`, held as a single string. Line
 offsets are kept as integers and substrings are taken on demand. Splitting it
 into 36 strings would roughly double its heap cost.
 
-**36 species, 12 families of 3 stages, 4 families per type.** 36 divides
-evenly by three types and three stages, giving twelve species of each of
-Water, Fire and Grass. Every species is one of those three: with
-rock paper scissors as the whole combat system, a creature of any other type
-could never be fielded.
+**36 species, 12 families of 3 stages, 2 families per type.** 36 divides
+evenly by six types and three stages, giving six species of each type. Every
+species sits on the wheel; there is no off-wheel type, because a creature
+that could never be fielded is dead content.
 
 Species line, space separated, about 285 bytes each:
 
@@ -219,7 +218,9 @@ id name type family stage strength catch_bias art
 04 EMBERKIT 1 2 1 3 190 0011100022...
 ```
 
-- `type` is 1 Fire, 2 Water, 3 Grass
+- `type` is the creature's **position on the wheel**: 1 Water, 2 Normal,
+  3 Fire, 4 Ice, 5 Grass, 6 Electric. The ordering is load-bearing - the
+  battle resolver is modular arithmetic on this number
 - `strength` is 1-10 and sets capture difficulty
 - `catch_bias` is a per-species nudge on top of strength, for making a
   particular creature a deliberate prize
@@ -233,11 +234,11 @@ Palette indices:
 - `3` accent, used for eyes and markings
 
 Palette colours are not stored. They are derived from the creature's type at
-paint time, so one grid renders in three palettes.
+paint time, so one grid renders in six palettes.
 
-**No move pool and no type chart.** Rock paper scissors over three types is
-three comparisons in code; a 256-character effectiveness table would be dead
-weight.
+**No move pool and no type chart.** The wheel is one modular subtraction; a
+36-entry effectiveness table would be dead weight and could drift out of
+sync with itself.
 
 Total: 36 species at about 285 bytes, so roughly 10.3 KB. That clears the
 16 KiB per-file read cap with 5.7 KB spare, and takes about 21 percent of
@@ -276,9 +277,9 @@ Cell size is an integer pixel count, so one grid serves every screen:
 `tools/gen_dex.py` and committed alongside its output.
 
 Twelve distinct body plans is the real cost of 36, and it is art work rather
-than budget. With only three types the palette sorts creatures into three
-groups, so the four families inside each palette have to be told apart by
-silhouette alone. The generator therefore varies four independent axes
+than budget. Six types helps here: the palette sorts creatures into six
+groups, so only **two** families share each colour and have to be told apart
+by silhouette. The generator therefore varies four independent axes
 rather than picking from a fixed list of shapes: **body** round, tall, squat
 or serpentine; **head** merged, distinct or crested; **limbs** none, two,
 four or finned; **crown** none, horns, long ears or antennae. That is 192
@@ -327,17 +328,62 @@ compatibility and the wire format for two bytes nobody needs.
 
 A duel is one round of rock paper scissors, sudden death.
 
-**Both players must field exactly one Water, one Fire and one Grass.** The
-app refuses to open the PAIR screen until the player's party contains all
-three, and says which type is missing. This is the game's progression gate -
-you start with one starter and must catch the other two types before you can
-duel anybody.
+**Both players field three creatures of three distinct types.** The app
+refuses to open the PAIR screen until the party holds three different types
+and says how many the player is short. This is the progression gate - you
+start with one starter and must catch at least two other types before you
+can duel anybody. Any three of the six qualify, so it gates on collecting
+breadth rather than on specific luck.
 
-Each player secretly picks one of their three. On reveal:
+### The type wheel
 
-- **Water beats Fire, Fire beats Grass, Grass beats Water.**
-- Same type: **the higher level wins.**
-- Same type and level: the host's RNG decides, and the frame says so.
+Six types on a circle. **Each type beats the next two, ties the one
+opposite, and loses to the previous two.**
+
+```
+Water -> Normal -> Fire -> Ice -> Grass -> Electric -> back to Water
+```
+
+| Type | Beats | Ties | Loses to |
+|---|---|---|---|
+| Water | Normal, Fire | Ice | Grass, Electric |
+| Normal | Fire, Ice | Grass | Electric, Water |
+| Fire | Ice, Grass | Electric | Water, Normal |
+| Ice | Grass, Electric | Water | Normal, Fire |
+| Grass | Electric, Water | Normal | Fire, Ice |
+| Electric | Water, Normal | Fire | Ice, Grass |
+
+**Store the wheel order, not the table.** Type ids ARE positions on the
+circle - Water 1 through Electric 6 - so the whole chart is arithmetic:
+
+```lua
+local d = (theirs - mine) % 6
+-- d == 1 or d == 2  -> I win
+-- d == 0 or d == 3  -> tie, fall through to level
+-- d == 4 or d == 5  -> I lose
+```
+
+A 36-entry lookup table would be dead weight, and a table can drift out of
+sync with itself. This cannot.
+
+Properties, asserted in `test_duel.lua` rather than trusted:
+
+- Every type has exactly two wins, two losses and one cross-type tie. No
+  dominant pick and no trap type.
+- The relation is antisymmetric: A beats B if and only if B loses to A.
+- 24 of 36 pick pairings are decisive, so two duels in three are settled by
+  the read rather than the tiebreak.
+- All six relations a Pokemon player expects hold - Water over Fire, Fire
+  over Grass, Fire over Ice, Grass over Water, Electric over Water, Ice over
+  Grass. Nothing contradicts canon.
+
+### Resolution
+
+- The wheel decides, per the arithmetic above.
+- Tie, whether a mirror or the opposite-type tie: **the higher level wins.**
+  That is one matchup in six, so it stays a tiebreak rather than the main
+  event.
+- Tie with equal levels: the host's RNG decides, and the frame says so.
 
 The winner gets one capture attempt, described in section 8. The loser gets
 nothing.
@@ -761,7 +807,7 @@ Additional asserted checks:
 | A malformed frame is fatal with no `pcall` | Validate-first rule and clamped accessors, all inside `net.lua` |
 | Old firmware gives 6 ms ticks | Batch every construction and paint loop; derive animation from `badge.sys.ms()` |
 | 48 KiB Share bundle, of which `icon.bin` is 5,304 bytes | Track bundle size at every gate; art packing in reserve; drop `icon.bin` for a text icon if needed |
-| 36 creatures across only three palettes means four families share each colour and must differ by silhouette alone | Generator varies body, head, limbs and crown independently - 192 combinations for 12 plans; stages add markings rather than changing plan |
+| 12 families must stay visually distinct | Six palettes mean only two families share a colour; the generator varies body, head, limbs and crown independently - 192 combinations for 12 plans; stages add markings rather than changing plan |
 | Losing creatures to strangers is grief-able over an anonymous channel | Nothing transfers on a loss alone - only a successful ball takes a creature, and only the duel winner throws. Starters are shielded and cannot be targeted |
 | Trainer walks away mid-duel | 15 seconds without a peer frame shows connection lost and offers forfeit; nothing transfers |
 | Sudden death plus a broadcast channel means a badge can hear the peer's pick before choosing | Commit-reveal with a 16-bit FNV commitment; asserted directly in `test_duel.lua`. Known ceiling: a purpose-built app could brute-force it |
