@@ -15,20 +15,23 @@ are live opponents.
 
 | Decision | Value |
 |---|---|
-| Species | 24, in 8 families of 3 stages |
+| Species | **27**, in 9 families of 3 stages, 3 families per type |
 | Art | 16x16 grid, 4 palette indices, drawn as box-widget row runs |
 | Opening flow | Title -> egg -> shake to hatch -> pick 1 of 3 starters |
 | Wild spawn sources | NFC nest stickers, and walking (step counter) |
 | Pokestops | NFC tags tagged as stops; give balls and XP on a per-tag cooldown |
-| Catch | Accelerometer throw, graded by speed; sweeping-bar fallback |
-| Duels | Two badges over radio; each stakes one pokemon, winner takes it |
-| Duel sync | Host-authoritative full snapshot, no acknowledgements |
-| Build order | Shell, battle engine, radio PvP, catching, economy, extras |
+| Catch | Countdown, 5-second shake window, then an accelerometer throw graded by speed; sweeping-bar fallback |
+| Types | **Three only** - Water beats Fire beats Grass beats Water |
+| Duel teams | Exactly one Water, one Fire and one Grass. This gates dueling behind collecting |
+| Duels | One round of rock paper scissors, sudden death, over radio |
+| Duel reward | Winner picks one of the loser's three and gets ONE capture attempt |
+| Duel sync | Commit-reveal, then host-authoritative result |
+| Build order | Shell, **catching**, economy, radio PvP, extras |
 | Wake lock | Off by manifest; taken at runtime in Walk mode and duels only |
 | Tag roles | Derived from NFC UID hash, since the badge cannot write tags |
 
-The starter is shielded and can never be wagered, stolen, or traded. That bit
-already exists in `app/monster.lua`.
+The starter is shielded: it can never be targeted in a capture phase, stolen
+or traded. That bit already exists in `app/monster.lua`.
 
 ## 2. Hardware contract
 
@@ -128,13 +131,13 @@ Ten files, plus an optional `icon.bin`, against the 16-file bundle cap.
 | `manifest.cfg` | slug `ktnh_mon`, `api=2`, `heap_kb=96`, `wake_lock=0`, `confirm_home=1` | - |
 | `main.lua` | Lifecycle, screen router, input dispatch, LED driver | all |
 | `fsm.lua` | Mode state machine and timeouts | `monster` |
-| `dex.lua` | Species lookup, art decode, box-run renderer, type chart | - |
+| `dex.lua` | Species lookup, art decode, box-run renderer | - |
 | `monster.lua` | 5-byte packed creature record | - |
-| `battle.lua` | Turn resolution, damage, stats from base + IVs | `dex`, `monster` |
+| `battle.lua` | Team legality, commit-reveal, rock-paper-scissors resolution | `dex`, `monster` |
 | `net.lua` | Radio framing, beacons, pairing, snapshots | `monster` |
 | `catch.lua` | Throw grading, bar fallback, catch probability, step counter | - |
 | `save.lua` | Load and persist to `appdata/save.dat` | `monster` |
-| `dex.txt` | 24 species, move pool, type chart | - |
+| `dex.txt` | 27 species | - |
 
 `app/throw.lua` is absorbed into `catch.lua`. `app/monster.lua` and
 `app/fsm.lua` survive close to as written.
@@ -146,8 +149,10 @@ Each module is testable on a host Lua with no badge present.
 - `dex` takes a species id, returns name, type, family, stage, base stats,
   move ids, catch rate, and an art iterator. It never touches widgets except
   through one `paint(pool, id, x, y, cell_px, palette)` entry point.
-- `battle` is pure: state in, state out, no rendering and no radio. This is
-  what makes two-badge agreement testable in one host process.
+- `battle` is pure: state in, state out, no rendering and no radio. It is
+  now about forty lines - three type comparisons, a level tiebreak and a
+  commitment check - which is what makes two-badge agreement trivially
+  testable in one host process.
 - `net` owns every byte that crosses the air. Nothing else calls
   `badge.radio`.
 - `catch` is a streaming sensor consumer plus a probability function. The
@@ -168,14 +173,18 @@ hidden. Widgets are never recreated.
 | WALK | Step count and meter only, near-black, low power | B back to MAP |
 | ENCOUNTER | Wild creature art, name, level, type, ball count, throw prompt or bar | Throw, or A to stop the bar, B flee |
 | DEX | 8 per page, owned marked | UP/DOWN page, A detail, B back |
-| PARTY | Up to 6 held creatures | UP/DOWN select, A set active, START set wager, B back |
-| PAIR | Nearby trainers by signal strength, wager confirm | UP/DOWN select, A challenge, B back |
-| BATTLE | Opponent art and HP, your name and HP, up to four unlocked moves | LEFT/RIGHT pick, A use, B switch, HOME forfeit |
+| PARTY | Up to 6 held, with the duel-legal Water/Fire/Grass trio marked | UP/DOWN select, A set duel slot, B back |
+| PAIR | Nearby trainers by signal strength; blocked with the missing type named if the party is not duel-legal | UP/DOWN select, A challenge, B back |
+| BATTLE | Four phases in one screen: pick (your three, peer hidden), reveal, result, capture | LEFT/RIGHT pick, A confirm, HOME forfeit |
 | STOP | Pokestop reward reveal | A collect |
 
-WALK is three widgets and costs nothing. Only the opponent gets pixel art in
-BATTLE. Your side is a name, a HP bar and
-a type colour, so exactly one art canvas ever repaints.
+WALK is three widgets and costs nothing. BATTLE shows one creature at a
+time - yours during the pick, the opponent's from the reveal onward - so it
+shares the single art pool like every other screen.
+
+The capture phase reuses ENCOUNTER's countdown, shake meter and throw
+widgets verbatim rather than building a second set. One catch UI, one set of
+bugs.
 
 ### Widget budget and staged construction
 
@@ -195,16 +204,28 @@ boards.
 
 One file, read once with `badge.fs.read`, held as a single string. Line
 offsets are kept as integers and substrings are taken on demand. Splitting it
-into 24 strings would roughly double its heap cost.
+into 27 strings would roughly double its heap cost.
 
-Species line, space separated, about 290 bytes each:
+**27 species, 9 families of 3 stages, 3 families per type.** 27 is the number
+that divides evenly by three types and three stages, giving nine species of
+each of Water, Fire and Grass. Every species is one of those three: with
+rock paper scissors as the whole combat system, a creature of any other type
+could never be fielded.
+
+Species line, space separated, about 285 bytes each:
 
 ```
-id name type family stage base_hp base_atk base_def base_spd catch_rate move_ids art
-02 EMBERKIT 1 2 1 45 49 43 45 190 01,03,07,09 0011100022...
+id name type family stage strength catch_bias art
+04 EMBERKIT 1 2 1 3 190 0011100022...
 ```
 
-`art` is 256 characters: 16 rows of 16, row major, palette index per cell.
+- `type` is 1 Fire, 2 Water, 3 Grass
+- `strength` is 1-10 and sets capture difficulty
+- `catch_bias` is a per-species nudge on top of strength, for making a
+  particular creature a deliberate prize
+- `art` is 256 characters: 16 rows of 16, row major, palette index per cell
+
+Palette indices:
 
 - `0` empty
 - `1` body
@@ -212,24 +233,19 @@ id name type family stage base_hp base_atk base_def base_spd catch_rate move_ids
 - `3` accent, used for eyes and markings
 
 Palette colours are not stored. They are derived from the creature's type at
-paint time, so one grid renders in sixteen palettes.
+paint time, so one grid renders in three palettes.
 
-Two further sections in the same file:
+**No move pool and no type chart.** Rock paper scissors over three types is
+three comparisons in code; a 256-character effectiveness table would be dead
+weight.
 
-- A move pool of 24 entries: `id name type power accuracy`.
-- The type chart as a single 256-character string, one character per
-  (attacker, defender) pair at index `attacker * 16 + defender + 1`:
-  `0` immune, `1` half damage, `2` normal, `3` double.
-
-Total: 24 species at about 290 bytes, a 600-byte move pool and a 256-byte
-type chart, so roughly 7.8 KB. Under the 16 KiB per-file read cap with room,
-and about 16 percent of the Share bundle.
+Total: 27 species at about 285 bytes, so roughly 7.7 KB. Under the 16 KiB
+per-file read cap with room, and about 16 percent of the Share bundle.
 
 Held in reserve, not done up front: packing two cells per hex character
-halves the art and brings the file to about 4.7 KB. Apply only if `badge.sys.stats()` or the bundle
-size demands it, because packed art cannot be read or hand-edited while
-creatures are still being tuned.
-
+halves the art and brings the file to about 4.3 KB. Apply only if
+`badge.sys.stats()` or the bundle size demands it, because packed art cannot
+be read or hand-edited while creatures are still being tuned.
 ### Art rendering
 
 A naive renderer would need one box per cell: 256 widgets for one creature,
@@ -249,11 +265,12 @@ Cell size is an integer pixel count, so one grid serves every screen:
 
 ### Generated creatures
 
-24 creatures, 8 families, generated by a parametric Python script kept in
+27 creatures, 9 families, generated by a parametric Python script kept in
 `tools/gen_dex.py` and committed alongside its output. Each family gets a
 distinct body plan - horns, long ears, side fins, quadruped, winged,
-serpentine, round, tall - because eight variations on one silhouette defeats
-the point of collecting. Stages grow in size and gain markings.
+serpentine, round, tall, coiled - because nine variations on one silhouette
+defeats the point of collecting. Type is legible at a glance from the
+palette, so a player scanning the PAIR screen can read a threat instantly. Stages grow in size and gain markings.
 
 No sourced sprite art. `badge.ui.image` requires an installed `.bin` and the
 IDE's only image path produces a single 42x42 `icon.bin` for the launcher, so
@@ -263,7 +280,7 @@ which is distribution.
 
 ## 6. Creature record
 
-`app/monster.lua`, unchanged, 5 bytes:
+`app/monster.lua`, 5 bytes, unchanged on the wire:
 
 | Byte | Contents |
 |---|---|
@@ -271,42 +288,87 @@ which is distribution.
 | 1 | shiny bit, level 1-127 |
 | 2 | hp IV (3 bits), shield bit, type (4 bits) |
 | 3 | atk IV (4 bits), def IV (4 bits) |
-| 4 | move unlock bitmask |
+| 4 | reserved, was the move bitmask |
 
 A full team of three is 15 bytes, which fits one radio frame with room for
-headers. That is why this format survives.
+headers. That is why this format survives a complete redesign of the battle.
 
-The move bitmask indexes the species' own four moves from `dex.txt`, not a
-global pool, so the pool can grow to 24 moves without changing the wire
-format. Bits set by level: one move at level 1, a second at 8, a third at 16,
-a fourth at 24.
+Rock paper scissors needs only two numbers, and neither costs a wire byte:
 
-Derived stats, integer only:
+- **Type** is already in byte 2. Only Water, Fire and Grass are used.
+- **Level** is already in byte 1. It breaks mirror matches and rises with
+  catches and duel wins.
+- **Strength, 1 to 10,** is a species attribute looked up from `dex.txt`, not
+  stored per creature. It sets capture difficulty and nothing else. Stage 1
+  species sit at 1-4, stage 2 at 4-7, stage 3 at 7-10, so evolving a creature
+  makes it harder for somebody else to take from you.
 
-```
-hp  = floor((2 * base_hp  + hp_iv  * 4) * level / 100) + level + 10
-stat = floor((2 * base_stat + iv * 4) * level / 100) + 5
-```
+The IV bits and the old move bitmask are now unused. They stay in the layout
+rather than being reclaimed, because changing the record would break save
+compatibility and the wire format for two bytes nobody needs.
+## 7. Duels
 
-## 7. Duel protocol
+### Format
 
-The channel is broadcast, unaddressed, lossy, 44 bytes, and shared with every
-other badge in the room running anything.
+A duel is one round of rock paper scissors, sudden death.
+
+**Both players must field exactly one Water, one Fire and one Grass.** The
+app refuses to open the PAIR screen until the player's party contains all
+three, and says which type is missing. This is the game's progression gate -
+you start with one starter and must catch the other two types before you can
+duel anybody.
+
+Each player secretly picks one of their three. On reveal:
+
+- **Water beats Fire, Fire beats Grass, Grass beats Water.**
+- Same type: **the higher level wins.**
+- Same type and level: the host's RNG decides, and the frame says so.
+
+The winner gets one capture attempt, described in section 8. The loser gets
+nothing.
+
+### Capture phase
+
+1. The winner sees the loser's three creatures with name, type, level and
+   strength, and picks one with LEFT/RIGHT and A.
+2. Shielded starters are not selectable. A player only ever has one starter,
+   so there are always at least two valid targets.
+3. Three second countdown, five second shake window, then the throw.
+4. The host resolves and broadcasts the result. On success the creature
+   moves: added to the winner's party, removed from the loser's.
+
+A creature transfers ONLY on a successful ball. Losing a duel costs nothing
+by itself, which is what keeps a broadcast channel with anonymous strangers
+tolerable.
 
 ### Sync model
 
-**Host-authoritative full snapshot.** The host computes the entire turn and
-broadcasts the complete battle state. The joiner broadcasts only its chosen
-move. Every frame is idempotent and latest-wins, so a dropped frame is
-repaired by the next one with no acknowledgement, no sequence number, no
-retransmit timer, and no shared random seed.
+**Host-authoritative.** The host computes the reveal and the capture result
+and broadcasts complete state. The joiner broadcasts only its commitment,
+its reveal, and its target choice. Every frame is idempotent and latest-wins,
+so a dropped frame is repaired by the next one with no acknowledgement, no
+sequence number and no retransmit timer.
 
-The alternative - lockstep determinism with a shared PRNG - needs
-bit-identical code on both badges, per-turn retransmission, and fails
-silently when it fails. At 44 bytes per frame there is no reason to buy that.
+### Commit and reveal
 
-Cost accepted: the joiner renders one frame behind, and a host that walks out
-of range stalls the duel into a timeout forfeit.
+Sudden death makes this load-bearing. **Every badge in the room hears every
+frame.** If the joiner broadcast its pick in the clear, the host's app would
+hold that value before the host had chosen, and a duel would be decided by
+whoever picked second.
+
+So each side first broadcasts a commitment, and reveals only after it has
+seen the peer's commitment:
+
+```
+commit = fnv16(pick .. nonce)     -- nonce is a 16-bit random value
+reveal = pick, nonce              -- peer recomputes and compares
+```
+
+A mismatched reveal forfeits the round. FNV-1a over 16 bits is not
+cryptography - a purpose-built cheating app could brute-force three picks
+across 65,536 nonces. That is the known ceiling, and it is the right one: it
+costs about a dozen lines, and it defeats every accidental and casual case.
+Upgrade path if it ever matters is a wider hash, not a different protocol.
 
 ### Frames
 
@@ -314,15 +376,17 @@ Every frame starts with `KM1` and a one-byte kind. Payloads are binary.
 
 | Kind | Sender | Payload | Bytes | Cadence |
 |---|---|---|---|---|
-| `B` beacon | any | short id (2), name (up to 8), lead species (1), lead level (1) | 16 | every 2,000 ms, MAP only |
-| `C` challenge | host | sid (2), staked creature (5) | 11 | every 500 ms until accepted |
-| `A` accept | joiner | sid (2), staked creature (5) | 11 | every 500 ms until a snapshot arrives |
-| `S` snapshot | host | sid (2), state (11) | 17 | on every turn, plus every 500 ms |
-| `M` move | joiner | sid (2), turn (1), move (1) | 8 | every 400 ms until the snapshot's turn advances |
-| `E` end | host | sid (2), result (1), transferred creature (5) | 12 | 5 times over 2 s |
+| `B` beacon | any | short id (2), name (up to 8), team types (1), best level (1) | 16 | every 2,000 ms, MAP only |
+| `C` challenge | host | sid (2), team (15) | 21 | every 500 ms until accepted |
+| `A` accept | joiner | sid (2), team (15) | 21 | every 500 ms until a commit arrives |
+| `H` commit | both | sid (2), commitment (2) | 8 | every 400 ms until the peer's commit is seen |
+| `R` reveal | both | sid (2), pick (1), nonce (2) | 9 | every 400 ms until the result arrives |
+| `S` result | host | sid (2), winner (1), picks (1), reason (1) | 9 | every 500 ms until a target arrives |
+| `T` target | winner | sid (2), slot (1) | 6 | every 400 ms until the outcome arrives |
+| `E` outcome | host | sid (2), caught (1), creature (5) | 11 | 5 times over 2 s |
 
-Snapshot state, 11 bytes: turn, phase, packed active indices, six HP values,
-packed last actions, effect flags.
+Largest frame is 21 bytes against a 44-byte limit, so hex-encoding as a
+fallback for binary payloads stays comfortably inside budget.
 
 The session id is a 16-bit random value chosen by the host. Every frame after
 the beacon is filtered on it, so two duels in the same room never collide.
@@ -331,12 +395,7 @@ the beacon is filtered on it, so two duels in the same room never collide.
 physically bumping two badges together, and that is the natural gesture for
 starting a duel, but bump and sync are system frames: Lua "can neither emit
 nor observe" them. Pairing is therefore beacon plus on-screen selection from
-the PAIR list, ordered by signal strength so the nearest trainer sorts
-first.
-
-A friendly duel sends an all-zero creature as its stake. The protocol is
-identical, which is why staked duels need no protocol work when they land in
-phase 4.
+the PAIR list, ordered by signal strength so the nearest trainer sorts first.
 
 ### Validating hostile input
 
@@ -347,9 +406,10 @@ error that suspends ticks, not an exception. Therefore, in `net.lua`:
 2. Reject any kind byte outside the known set.
 3. Reject any frame whose length does not exactly match its kind.
 4. Read every field through one clamped accessor that returns 0 out of range.
-5. Range-check every decoded value - species against 24, level against 127,
-   move index against 4, HP against the computed maximum - before it reaches
-   `battle` or the renderer.
+5. Range-check every decoded value - species against 27, level against 127,
+   pick against 3, slot against 3 - before it reaches `battle` or the
+   renderer.
+6. Reject a peer team that is not exactly one Water, one Fire and one Grass.
 
 Nothing outside `net.lua` ever sees a raw payload.
 
@@ -357,8 +417,8 @@ Nothing outside `net.lua` ever sees a raw payload.
 
 The guide states `badge.fs` is binary safe. It says nothing about
 `badge.radio`, and `monster.lua` packs NUL bytes. If binary payloads do not
-survive, every frame hex-encodes instead: the largest frame grows from 17 to
-31 bytes, still inside 44, and no other part of the design changes. Phase 0
+survive, every frame hex-encodes instead: the largest grows from 21 to 42
+bytes, still inside 44, and no other part of the design changes. Phase 0
 settles this in twenty minutes.
 
 ### Rate limiting
@@ -370,8 +430,11 @@ frames per second, against roughly 25 per second from fifty beaconing badges.
 
 `badge.radio.disable()` takes about two seconds and needs its own RAM, so the
 radio is an explicit toggle, never always on.
-
 ## 8. Catching
+
+Two situations produce a catch attempt: a wild encounter, and the capture
+phase after winning a duel. They share one probability function and one
+throw grader.
 
 ### Throw
 
@@ -391,30 +454,49 @@ read off, and the correct values are whatever a hard throw actually produces
 on the badge in hand. Expose them at the top of `catch.lua` and tune on
 hardware.
 
+### The shake window
+
+Before every throw there is a **three second countdown, then a five second
+shake window**. `badge.sensor.shake()` fires once per shake with a hardware
+refractory period, so the window counts discrete shakes rather than
+integrating acceleration.
+
+```
+shake_mult = 5 + 5 * min(1, shakes / SHAKE_TARGET)    -- tenths, 0.5x to 1.0x
+```
+
+`SHAKE_TARGET` starts at 12 shakes in five seconds and is a tuning knob. The
+six LEDs fill as the meter charges and flash white at full, so the player
+knows they can stop.
+
+The window runs off `badge.sys.ms()`, not a tick counter, because ticks are
+not guaranteed to arrive on time and pause entirely under HOME confirmation.
+A resume gap over 300 ms abandons the window and restarts the countdown
+rather than silently stealing the player's five seconds.
+
 ### Probability
 
-One function, shared by both input mechanics, integer arithmetic throughout
-and clamped to 5-95 percent so no encounter is hopeless or certain:
+One function, shared by wild encounters and duel captures, integer
+arithmetic throughout and clamped to 5-95 percent so no attempt is hopeless
+or certain:
 
 ```
-chance = catch_rate * grade_mult * level_factor * dex_bonus / 100000
+chance = base(strength) * shake_mult * throw_mult * dex_bonus / 1000
 ```
 
-- `catch_rate` per species from `dex.txt`, 0-255. High for stage 1, low for
-  stage 3
-- `grade_mult` 10, 15 or 20, from the throw grade
-- `level_factor` = `max(40, 100 - 4 * (wild_level - trainer_level))`, so a
-  creature ten levels above you is caught at 60 percent of the normal rate
-  and the penalty floors at 40
+- `base(strength)` falls as the creature's strength rises. Strength 1 is
+  `70` percent, strength 10 is `8` percent, interpolated linearly between.
+  This is the whole of "stronger pokemon are harder to catch"
+- `shake_mult` 5 to 10 tenths, from the shake window
+- `throw_mult` 10, 15 or 20, from the throw grade
 - `dex_bonus` = `100 + 10 * min(5, copies_owned)`, capped at 150
 
-The divisor folds the 255 catch-rate scale, the tenths in `grade_mult`, and
-the two percentage terms. Every term is a tuning knob; the numbers above are
-starting points to calibrate on hardware, not balance.
+Best case is a strength-1 creature at a full shake and an Excellent throw;
+worst is a strength-10 creature barely shaken with a Nice throw. Every term
+is a tuning knob and the numbers above are starting points, not balance.
 
-Three balls per encounter. Each miss rolls a flee chance that rises with
-rarity. The encounter also ends after 30 seconds.
-
+Wild encounters give three balls and end after 30 seconds or when the
+creature flees. A duel capture gives exactly one ball and one attempt.
 ### Bar fallback
 
 `badge.sensor.accel()` returns nil plus an error when the accelerometer is
@@ -460,13 +542,25 @@ So the role is **derived from a hash of the tag UID** instead:
 
 | `hash(uid) % 8` | Role |
 |---|---|
-| 0 | Pokestop: grants balls and XP |
+| 0 | Pokestop chest: balls, XP, and a chance of a creature |
 | 1-7 | Nest: family is `hash >> 3 % 8`, spawning that family's creatures |
 
 Every sticker in the building becomes playable content with nothing to set
-up, one stop for roughly every eight tags, and the same sticker is the same
-place for every player - which is what makes a nest worth telling a friend
-about.
+up, and the same sticker is the same place for every player - which is what
+makes a nest worth telling a friend about.
+
+**Every tag gives something.** The hash sets the flavour rather than pass or
+fail, so no tap is ever wasted and the player never has to guess which
+stickers are worth walking to:
+
+| Flavour | Reward |
+|---|---|
+| Chest | 3-5 balls, XP, and a roughly 1-in-4 chance of a creature outright |
+| Nest | A wild encounter of that tag's family, plus 1 ball and a little XP |
+
+Chest creatures are granted, not thrown for - that is the point of a chest.
+They skew to stage 1 and low strength, so a chest is a steady trickle rather
+than a substitute for hunting.
 
 NDEF text is still read and still honoured as an **override** when it
 contains `stop` or `rocket`, so a player who does own an NFC writer can
@@ -524,10 +618,10 @@ explicitly binary safe:
 | 9 | 1 | Balls held |
 | 10 | 1 | Party count |
 | 11 | 30 | Party: 6 slots of 5 bytes |
-| 41 | 48 | Dex: 24 entries of (count, best level) |
-| 89 | 336 | Tag log: up to 24 entries of 14 bytes |
+| 41 | 54 | Dex: 27 entries of (count, best level) |
+| 95 | 336 | Tag log: up to 24 entries of 14 bytes |
 
-About 425 bytes.
+About 431 bytes.
 
 `badge.store` holds only `sv`, the format version, as a cheap corruption
 guard readable before the file load.
@@ -543,7 +637,7 @@ powering off, since `on_exit` is not guaranteed to run.
 
 ### Why not `badge.store` for the whole save
 
-It would fit: 24 species at three characters each is 72 characters, inside
+It would fit: 27 species at three characters each is 81 characters, inside
 the 128-byte string cap. The cap is the reason not to - it puts a hard
 ceiling of 42 species on the game and leaves no room for the tag log. The
 file has none of those limits and is binary safe.
@@ -593,25 +687,24 @@ the confirmation and the player loses a ball to a dialog.
 Each phase ends in a complete app that can be pushed and played. Each gate is
 a thing to verify on hardware, not a feeling.
 
+**The order changed.** PvP was going to come before catching. It cannot: a
+legal duel team is one Water, one Fire and one Grass, you start with a single
+starter, so nobody can field a team until they have caught two more
+creatures. Collecting is now a hard prerequisite for dueling and ships first.
+
 | Phase | Scope | Gate |
 |---|---|---|
 | 0 | Host mock harness; throwaway probe app | Binary radio payloads survive or they do not; accelerometer present; `badge.sys.stats()` after loading `dex.txt` |
 | 1 | `dex.txt` and generator, art renderer, title, egg, hatch, starter pick, MAP, save | Staged widget construction finishes inside budget; `lua_peak` measured and recorded; save survives a reboot |
-| 2 | Battle engine, party, move unlocks, practice AI | 50 consecutive battles with no heap growth; win, loss and forfeit all return cleanly to MAP |
-| 3 | Radio: beacons, pairing, snapshot duels, friendly stakes only | Two badges; walk out of range mid-duel and confirm both recover; `dropped()` stays near zero |
-| 4 | Catching: steps, NFC nests, throw, bar fallback, dex browser, staked duels | Catch rates feel right on hardware after tuning; a wagered creature transfers exactly once |
-| 5 | Pokestops, ball economy, XP and trainer levels, evolution | Step-based cooldowns survive a reboot |
-| 6 | Trading, Team Rocket heist, shinies, polish | Bundle still under 48 KiB |
+| 2 | Catching: steps, Walk mode, NFC nests, throw, bar fallback, dex browser | Catch rates tuned on hardware; a player can assemble one Water, one Fire and one Grass |
+| 3 | Pokestop chests, ball economy, XP and trainer levels, evolution | Step-based cooldowns survive a reboot; the randomized-UID filter rejects a real payment card |
+| 4 | Radio: beacons, pairing, commit-reveal duel, capture phase | Two badges; neither can see the other's pick before revealing; walk out of range mid-duel and both recover |
+| 5 | Trading, Team Rocket heist, shinies, polish | Bundle still under 48 KiB |
 
 Phase 0 exists because two unknowns cannot be settled on paper: whether the
 radio carries binary, and what the real heap looks like with `dex.txt`
 resident. Both change the design if they go the wrong way, and both are
-cheaper to learn now than in phase 3.
-
-Phase 3 ships friendly duels only because staking requires catchable
-creatures, which arrive in phase 4. The `C` and `A` frames carry a stake
-field from the start, so this costs no rework.
-
+cheaper to learn now than in phase 4.
 ## 14. Testing
 
 No `pcall` on the badge means the host harness is the only place logic can
@@ -626,10 +719,15 @@ gate.
 **`test/test_duel.lua`** is the highest-value test in the project. It
 instantiates two complete app states in one Lua process, wires their radios
 together through a queue that drops 20 percent of frames and reorders some,
-runs 100 duels to completion, and asserts that both sides agree on the
-winner, that exactly one creature transfers, and that neither side errors.
-Loss recovery is the whole point of the snapshot model, so it is the thing
-worth proving.
+runs 100 duels to completion, and asserts:
+
+- Both sides agree on the winner, every time.
+- **Neither side's state contains the peer's pick before it has broadcast
+  its own commitment.** This is the cheat test, and it is the reason
+  commit-reveal exists. Assert it directly on the app state, not on the UI.
+- A mismatched reveal forfeits rather than crashing.
+- At most one creature transfers, and only on a successful ball.
+- Neither side errors.
 
 Additional asserted checks:
 
@@ -649,18 +747,22 @@ Additional asserted checks:
 | Old firmware gives 6 ms ticks | Batch every construction and paint loop; derive animation from `badge.sys.ms()` |
 | 48 KiB Share bundle, of which `icon.bin` is 5,304 bytes | Track bundle size at every gate; art packing in reserve; drop `icon.bin` for a text icon if needed |
 | 24 generated creatures looking alike | Eight distinct family body plans, stages that add markings, not just scale |
-| Wagering is grief-able over an anonymous channel | Starters are shielded and cannot be staked; a wager is set only from the PARTY screen and confirmed again before the duel starts |
-| Trainer walks away mid-duel | 15 seconds without a peer frame shows connection lost and offers forfeit; the stake does not transfer |
+| Losing creatures to strangers is grief-able over an anonymous channel | Nothing transfers on a loss alone - only a successful ball takes a creature, and only the duel winner throws. Starters are shielded and cannot be targeted |
+| Trainer walks away mid-duel | 15 seconds without a peer frame shows connection lost and offers forfeit; nothing transfers |
+| Sudden death plus a broadcast channel means a badge can hear the peer's pick before choosing | Commit-reveal with a 16-bit FNV commitment; asserted directly in `test_duel.lua`. Known ceiling: a purpose-built app could brute-force it |
+| Forced Water/Fire/Grass locks new players out of dueling | Deliberate - it is the progression gate. PAIR names the missing type, and chests grant creatures so the trio is reachable without luck |
 | Two AA alkalines, and the manual warns that low batteries cause glitches | `wake_lock` off by default and taken only in Walk mode and duels; Walk mode stops repainting and dims the LEDs; save on every meaningful event so a brownout costs at most one action |
 | Steps cannot accrue in the background, so the GO-style walking loop is weakened | Spawn threshold cut to 40-80 steps; steps accrue on MAP too, not only in Walk mode; NFC stickers remain the primary spawn source |
 | `badge.input.BUTTON.AUX1` exists in the enum but not on the board | Controls use only the eight physical buttons; asserted in the mock harness |
 
 ## 16. Explicitly out of scope
 
-Audio, because there is no Lua audio API at all - the LEDs carry all
-feedback. A scrolling tilemap overworld, because the renderer would spend the
-memory budget the creatures need. Individual creature instances with
-nicknames and per-catch IVs, since the dex records a species at its best
-caught level. 151 species. 18 types with full coverage, though the chart is
-stored as all 16. Items beyond balls. Any network, Wi-Fi or HTTP feature, as
-none exists.
+Deleted by the rock-paper-scissors duel: HP, damage formulas, IV-derived
+stats, the move pool, move accuracy, turn order, speed, and the 16-type
+effectiveness chart. Three types and one comparison replace all of it.
+
+Never in scope: audio, because there is no Lua audio API at all - the LEDs
+carry every piece of feedback. A scrolling tilemap overworld, because the
+renderer would spend the memory the creatures need. Individual creature
+instances with nicknames and per-catch IVs. 151 species. Items beyond balls.
+Any network, Wi-Fi or HTTP feature, since none is exposed.
