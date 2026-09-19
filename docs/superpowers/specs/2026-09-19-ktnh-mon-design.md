@@ -470,7 +470,8 @@ error that suspends ticks, not an exception. Therefore, in `net.lua`:
 5. Range-check every decoded value - species against 36, level against 127,
    pick against 3, slot against 3 - before it reaches `battle` or the
    renderer.
-6. Reject a peer team that is not exactly one Water, one Fire and one Grass.
+6. Reject a peer team whose three creatures are not three distinct types,
+   and any type id outside 1-6.
 
 Nothing outside `net.lua` ever sees a raw payload.
 
@@ -749,15 +750,14 @@ Each phase ends in a complete app that can be pushed and played. Each gate is
 a thing to verify on hardware, not a feeling.
 
 **The order changed.** PvP was going to come before catching. It cannot: a
-legal duel team is one Water, one Fire and one Grass, you start with a single
-starter, so nobody can field a team until they have caught two more
-creatures. Collecting is now a hard prerequisite for dueling and ships first.
+legal duel team is three distinct types, you start with a single starter, so
+nobody can field a team until they have caught two more creatures. Collecting is now a hard prerequisite for dueling and ships first.
 
 | Phase | Scope | Gate |
 |---|---|---|
 | 0 | Host mock harness; throwaway probe app | Binary radio payloads survive or they do not; accelerometer present; `badge.sys.stats()` after loading `dex.txt` |
 | 1 | `dex.txt` and generator, art renderer, title, egg, hatch, starter pick, MAP, save | Staged widget construction finishes inside budget; `lua_peak` measured and recorded; save survives a reboot |
-| 2 | Catching: steps, Walk mode, NFC nests, throw, bar fallback, dex browser | Catch rates tuned on hardware; a player can assemble one Water, one Fire and one Grass |
+| 2 | Catching: steps, Walk mode, NFC nests, throw, bar fallback, dex browser | Catch rates tuned on hardware; a player can assemble three distinct types |
 | 3 | Pokestop chests, ball economy, XP and trainer levels, evolution | Step-based cooldowns survive a reboot; the randomized-UID filter rejects a real payment card |
 | 4 | Radio: beacons, pairing, commit-reveal duel, capture phase | Two badges; neither can see the other's pick before revealing; walk out of range mid-duel and both recover |
 | 5 | Trading, Team Rocket heist, shinies, polish | Bundle still under 48 KiB |
