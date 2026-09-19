@@ -25,8 +25,15 @@ local raw = nil          -- the whole file, one string
 local starts = {}        -- starts[id] = byte offset of that line
 local stops = {}         -- stops[id]  = byte offset of its last character
 
+-- Shared bounds guard: NEVER let a nil/string/float/out-of-range value reach
+-- a table lookup or a == comparison against a live field, or a garbage input
+-- silently matches whatever that lookup defaults to (see first_of_type below).
+local function in_range(n, lo, hi)
+  return type(n) == "number" and n == math.floor(n) and n >= lo and n <= hi
+end
+
 local function valid(id)
-  return type(id) == "number" and id == math.floor(id) and id >= 1 and id <= M.COUNT
+  return in_range(id, 1, M.COUNT)
 end
 
 -- One shared parse. Called per accessor rather than cached, because caching
@@ -88,6 +95,10 @@ function M.art(id)
 end
 
 function M.first_of_type(t)
+  -- A nil/garbage t must never match: before load(), M.type(id) is nil for
+  -- every id, and nil == nil would otherwise hand back species 1 as a false
+  -- answer to the starter carousel and nest spawns instead of failing loud.
+  if not in_range(t, 1, 6) then return nil end
   for id = 1, M.COUNT do
     if M.type(id) == t then return id end
   end

@@ -1,6 +1,26 @@
 package.path = "test/?.lua;app/?.lua;" .. package.path
 local mock = require("mock_badge")
+
+-- Every public accessor must tolerate being called before load() ever runs.
+-- A radio handler or UI screen that races init and reads the dex first must
+-- get nil, never a fabricated answer -- see first_of_type's t == nil trap
+-- below, where an unguarded == against an all-nil table returns species 1.
+mock.install()
+package.loaded["dex"] = nil
+local dex0 = require("dex")
+assert(dex0.name(1) == nil, "name must be nil before load()")
+assert(dex0.type(1) == nil, "type must be nil before load()")
+assert(dex0.strength(1) == nil, "strength must be nil before load()")
+assert(dex0.family(1) == nil, "family must be nil before load()")
+assert(dex0.art(1) == nil, "art must be nil before load()")
+for t = 1, 6 do
+  assert(dex0.first_of_type(t) == nil, "first_of_type(" .. t .. ") must be nil before load()")
+end
+assert(dex0.first_of_type(nil) == nil,
+  "first_of_type(nil) must not fall back to species 1 via a nil == nil match")
+
 local M = mock.install()
+package.loaded["dex"] = nil
 
 -- dex.load reads through badge.fs, so the harness must hold the real file.
 local f = io.open("app/dex.txt", "rb")
@@ -43,6 +63,9 @@ for t = 1, 6 do
   local id = dex.first_of_type(t)
   assert(id and dex.type(id) == t, "first_of_type broken for " .. t)
 end
+assert(dex.first_of_type(0) == nil and dex.first_of_type(7) == nil
+  and dex.first_of_type(nil) == nil and dex.first_of_type("junk") == nil,
+  "first_of_type must reject out-of-wheel and non-numeric t, not fabricate species 1")
 
 -- A missing file must fail cleanly, not throw.
 local M2 = mock.install()
