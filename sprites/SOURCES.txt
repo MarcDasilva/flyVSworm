@@ -8,6 +8,8 @@ gen1-16/        151 PNG, uniform 16x16 RGBA, National Dex order
                 downsample. One sprite (089 Muk) measured 17 wide and lost a
                 single column of WebP bleed.
 
+iconic-36/      Curated picks grouped by type, contributed separately.
+
 app-icon-42.png 42x42, the launcher icon. Feed it to the IDE's Choose image,
                 which converts to icon.bin (5,304 bytes, LVGL RGB565A8).
 

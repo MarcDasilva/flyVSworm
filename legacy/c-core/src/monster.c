@@ -117,9 +117,19 @@ bool monster_has_move(const Monster *m, uint8_t slot)
     return (m->bytes[4] & (uint8_t)(1u << slot)) != 0;
 }
 
+bool monster_species_is_unbeatable(uint8_t species)
+{
+    return species >= SPECIES_UNBEATABLE_MIN;
+}
+
+bool monster_is_unbeatable(const Monster *m)
+{
+    return !monster_is_empty(m) && monster_species_is_unbeatable(m->bytes[0]);
+}
+
 bool monster_can_transfer(const Monster *m)
 {
-    return !monster_is_empty(m) && !monster_is_shielded(m);
+    return !monster_is_empty(m) && !monster_is_shielded(m) && !monster_is_unbeatable(m);
 }
 
 void monster_pack(const Monster *m, uint8_t out[MONSTER_BYTES])

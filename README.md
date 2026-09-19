@@ -1,70 +1,52 @@
 # KTNH Mon
 
-Pokemon-inspired catch / battle / trade / heist game for the
+Pokemon-inspired catch / duel / collect game for the
 [Hack the North 2026 Hacker Badge](https://badge.hackthenorth.com/).
 
-This is the working repo. The old Solana quest (`htn-solana`) is leftover
-event work and is not used here.
-
-## Badge target
-
-The badge is a 320x240 ESP32 with a **Lua OS** (not MicroPython, not a
-C firmware you flash yourself). Custom apps are Lua + LVGL widgets:
-
-- IDE: https://badge.hackthenorth.com/ide/
-- Official API: [`docs/badge-ide-README.md`](docs/badge-ide-README.md)
-- Lua+LVGL binding reference (cloned, gitignored): `vendor/luavgl`
-
-HTN has not published the badge firmware source. The IDE README is the
-public OS contract. `vendor/luavgl` is the closest public Lua+LVGL code
-if you need to see how widgets bind.
+The badge is a 320x240 ESP32 running a Lua OS. Apps are Lua + LVGL widgets
+pushed from the [Badge IDE](https://badge.hackthenorth.com/ide/).
 
 ## App
 
-Push the files in `app/` from the Badge IDE:
+Push the files in `app/` from the Badge IDE. Share caps the directory at
+48 KiB across 16 files, so `tools/bundle_check.sh` gates every change.
 
 | File | Role |
 |---|---|
-| `app/manifest.cfg` | slug `ktnh_mon`, 96 KiB heap, wake lock, HOME confirm |
-| `app/main.lua` | UI, NFC, radio, IMU throw loop |
-| `app/monster.lua` | 5-byte packed monster |
-| `app/fsm.lua` | idle / encounter / battle / trade / heist |
-| `app/throw.lua` | accelerometer throw grader |
+| `app/manifest.cfg` | slug, heap budget, wake lock |
+| `app/main.lua` | screen router, hub, walk mode, starter flow |
+| `app/dex.lua` | species table and creature rendering |
+| `app/own.lua` | collection, pokedex counts, crash-safe save |
+| `app/dex.txt` | generated species data (`tools/gen_dex.py`) |
 
-Controls on device:
+`heapcheck.lua` and `imgprobe.lua` are standalone probe apps for measuring
+the widget and heap ceilings on real hardware.
 
-- Scan an NFC sticker to spawn a wild encounter
-- Throw the badge to catch (Nice / Great / Excellent)
-- **UP** sends a battle ping; bump/radio enters battle
-- **Start** sends a trade ping
-- **A** confirm, **B** cancel
-- Shake during a heist to break the siphon
-- Stickers whose NDEF text contains `rocket` arm a heist on the next bump
+## Tests
+
+```sh
+sh test/run.sh
+```
+
+Syntax-checks every Lua file, runs the host mocks in `test/`, and fails if
+the bundle would exceed the Share cap.
 
 ## Sprites
 
-Classic Gen I–III dumps live in `sprites/` (~81 MB). PNGs are gitignored.
-See `sprites/SOURCES.txt`. Closest to the badge 42x42 `icon.bin`:
+- `sprites/gen1-16/` 151 uniform 16x16 PNGs, National Dex order
+- `sprites/iconic-36/` curated picks grouped by type
+- `sprites/app-icon-42.png` launcher icon
 
-`sprites/pokeapi/generation-i/red-blue/25.png`
-
-In the IDE, **Choose image** crops to 42x42 LVGL RGB565A8.
+See `sprites/SOURCES.txt` for provenance and regeneration.
 
 ## Legacy C core
 
-`legacy/c-core/` is the first MCU-agnostic prototype of the same 5-byte
-payload, FSM, and throw detector. The badge cannot run it. Host check:
+`legacy/c-core/` is the MCU-agnostic prototype of the 5-byte monster
+payload, FSM, and throw detector. Superseded by `app/`, kept for reference.
 
 ```sh
 gcc -std=c11 -Wall -Wextra -Werror -I legacy/c-core/include \
   legacy/c-core/src/monster.c legacy/c-core/src/badge_fsm.c \
   legacy/c-core/src/imu_throw.c legacy/c-core/test/host_check.c \
   -o host_check && ./host_check
-```
-
-## Refresh local clones
-
-```sh
-git clone --depth 1 https://github.com/XuNeo/luavgl.git vendor/luavgl
-powershell -File sprites/fetch-numbered.ps1
 ```
