@@ -10,11 +10,12 @@
 #define LUT_ENTRIES       257
 
 /* Instruction discriminants. Little-endian u32 at instruction_data[0..4). */
-#define INSTR_UPLOAD_CHUNK    1u
-#define INSTR_CREATE_NEURONS  2u
-#define INSTR_STIMULATE       3u
-#define INSTR_STEP            4u
-#define INSTR_CLASSIFY        5u
+#define INSTR_UPLOAD_CHUNK       1u
+#define INSTR_CREATE_NEURONS     2u
+#define INSTR_STIMULATE          3u
+#define INSTR_STEP               4u
+#define INSTR_CLASSIFY           5u
+#define INSTR_CREATE_SINGLETONS  6u
 
 /* Error codes. Returned via tsdk_revert(). */
 #define ERR_BAD_INSTR_SIZE    0x1001u
@@ -86,9 +87,16 @@ typedef struct {
 } worm_behavior_t;       /* 32 bytes */
 
 /* Voltage <-> native balance. uint64 balance cannot go negative; biological
- * voltage can. The +100mV offset is what makes hyperpolarizing transfers safe. */
+ * voltage can. The +100mV offset is what makes hyperpolarizing transfers safe.
+ *
+ * TASK-9 R14: scale dropped from 1000 to 10. At 1000 a neuron holds
+ * 20,000-120,000 units and the whole brain needs 10-36M — over a thousand
+ * 10,000-unit faucet withdrawals to fund. At 10 a neuron holds ~400 and the
+ * brain ~120,000, fundable in ~20 withdrawals. Safe because account DATA
+ * v_next (Q16.16) is the simulation's source of truth; balance is only the
+ * settled projection — see worm_neuron_t above. */
 #define BAL_OFFSET_MV   100
-#define BAL_SCALE       1000
-#define BAL_MIN         1000u
-#define BAL_MAX         200000u
+#define BAL_SCALE       10
+#define BAL_MIN         10u
+#define BAL_MAX         2000u
 #endif

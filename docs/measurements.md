@@ -78,7 +78,20 @@ this SDK version — later tasks that assumed an in-program
 
 3. **CU_PER_STEP_STUB = PENDING** — deferred to Task 11.
 
-4. **STATE_UNITS_PER_CREATE = PENDING** — deferred to Task 9.
+4. **STATE_UNITS_PER_CREATE ≈ 0.1 (1 state unit per 10-account create batch)** —
+   measured on-chain across the 31 `INSTR_CREATE_NEURONS` transactions that
+   created all 302 neuron accounts (program `taXILSqS99UxmqBxrvpcETPQ8j6zd-xmFmK6EQ5xFWrvgQ`,
+   seed `hello-worm-v1`, 2026-09-19). Every 10-neuron batch (each doing 10x
+   `tsys_account_create` + `tsys_account_resize` to 28 bytes) reported
+   `state_units_consumed: 1` from `thru --json txn execute`, including the
+   final 2-neuron batch — state units evidently meter something coarser than
+   "per account" (e.g. per state-trie write op per transaction), not a
+   per-account linear cost. A single bare create with no resize (topology
+   singleton, data_sz=0) consumed 0 state units; a create+resize to 32 bytes
+   (behavior singleton) consumed 1. Compute units scaled roughly linearly:
+   ~47,377 CU for a 10-neuron create batch vs 8,259 CU for a single bare
+   create. Batch size 10 was used throughout (not 20) per Task 9's ruling on
+   state-proof staleness.
 
 ## Hello-world execution (Step 6 reference measurement)
 
