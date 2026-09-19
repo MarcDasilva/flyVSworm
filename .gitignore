@@ -2,9 +2,6 @@
 *.log
 *.exe
 
-# Third-party Lua+LVGL clone (local reference only)
-vendor/luavgl/
-
 # Local Nintendo sprite dumps (do not commit PNGs)
 #sprites/*
 #!sprites/SOURCES.txt
