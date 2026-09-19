@@ -23,8 +23,22 @@
              color: #94a3b8; border-bottom: 1px solid #1e293b;
              display: flex; justify-content: space-between; }
   #txtitle .dot { color: #4ade80; }
-  #feed { padding: 8px 12px 11px; overflow: hidden; font-size: 11px;
-          line-height: 1.75; white-space: pre; }
+  #txpause { padding: 0 7px; font-size: 10px; letter-spacing: 0.08em;
+             border-radius: 4px; pointer-events: auto; }
+  #txstats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px;
+             background: #1e293b; border-bottom: 1px solid #1e293b; }
+  #txstats div { background: #0b111a; padding: 7px 10px 8px; }
+  #txstats .k { font-size: 9px; letter-spacing: 0.1em; color: #64748b; }
+  #txstats .v { font-size: 15px; color: #e2e8f0; margin-top: 2px; }
+  #txstats .v.warn { color: #fbbf24; }
+  #feed { padding: 6px 0 8px; overflow: hidden; font-size: 11px;
+          line-height: 1.7; }
+  /* The row whose transfers are CURRENTLY drawing as particles. Without this
+     the panel is a log next to an animation; with it they are one thing. */
+  #feed .row { padding: 1px 12px; white-space: pre; border-left: 2px solid transparent; }
+  #feed .row.live { background: rgba(56,189,248,0.10); border-left-color: #38bdf8; }
+  #feed .row.fail { color: #f87171; }
+  #feed .dim { color: #64748b; }
   #feed a { color: #7dd3fc; text-decoration: none; }
   #feed a:hover { text-decoration: underline; }
   #hint { position: fixed; left: 16px; bottom: 16px; font-size: 11px;
@@ -37,7 +51,8 @@
   </div>
   <div id="hud"></div>
   <div id="txpanel">
-    <div id="txtitle"><span>LIVE TRANSACTIONS &middot; THRU ALPHANET</span><span class="dot">&#9679;</span></div>
+    <div id="txtitle"><span>LIVE TRANSACTIONS &middot; THRU ALPHANET</span><span><button id="txpause">PAUSE</button> <span class="dot">&#9679;</span></span></div>
+    <div id="txstats"></div>
     <div id="feed"></div>
   </div>
   <div id="hint">drag to orbit &middot; scroll to zoom &middot; live on Thru alphanet</div>

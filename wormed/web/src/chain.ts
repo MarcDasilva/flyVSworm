@@ -128,6 +128,14 @@ export type RelayStatus = {
  *  125 frames/s, which is what makes the cloud look alive rather than
  *  stepping. Raise it if the queue never empties. */
 const PLAY_FLOOR_MS = 8;
+/** Ceiling on that gap. 400 ms plus a deep queue was unrecoverable. */
+const PLAY_CEIL_MS = 150;
+/** burstMs is an estimate of the arrival period; clamp it so one stall does
+ *  not poison the average. */
+const BURST_MS_MIN = 400;
+const BURST_MS_MAX = 6000;
+/** Most frames one tick may play. Bounds a stall from strobing the cloud. */
+const CATCHUP_MAX = 40;
 
 export class ChainFeed {
   private thru;
@@ -141,7 +149,7 @@ export class ChainFeed {
   private lastArrival = 0;
   private burstMs = 5000;
   /** Frames delivered to the scene, and events seen — the HUD's proof of life. */
-  stats = { frames: 0, events: 0, transfers: 0, lastStep: 0, lag: 0 };
+  stats = { frames: 0, events: 0, transfers: 0, lastStep: 0, lag: 0, burstMs: 0, interval: 0 };
 
   constructor(private readonly cfg: ChainConfig) {
     this.thru = createThruClient({ baseUrl: cfg.rpc });
@@ -225,7 +233,14 @@ export class ChainFeed {
     const now = performance.now();
     if (this.lastArrival) {
       const gap = now - this.lastArrival;
-      if (gap > 200) this.burstMs = this.burstMs * 0.7 + gap * 0.3;  // burst period
+      // Clamped: a startup stall or a stream reconnect is a multi-SECOND gap,
+      // and letting that into the average pins the play interval at its
+      // ceiling forever, after which the queue can never drain.
+      if (gap > 200) {
+        const g = Math.min(gap, BURST_MS_MAX);
+        this.burstMs = Math.min(BURST_MS_MAX,
+          Math.max(BURST_MS_MIN, this.burstMs * 0.7 + g * 0.3));
+      }
     }
     this.lastArrival = now;
     this.queue.push(f);
@@ -243,14 +258,30 @@ export class ChainFeed {
   tick(): Frame | undefined {
     if (!this.queue.length) return undefined;
     const now = performance.now();
-    const interval = Math.min(400, Math.max(PLAY_FLOOR_MS, this.burstMs / this.queue.length));
+    const interval = Math.min(PLAY_CEIL_MS,
+      Math.max(PLAY_FLOOR_MS, this.burstMs / this.queue.length));
+    this.stats.burstMs = Math.round(this.burstMs);
+    this.stats.interval = Math.round(interval);
     if (now - this.lastPlay < interval) return undefined;
+
+    // Play every frame that came DUE since the last tick, not a fixed number.
+    // A fixed budget ties playback to the render rate, and on a slow renderer
+    // (software WebGL manages about 1 fps with 9,400 neurites) that caps
+    // playback far below the arrival rate — the queue then only grows and the
+    // oldest frames are dropped at the cap, so the cloud drifts further and
+    // further behind the chain. Bounded so one long stall cannot dump the
+    // whole queue into a single frame.
+    const due = Math.floor((now - this.lastPlay) / interval);
+    const budget = Math.max(1, Math.min(CATCHUP_MAX, due));
     this.lastPlay = now;
-    const f = this.queue.shift()!;
-    this.stats.frames++;
-    this.stats.lastStep = f.step;
+    let f: Frame | undefined;
+    for (let i = 0; i < budget && this.queue.length; i++) {
+      f = this.queue.shift()!;
+      this.stats.frames++;
+      this.stats.lastStep = f.step;
+      this.frameCbs.forEach(cb => cb(f!));
+    }
     this.stats.lag = this.queue.length;
-    this.frameCbs.forEach(cb => cb(f));
     return f;
   }
 
