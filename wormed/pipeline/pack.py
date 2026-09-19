@@ -10,7 +10,7 @@ import struct
 from pathlib import Path
 
 from .connectome import load_connectome, assign_physiology, neuron_positions
-from .pack_addr import derive_addresses
+from .pack_addr import derive_addresses, chain_order_index
 from .refsim import compute_resting_state
 
 DATA = Path(__file__).resolve().parent.parent / "data"
@@ -90,12 +90,23 @@ def build_all() -> Path:
     # index field (Task 10), so this array is a CROSS-CHECK, not the source of
     # truth: if the two ever disagree, address derivation drifted — almost
     # always a changed program id — and every transfer would target the wrong
-    # neuron. Keeping it costs 604 bytes and catches a silent, total failure. ---
+    # neuron. Keeping it costs 604 bytes and catches a silent, total failure.
+    #
+    # FIX ROUND 1 (Task 9 finding 1): this used to be `sorted(range(n),
+    # key=lambda i: addrs[i])` — Python's string sort over the ENCODED `ta...`
+    # address. That disagrees with Thru's real ascending order (by decoded
+    # pubkey bytes) at effectively every position, because '-'/'_' in the
+    # base64url alphabet don't sit where ASCII puts them. deploy.py already
+    # used the chain's real order (`thru txn sort`) to create the 302
+    # accounts; this cross-check must use the SAME order or it is guaranteed
+    # to disagree with the on-chain reality it exists to catch drift against.
+    # chain_order_index is the one shared definition of "ascending by
+    # address" — see pack_addr.py. ---
     addrs = derive_addresses(c.names)
-    order = sorted(range(n), key=lambda i: addrs[i])
+    rank, slot_map_order = chain_order_index(addrs)
     slot_map = [0] * n
-    for slot, neuron_idx in enumerate(order):
-        slot_map[slot] = neuron_idx
+    for neuron_idx, addr in enumerate(addrs):
+        slot_map[rank[addr]] = neuron_idx
 
     # --- Emit, 8-aligning every array start. ---
     body = bytearray()
@@ -175,6 +186,10 @@ def build_all() -> Path:
 
     provenance = dict(p.provenance)
     provenance["derivation"] = "cli"
+    # FIX ROUND 1: records which code path produced slot_map's ordering, so
+    # a topology.bin built without the CLI available (python-fallback) is
+    # never silently indistinguishable from one built with it.
+    provenance["slot_map_order"] = slot_map_order
     (DATA / "provenance.json").write_text(json.dumps(provenance, indent=2))
     return out
 

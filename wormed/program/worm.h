@@ -47,6 +47,8 @@ typedef struct {
     uint32_t off_lut;        /* 0x38  i32[257] Q16.16  */
     uint32_t total_sz;       /* 0x3C */
 } worm_topology_hdr_t;       /* 64 bytes, naturally aligned, NOT packed */
+_Static_assert(sizeof(worm_topology_hdr_t) == 64,
+    "worm_topology_hdr_t size drifted from 64 bytes — HDR_SZ in pipeline/pack.py is hardcoded to match");
 
 typedef struct {
     int16_t g_leak;    /* Q8.8 */
@@ -63,8 +65,17 @@ typedef struct {
                          * reads nonzero drive with nobody touching the worm. */
     int16_t _pad[2];
 } worm_param_t;        /* 16 bytes */
+_Static_assert(sizeof(worm_param_t) == 16,
+    "worm_param_t size drifted from 16 bytes — pipeline/pack.py's _pack_params struct format assumes this");
 
-/* Per-neuron account data. Voltage lives in the account BALANCE, not here. */
+/* Per-neuron account data. Voltage lives in the account BALANCE, not here.
+ *
+ * FIX ROUND 1 (Task 9 finding 2): this was commented "32 bytes" but the
+ * natural-alignment layout below sums to 28 (2+8+2+4+4+4+4), which is what
+ * every one of the 302 on-chain accounts actually reports as dataSize — the
+ * code was always correct (it resizes with sizeof()), only the comment
+ * lied. DO NOT change this layout: 302 accounts already exist on chain with
+ * it, and re-creating them is not something anyone wants to pay for. */
 typedef struct {
     uint16_t index;
     char     name[8];
@@ -73,7 +84,9 @@ typedef struct {
     int32_t  i_stim;   /* Q16.16 */
     uint32_t step_tag;
     uint32_t _pad1;
-} worm_neuron_t;       /* 32 bytes */
+} worm_neuron_t;       /* 28 bytes */
+_Static_assert(sizeof(worm_neuron_t) == 28,
+    "worm_neuron_t size drifted from 28 bytes — 302 accounts already exist on chain with this layout, do not change it");
 
 typedef struct {
     uint8_t  state;      /* 0=PAUSE 1=FORWARD 2=REVERSE 3=OMEGA */
@@ -85,6 +98,8 @@ typedef struct {
     uint32_t step;
     uint64_t block_time; /* Unix ns, from BLOCK_CTX */
 } worm_behavior_t;       /* 32 bytes */
+_Static_assert(sizeof(worm_behavior_t) == 32,
+    "worm_behavior_t size drifted from 32 bytes — pipeline/deploy.py's create_singletons() hardcodes this size");
 
 /* Voltage <-> native balance. uint64 balance cannot go negative; biological
  * voltage can. The +100mV offset is what makes hyperpolarizing transfers safe.

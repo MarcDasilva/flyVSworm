@@ -308,5 +308,6 @@
     "VC6"
   ],
   "caveat": "Synaptic sign is ASSIGNED, not measured. State this in the README.",
-  "derivation": "cli"
+  "derivation": "cli",
+  "slot_map_order": "cli"
 }

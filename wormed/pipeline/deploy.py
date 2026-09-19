@@ -51,13 +51,22 @@ def _behavior_account() -> str: return _derive("behavior")
 
 
 def _sort_order(addrs: list[str]) -> dict:
-    """Canonical ascending order, from the chain's own `thru txn sort` —
-    NOT Python's sorted(). Verified empirically that they disagree on these
-    addresses (some decode such that '-'/'_' don't preserve ASCII order once
-    the base62-ish encoding is undone). Using Python's sorted() here would
-    write each neuron's name and index into the WRONG account, silently —
-    see task-9-report.md for the diff that caught this."""
-    return _run_json(["txn", "sort", *addrs])
+    """Canonical ascending order. Delegates to pack_addr.chain_order_index —
+    the ONE definition of "ascending by address" in this codebase, shared
+    with pipeline/pack.py's slot_map — rather than duplicating the `thru txn
+    sort` call here. FIX ROUND 1: this file and pack.py used to each roll
+    their own notion of "sorted", and pack.py's used Python's sorted() on the
+    encoded ta... string, which disagrees with the chain's real order (by
+    decoded pubkey bytes) at effectively every position. That let
+    topology.bin's slot_map ship with a permutation that could never match
+    what account creation actually did. Fix (task-9-report.md) is to have
+    both call this one function."""
+    from .pack_addr import chain_order_index
+    order, source = chain_order_index(addrs)
+    if source != "cli":
+        print(f"WARNING: chain_order_index fell back to {source!r} — "
+              f"`thru` CLI was unavailable for account ordering")
+    return order
 
 
 def _make_proof(addr: str) -> bytes:

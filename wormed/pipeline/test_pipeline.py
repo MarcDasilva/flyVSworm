@@ -366,3 +366,52 @@ def test_v_rest_mv_matches_converged_float_state_and_zeroes_command_drive_at_res
         i = names.index(name)
         drive = (v_rest_stored[i] - v_rest_stored[i]) / 20.0
         assert drive == 0.0, f"{name} reads nonzero drive at rest: {drive}"
+
+
+# --- Task 9 fix round 1: slot_map must use the chain's real address order --
+
+def test_slot_map_matches_the_chains_own_ascending_order():
+    """Regression for the broken cross-check: slot_map used to be built with
+    Python's sorted(range(n), key=lambda i: addrs[i]) — an ASCII sort over
+    the ENCODED `ta...` address string. Thru's real ascending order (the one
+    `thru txn execute --readwrite-accounts` actually imposes, and what
+    pipeline/deploy.py used to create every one of the 302 on-chain
+    accounts) sorts by the DECODED pubkey bytes instead, and the two
+    disagree at effectively every position — '-'/'_' in the base64url
+    alphabet (values 62/63) don't sit where ASCII puts 0x2D/0x5F. slot_map
+    is a cross-check the on-chain program never reads today (Task 10 will),
+    so this was silent: the moment it IS read, every slot_map lookup points
+    at the wrong neuron and every step transaction that trusts it reverts.
+
+    This is the test that would have caught it: for every slot k,
+    addresses[slot_map[k]] must be the k-th address in the chain's own
+    ascending order (pack_addr.chain_order_index — the same function
+    pipeline/deploy.py uses to pick the account index when it actually
+    creates accounts)."""
+    from wormed.pipeline.pack_addr import chain_order_index
+    build_all()
+    blob = (DATA / "topology.bin").read_bytes()
+    n = 302
+    off = LAYOUT["slot_map"][0]
+    slot_map = struct.unpack_from(f"<{n}H", blob, off)
+    addrs = json.loads((DATA / "addresses.json").read_text())
+
+    rank, source = chain_order_index(addrs)
+    assert source == "cli", "expected the real `thru txn sort` CLI to be available for this test"
+    expected_kth_address = sorted(addrs, key=lambda a: rank[a])
+
+    assert sorted(slot_map) == list(range(n)), "slot_map is not a permutation of every neuron index"
+    for k in range(n):
+        assert addrs[slot_map[k]] == expected_kth_address[k], (
+            f"slot {k}: slot_map points at neuron {slot_map[k]} ({addrs[slot_map[k]]}), "
+            f"but the chain's real ascending order puts {expected_kth_address[k]} there"
+        )
+
+
+def test_provenance_records_which_order_slot_map_used():
+    """If chain_order_index ever falls back to python-fallback (CLI missing),
+    that must be visible in provenance.json rather than indistinguishable
+    from a CLI-derived topology.bin — see chain_order_index's docstring."""
+    build_all()
+    prov = json.loads((DATA / "provenance.json").read_text())
+    assert prov.get("slot_map_order") in ("cli", "python-fallback")
