@@ -358,3 +358,80 @@ def reset_sim() -> dict:
     reservoir's scratch region sized before they can run at all."""
     ensure_scratch()
     return run_steps(0, settle_every=1, reset=True)
+
+
+# --- Classifier, behavior state and events (Task 12) ------------------------
+
+INSTR_CLASSIFY = 5
+
+# worm.h's WORM_EVENT_* tags. The runtime eats the first 8 bytes of every
+# emitted buffer and reports them as the event's `event_type` (see
+# read_events), so these ARE the discriminator — there is no magic number
+# inside the payload to check.
+EVENT_TRACE = int.from_bytes(b"WORMTRCE", "little")
+EVENT_XFER = int.from_bytes(b"WORMGAPX", "little")
+
+
+def classify() -> dict:
+    """Reads every neuron's voltage and writes one byte of behavior. Needs the
+    same 305-account writable array a step does, because the classifier's five
+    command interneurons are found by NAME in account data, not by a baked
+    index (worm.c: resolve_command_neurons)."""
+    payload = struct.pack("<I", INSTR_CLASSIFY) + struct.pack("<HHH", *_slots())
+    out = _exec(_step_accounts(), payload.hex(), FEE_STEP)
+    print(f"classify() -> {out['signature']} cu={out['compute_units_consumed']}")
+    return out
+
+
+def read_behavior() -> dict:
+    """worm_behavior_t, 32 bytes. `data` in account info's JSON is base64, not
+    hex — the same trap read_voltages() documents."""
+    r = subprocess.run(["thru", "--json", "account", "info", _behavior_account()],
+                       capture_output=True, text=True, check=True)
+    raw = base64.b64decode(json.loads(r.stdout)["account_info"]["data"])
+    state, gain, fwd, rev, entered, step, bt = struct.unpack_from("<B3xiiiIIQ", raw, 0)
+    return {"state": state, "gain": gain, "drive_fwd": fwd, "drive_rev": rev,
+            "entered_at": entered, "step": step, "block_time": bt}
+
+
+def read_events(out: dict) -> list[tuple[int, bytes]]:
+    """(event_type, payload) per event, in emission order.
+
+    TWO findings here, both verified against live alphanet transactions and
+    neither documented anywhere:
+
+    1. `thru txn execute`'s response reports events_count and events_size but
+       NOT the payloads. Only `thru txn get <signature>` carries them, under
+       events[].data as {"type": "hex", "value": ...}. There is no `thru txn
+       last`, which is what the brief's last_event_bytes() assumed.
+    2. `tsys_emit_event` does not deliver its buffer verbatim: the runtime
+       takes the FIRST 8 BYTES as the event_type and STRIPS TRAILING ZERO
+       BYTES from the rest. A 612-byte trace starting at mV[0] arrived as 597
+       bytes starting at mV[4], silently. worm.c compensates by leading with
+       an explicit 8-byte tag and ending with a non-zero terminator."""
+    r = subprocess.run(["thru", "--json", "txn", "get", out["signature"]],
+                       capture_output=True, text=True, check=True)
+    evs = json.loads(r.stdout)["transaction_get"].get("events") or []
+    return [(e["event_type"], bytes.fromhex(e["data"]["value"])) for e in evs]
+
+
+def last_event_bytes(out: dict) -> bytes:
+    return read_events(out)[-1][1]
+
+
+def read_transfer_event(out: dict) -> list[tuple[int, int, int]]:
+    """Every gap-junction transfer the transaction actually settled, as
+    (pre_neuron, post_neuron, units). Concatenated across events so a run with
+    settle_every set — which settles once per chunk and therefore emits one
+    event per chunk — still reports every transfer exactly once."""
+    xs: list[tuple[int, int, int]] = []
+    for etype, blob in read_events(out):
+        if etype != EVENT_XFER:
+            continue
+        step, count = struct.unpack_from("<II", blob, 0)
+        assert len(blob) == 9 + 8 * count, (
+            f"transfer event at step {step} declares {count} transfers "
+            f"but carries {len(blob)} bytes"
+        )
+        xs += [struct.unpack_from("<HHi", blob, 8 + 8 * k) for k in range(count)]
+    return xs

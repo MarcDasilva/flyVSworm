@@ -160,9 +160,10 @@ typedef struct __attribute__((packed)) {
  * own DATA (see the TASK-10 finding above worm_scratch_t), and there is no
  * other way to reach it from here. */
 struct worm_scratch_s;
-static void emit_trace(uint32_t step);
+static void emit_trace(struct worm_scratch_s *scratch, uint32_t step,
+                        uint16_t acc_behavior);
 static void settle_transfers(struct worm_scratch_s *scratch, uint32_t flags,
-                              uint16_t acc_reservoir);
+                              uint16_t acc_reservoir, uint32_t step);
 
 typedef struct __attribute__((packed)) {
     uint32_t instr;
@@ -172,6 +173,13 @@ typedef struct __attribute__((packed)) {
     uint16_t acc_reservoir;
     uint16_t acc_behavior;
 } stim_args_t;
+
+typedef struct __attribute__((packed)) {
+    uint32_t instr;
+    uint16_t acc_topology;
+    uint16_t acc_reservoir;
+    uint16_t acc_behavior;
+} classify_args_t;
 
 /* TASK-10 FINDING (see task-10-report.md): writing to this program's own
  * static/global (.bss) memory hard-faults (VM_FAILED) the instant the SAME
@@ -209,6 +217,15 @@ typedef struct worm_scratch_s {
     int32_t    V[N_NEURONS];
     int32_t    stim[N_NEURONS];
     uint16_t   neuron_to_slot[N_NEURONS];
+    /* TASK 12: both event payloads are assembled HERE for the same reason
+     * everything else is — a 612-byte static would fault the moment this
+     * instruction also touched an account, and a 4.4 KB stack local
+     * overflows the VM's few-KB stack outright. They are scratch, never
+     * read back across calls. Growing this struct means ensure_scratch()
+     * must run again before the next step; deploy.py's reset_sim() calls
+     * it every time, so an upgrade that changes this size self-heals. */
+    worm_trace_event_t trace;
+    worm_xfer_event_t  xfers;
 } worm_scratch_t;
 
 typedef struct __attribute__((packed)) {
@@ -285,14 +302,16 @@ static void load_state(worm_scratch_t *scratch) {
     }
 }
 
-/* `tag` is do_step's own local `done` counter, which starts at 0 on EVERY
- * call — it is not a running total across separate transactions. Comparing
- * it against the account's existing step_tag therefore only makes sense
- * within a single do_step invocation's own chunk loop (protects against a
- * call that itself under-runs); across separate calls it would wrongly
- * flag a normal second call whose `done` happens to be smaller than the
- * previous call's final tag. `force` (do_step's reset flag) bypasses the
- * check outright — reset is DELIBERATELY rewinding to tag 0. */
+/* `tag` is the ABSOLUTE simulated step this transaction advanced the worm
+ * to — the behavior account's clock plus this call's own progress, not the
+ * per-call counter it used to be. That is what makes the guard below mean
+ * something: a neuron whose step_tag is already AHEAD of what this
+ * transaction computed is being overwritten with a stale voltage, which is
+ * what a replayed or raced transaction looks like. Task 10 left this guard
+ * honest only within one call's chunk loop and flagged it as worse than no
+ * guard; with an absolute clock it holds across transactions too.
+ * `force` (do_step's reset flag) bypasses it outright — reset is
+ * DELIBERATELY rewinding to tag 0. */
 static void store_state(worm_scratch_t *scratch, uint32_t tag, int force) {
     for (uint32_t i = 0; i < scratch->sim.hdr->n_neurons; i++) {
         uint16_t slot = scratch->neuron_to_slot[i];
@@ -305,6 +324,13 @@ static void store_state(worm_scratch_t *scratch, uint32_t tag, int force) {
         worm_neuron_t *nd = (worm_neuron_t *)tsdk_get_account_data_ptr(slot);
         if (!force && nd->step_tag > tag) tsdk_revert(ERR_STALE_STEP_TAG);
         nd->v_next   = scratch->V[i];
+        /* i_stim goes back too. load_state read it from here and nothing in
+         * the step mutates it, so this is a no-op EXCEPT after a reset,
+         * where worm_sim_reset zeroed the scratch copy. Without this write
+         * a reset leaves every past stimulus latched in account data and
+         * the next experiment runs with the previous one still applied —
+         * the head-touch/tail-touch test is exactly what that breaks. */
+        nd->i_stim   = scratch->stim[i];
         nd->step_tag = tag;
     }
 }
@@ -334,20 +360,35 @@ static void do_step(uchar const *data, ulong sz) {
     if (flags & 4u) worm_sim_reset(&scratch->sim);
     else            load_state(scratch);
 
+    /* The behavior account's `step` is the simulation's ONLY clock. The
+     * classifier's dwell and hysteresis are both measured against it, so if
+     * stepping does not advance it the classifier can never leave its
+     * starting state — every dwell comparison reads held == 0 forever. */
+    if (tsys_set_account_data_writable(acc_behavior) != TSDK_SUCCESS)
+        tsdk_revert(ERR_RESIZE_FAILED);
+    worm_behavior_t *beh =
+        (worm_behavior_t *)tsdk_get_account_data_ptr(acc_behavior);
+    if (flags & 4u) {
+        memset(beh, 0, sizeof(*beh));
+    }
+    uint32_t const step0 = beh->step;
+
     uint32_t done = 0;
     do {
         uint32_t chunk = settle_every ? settle_every : n_steps;
         if (chunk > n_steps - done) chunk = n_steps - done;
         if (chunk) worm_step(&scratch->sim, chunk);
         done += chunk;
-        if (flags & 2u) emit_trace(done);
+        if (flags & 2u) emit_trace(scratch, step0 + done, acc_behavior);
         /* bit0: reservoir reconciliation. bit3: gap-junction transfers. Both
          * are Task 11's settlement bodies; either one firing is reason to
          * call in. */
-        if (flags & (1u | 8u)) settle_transfers(scratch, flags, acc_reservoir);
+        if (flags & (1u | 8u))
+            settle_transfers(scratch, flags, acc_reservoir, step0 + done);
     } while (done < n_steps);
 
-    store_state(scratch, done, (flags & 4u) != 0);
+    beh->step = step0 + done;
+    store_state(scratch, beh->step, (flags & 4u) != 0);
     tsdk_return(TSDK_SUCCESS);
 }
 
@@ -370,7 +411,116 @@ static void do_stimulate(uchar const *data, ulong sz) {
     tsdk_return(TSDK_SUCCESS);
 }
 
-static void emit_trace(uint32_t step) { (void)step; }          /* Task 12 */
+/* The command interneurons ARE the classifier. AVA/AVD/AVE carry reversal
+ * and AVB/PVC carry forward locomotion — that is their documented function
+ * (Chalfie et al. 1985), not a mapping we invented to have something to
+ * read. Resolved from each account's own name field rather than a baked
+ * index, so a connectome rebuild that shifts dense indices cannot silently
+ * point the classifier at the wrong five cells. */
+#define CMD_AVA 0
+#define CMD_AVD 1
+#define CMD_AVE 2
+#define CMD_AVB 3
+#define CMD_PVC 4
+#define CMD_N   5
+
+static void resolve_command_neurons(worm_scratch_t *scratch, int16_t *ix) {
+    for (uint32_t k = 0; k < CMD_N; k++) ix[k] = -1;
+    for (uint32_t i = 0; i < scratch->sim.hdr->n_neurons; i++) {
+        worm_neuron_t const *nd = (worm_neuron_t const *)
+            tsdk_get_account_data_ptr(scratch->neuron_to_slot[i]);
+        if      (!memcmp(nd->name, "AVAL", 5)) ix[CMD_AVA] = (int16_t)nd->index;
+        else if (!memcmp(nd->name, "AVDL", 5)) ix[CMD_AVD] = (int16_t)nd->index;
+        else if (!memcmp(nd->name, "AVEL", 5)) ix[CMD_AVE] = (int16_t)nd->index;
+        else if (!memcmp(nd->name, "AVBL", 5)) ix[CMD_AVB] = (int16_t)nd->index;
+        else if (!memcmp(nd->name, "PVCL", 5)) ix[CMD_PVC] = (int16_t)nd->index;
+    }
+}
+
+/* Drive is depolarisation above the cell's OWN measured resting potential,
+ * 20 mV full scale. Normalising against E_leak instead reads 0.49-0.68 on
+ * every command neuron with nobody touching the worm (R13, and
+ * worm_param_t.V_rest_mV in worm.h) — the worm would latch into REVERSE
+ * before the demo started and tail touch would never register. */
+static int32_t drive_of(worm_scratch_t *scratch, int16_t ix) {
+    if (ix < 0) return 0;
+    int32_t d = scratch->V[ix] - (int32_t)scratch->sim.params[ix].V_rest_mV * Q16;
+    d = q16_mul(d, Q16 / 20);
+    if (d < 0)   d = 0;
+    if (d > Q16) d = Q16;
+    return d;
+}
+
+#define THRESH_ON   (Q16 * 35 / 100)
+#define THRESH_OFF  (Q16 * 20 / 100)
+#define DWELL_MIN   60     /* 300 ms at dt=5ms */
+#define OMEGA_HOLD  160    /* 800 ms */
+
+static void do_classify(uchar const *data, ulong sz) {
+    if (sz != sizeof(classify_args_t)) tsdk_revert(ERR_BAD_INSTR_SIZE);
+    uint16_t acc_topology  = TSDK_LOAD(uint16_t, data + 4);
+    uint16_t acc_reservoir = TSDK_LOAD(uint16_t, data + 6);
+    uint16_t acc_behavior  = TSDK_LOAD(uint16_t, data + 8);
+
+    worm_scratch_t *scratch;
+    bind_accounts(acc_topology, acc_reservoir, acc_behavior, &scratch);
+    load_state(scratch);
+
+    int16_t ix[CMD_N];
+    resolve_command_neurons(scratch, ix);
+
+    int32_t rev = q16_mul(Q16 * 50 / 100, drive_of(scratch, ix[CMD_AVA]))
+                + q16_mul(Q16 * 30 / 100, drive_of(scratch, ix[CMD_AVD]))
+                + q16_mul(Q16 * 20 / 100, drive_of(scratch, ix[CMD_AVE]));
+    int32_t fwd = q16_mul(Q16 * 60 / 100, drive_of(scratch, ix[CMD_AVB]))
+                + q16_mul(Q16 * 40 / 100, drive_of(scratch, ix[CMD_PVC]));
+
+    if (tsys_set_account_data_writable(acc_behavior) != TSDK_SUCCESS)
+        tsdk_revert(ERR_RESIZE_FAILED);
+    worm_behavior_t *b =
+        (worm_behavior_t *)tsdk_get_account_data_ptr(acc_behavior);
+    uint32_t held = b->step - b->entered_at;
+    uint8_t next = b->state;
+
+    /* Dwell and hysteresis, not argmax. Two drives within noise of each
+     * other flip a bare argmax every frame, and a worm that flickers
+     * between forward and reverse reads as broken however correct the
+     * voltages underneath are. */
+    if (b->state == 3u) {                      /* OMEGA runs to completion */
+        if (held >= 200u) next = 1u;           /* 1.0 s, then FORWARD */
+    } else if (b->state == 2u && held >= OMEGA_HOLD && rev < THRESH_OFF) {
+        next = 3u;                             /* sustained reversal, released */
+    } else if (held >= DWELL_MIN) {
+        if (rev > THRESH_ON && rev > fwd)      next = 2u;
+        else if (fwd > THRESH_ON && fwd > rev) next = 1u;
+        else if (rev < THRESH_OFF && fwd < THRESH_OFF) next = 0u;
+    }
+
+    if (next != b->state) { b->state = next; b->entered_at = b->step; }
+    b->gain       = (rev > fwd) ? rev : fwd;
+    b->drive_fwd  = fwd;
+    b->drive_rev  = rev;
+    b->block_time = tsdk_get_current_block_ctx()->block_time;
+    tsdk_return(TSDK_SUCCESS);
+}
+
+/* One event per traced frame. Voltages are truncated to whole millivolts
+ * (>> 16 floors, matching every other conversion in this program) — the
+ * front-end draws them, it does not simulate from them, and v_next in
+ * account data remains the Q16.16 source of truth (TASK-10 R5). */
+static void emit_trace(worm_scratch_t *scratch, uint32_t step,
+                        uint16_t acc_behavior) {
+    uint32_t const N = scratch->sim.hdr->n_neurons;
+    scratch->trace.type = WORM_EVENT_TRACE;
+    for (uint32_t i = 0; i < N; i++)
+        scratch->trace.frame.mV[i] = (int16_t)(scratch->V[i] >> 16);
+    scratch->trace.frame.step = step;
+    worm_behavior_t const *b =
+        (worm_behavior_t const *)tsdk_get_account_data_ptr(acc_behavior);
+    scratch->trace.frame.state = b->state;
+    scratch->trace.frame.end   = WORM_EVENT_END;
+    tsys_emit_event((uchar const *)&scratch->trace, sizeof(scratch->trace));
+}
 
 /* Voltage -> settled balance PROJECTION (worm.h R14): balance = (V_mV + 100)
  * * BAL_SCALE. NEVER invert this to recover V — v_next (Q16.16) is the ONLY
@@ -399,8 +549,9 @@ static uint64_t v_to_balance(int32_t v_q16) {
  * gap pass would immediately pull balance back OFF that exact value — double
  * counting the gap component instead of isolating it. */
 static void settle_transfers(worm_scratch_t *scratch, uint32_t flags,
-                              uint16_t acc_reservoir) {
+                              uint16_t acc_reservoir, uint32_t step) {
     uint32_t const N = scratch->sim.hdr->n_neurons;
+    uint32_t n_xfer = 0;
 
     /* One transfer per anatomical junction (517 real undirected pairs; the
      * CSR stores both directions symmetrically, so j > i takes each pair
@@ -433,7 +584,36 @@ static void settle_transfers(worm_scratch_t *scratch, uint32_t flags,
                 if (from_bal < amt + BAL_MIN) continue;
                 if (tsys_account_transfer(from, to, amt) != TSDK_SUCCESS)
                     tsdk_revert(ERR_TRANSFER_FAILED);
+
+                /* Recorded AFTER the transfer succeeds, so the event
+                 * describes what the ledger did rather than what this loop
+                 * intended — the skips above (rounding floor, BAL_MIN) are
+                 * exactly the cases where the two would differ, and
+                 * test_gap_settlement_emits_the_transfers_it_made checks the
+                 * event against the chain's own balance deltas. */
+                if (n_xfer >= XFER_MAX) tsdk_revert(ERR_XFER_OVERFLOW);
+                scratch->xfers.xfer[n_xfer].pre    = (uint16_t)((flow > 0) ? i : j);
+                scratch->xfers.xfer[n_xfer].post   = (uint16_t)((flow > 0) ? j : i);
+                scratch->xfers.xfer[n_xfer].amount = (int32_t)amt;
+                n_xfer++;
             }
+        }
+
+        /* The per-synapse record the transaction receipt does not carry:
+         * `thru txn execute` reports no per-operation trace, so without this
+         * event nothing off-chain can see WHICH junctions moved charge — only
+         * that some balance changed. Task 15 animates from it. 334 of 517
+         * junctions clear the rounding floor in a settled run, so ~2.7 KB. */
+        if (n_xfer) {
+            scratch->xfers.type  = WORM_EVENT_XFER;
+            scratch->xfers.step  = step;
+            scratch->xfers.count = n_xfer;
+            /* The terminator travels with the LAST transfer, not at the end
+             * of the fixed-size array — a small `amount` ends in zero bytes
+             * and the runtime would trim them off the wire. */
+            *(uchar *)&scratch->xfers.xfer[n_xfer] = (uchar)WORM_EVENT_END;
+            tsys_emit_event((uchar const *)&scratch->xfers,
+                            WORM_XFER_EVENT_SZ(n_xfer));
         }
     }
 
@@ -486,6 +666,7 @@ TSDK_ENTRYPOINT_FN void start(void) {
         case INSTR_CREATE_SINGLETONS: do_create_singletons(data, sz); break;
         case INSTR_STEP:               do_step(data, sz); break;
         case INSTR_STIMULATE:          do_stimulate(data, sz); break;
+        case INSTR_CLASSIFY:           do_classify(data, sz); break;
         case INSTR_RESIZE_SCRATCH:     do_resize_scratch(data, sz); break;
         default:                       tsdk_revert(ERR_BAD_INSTR_TYPE);
     }

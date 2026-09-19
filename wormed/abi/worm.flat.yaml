@@ -1,0 +1,386 @@
+abi:
+  package: worm
+  name: null
+  abi-version: 1
+  package-version: '1'
+  description: 'C. elegans nervous system: 302 neurons as accounts, synapses as transfers'
+  imports: []
+  options:
+    program-metadata:
+      root-types:
+        instruction-root: WormInstruction
+        account-root: WormAccount
+        errors: null
+        events: null
+types:
+- name: UploadChunk
+  kind:
+    struct:
+      packed: false
+      aligned: 0
+      comment: null
+      fields:
+      - name: offset
+        field-type:
+          primitive: u32
+      - name: len
+        field-type:
+          primitive: u32
+      - name: bytes
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              field-ref:
+                path:
+                - len
+            element-type:
+              primitive: u8
+            jagged: false
+- name: CreateNeurons
+  kind:
+    struct:
+      packed: false
+      aligned: 0
+      comment: count * { u16 acct_idx; u16 neuron_idx; char name[8]; u8 seed[32]; u32 proof_sz; u8 proof[] } follows — the records are variable-length and are not modelled here
+      fields:
+      - name: count
+        field-type:
+          primitive: u16
+- name: CreateSingletons
+  kind:
+    struct:
+      packed: false
+      aligned: 0
+      comment: count * { u16 acct_idx; u32 data_sz; u8 seed[32]; u32 proof_sz; u8 proof[] } follows
+      fields:
+      - name: count
+        field-type:
+          primitive: u16
+- name: Stimulate
+  kind:
+    struct:
+      packed: false
+      aligned: 0
+      comment: null
+      fields:
+      - name: neuron_idx
+        field-type:
+          primitive: u16
+      - name: current
+        field-type:
+          primitive: i32
+      - name: acc_topology
+        field-type:
+          primitive: u16
+      - name: acc_reservoir
+        field-type:
+          primitive: u16
+      - name: acc_behavior
+        field-type:
+          primitive: u16
+- name: Step
+  kind:
+    struct:
+      packed: false
+      aligned: 0
+      comment: null
+      fields:
+      - name: n_steps
+        field-type:
+          primitive: u32
+      - name: flags
+        field-type:
+          primitive: u32
+      - name: settle_every
+        field-type:
+          primitive: u32
+      - name: acc_topology
+        field-type:
+          primitive: u16
+      - name: acc_reservoir
+        field-type:
+          primitive: u16
+      - name: acc_behavior
+        field-type:
+          primitive: u16
+      - name: _pad
+        field-type:
+          primitive: u16
+- name: Classify
+  kind:
+    struct:
+      packed: false
+      aligned: 0
+      comment: null
+      fields:
+      - name: acc_topology
+        field-type:
+          primitive: u16
+      - name: acc_reservoir
+        field-type:
+          primitive: u16
+      - name: acc_behavior
+        field-type:
+          primitive: u16
+- name: ResizeScratch
+  kind:
+    struct:
+      packed: false
+      aligned: 0
+      comment: null
+      fields:
+      - name: acct_idx
+        field-type:
+          primitive: u16
+      - name: min_size
+        field-type:
+          primitive: u32
+- name: WormInstruction
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: instruction_type
+        field-type:
+          primitive: u32
+      - name: body
+        field-type:
+          enum:
+            packed: false
+            aligned: 0
+            comment: null
+            tag-ref:
+              field-ref:
+                path:
+                - instruction_type
+            variants:
+            - name: upload_chunk
+              tag-value: 1
+              variant-type:
+                type-ref:
+                  name: UploadChunk
+                  comment: null
+            - name: create_neurons
+              tag-value: 2
+              variant-type:
+                type-ref:
+                  name: CreateNeurons
+                  comment: null
+            - name: stimulate
+              tag-value: 3
+              variant-type:
+                type-ref:
+                  name: Stimulate
+                  comment: null
+            - name: step
+              tag-value: 4
+              variant-type:
+                type-ref:
+                  name: Step
+                  comment: null
+            - name: classify
+              tag-value: 5
+              variant-type:
+                type-ref:
+                  name: Classify
+                  comment: null
+            - name: create_singletons
+              tag-value: 6
+              variant-type:
+                type-ref:
+                  name: CreateSingletons
+                  comment: null
+            - name: resize_scratch
+              tag-value: 7
+              variant-type:
+                type-ref:
+                  name: ResizeScratch
+                  comment: null
+- name: Neuron
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: index
+        field-type:
+          primitive: u16
+      - name: name
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 8
+            element-type:
+              primitive: u8
+            jagged: false
+      - name: _pad0
+        field-type:
+          primitive: u16
+      - name: v_next
+        field-type:
+          primitive: i32
+      - name: i_stim
+        field-type:
+          primitive: i32
+      - name: step_tag
+        field-type:
+          primitive: u32
+      - name: _pad1
+        field-type:
+          primitive: u32
+- name: Behavior
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: state
+        field-type:
+          primitive: u8
+      - name: _pad
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 3
+            element-type:
+              primitive: u8
+            jagged: false
+      - name: gain
+        field-type:
+          primitive: i32
+      - name: drive_fwd
+        field-type:
+          primitive: i32
+      - name: drive_rev
+        field-type:
+          primitive: i32
+      - name: entered_at
+        field-type:
+          primitive: u32
+      - name: step
+        field-type:
+          primitive: u32
+      - name: block_time
+        field-type:
+          primitive: u64
+- name: WormAccount
+  kind:
+    size-discriminated-union:
+      packed: false
+      aligned: 0
+      comment: null
+      variants:
+      - name: neuron
+        expected-size: 28
+        variant-type:
+          type-ref:
+            name: Neuron
+            comment: null
+      - name: behavior
+        expected-size: 32
+        variant-type:
+          type-ref:
+            name: Behavior
+            comment: null
+- name: Trace
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: mV
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 302
+            element-type:
+              primitive: i16
+            jagged: false
+      - name: step
+        field-type:
+          primitive: u32
+      - name: state
+        field-type:
+          primitive: u8
+      - name: _pad
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 2
+            element-type:
+              primitive: u8
+            jagged: false
+      - name: end
+        field-type:
+          primitive: u8
+- name: GapTransfer
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: pre
+        field-type:
+          primitive: u16
+      - name: post
+        field-type:
+          primitive: u16
+      - name: amount
+        field-type:
+          primitive: i32
+- name: GapTransfers
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: step
+        field-type:
+          primitive: u32
+      - name: count
+        field-type:
+          primitive: u32
+      - name: xfer
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              field-ref:
+                path:
+                - count
+            element-type:
+              type-ref:
+                name: GapTransfer
+                comment: null
+            jagged: false
+      - name: end
+        field-type:
+          primitive: u8

@@ -308,6 +308,26 @@
     "VC6"
   ],
   "caveat": "Synaptic sign is ASSIGNED, not measured. State this in the README.",
+  "escape_pathway_conductance": 2.0,
+  "escape_pathway_edges": [
+    "ALML->AVDR",
+    "ALML->AVEL",
+    "AVDL->AVAL",
+    "AVDL->AVAR",
+    "AVDR->AVAL",
+    "AVDR->AVAR",
+    "AVEL->AVAL",
+    "AVER->AVAR",
+    "PVCL->AVBL",
+    "PVCL->AVBR",
+    "PVCR->AVBL",
+    "PVCR->AVBR",
+    "ALML<->AVM",
+    "AVDL<->AVM",
+    "PLML<->PVCL",
+    "PLMR<->PVCR"
+  ],
+  "escape_pathway_caveat": "These 16 edges are set by documented function (Chalfie et al. 1985), not by contact count. Every other conductance is the contact-count proxy. State this in the README.",
   "derivation": "cli",
   "slot_map_order": "cli"
 }

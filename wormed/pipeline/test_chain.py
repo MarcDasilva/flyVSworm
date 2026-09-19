@@ -6,7 +6,8 @@ import pytest
 from wormed.pipeline.refsim import FixedSim
 from wormed.pipeline.deploy import (
     reset_sim, stimulate, run_steps, read_voltages, read_balances,
-    read_reservoir_balance,
+    read_reservoir_balance, classify, read_behavior, last_event_bytes,
+    read_transfer_event,
 )
 
 pytestmark = pytest.mark.chain
@@ -75,4 +76,63 @@ def test_gap_junction_settlement_conserves_total_balance():
     after_total = sum(read_balances()) + read_reservoir_balance()
     assert before_total == after_total, (
         f"reservoir reconciliation created/destroyed {after_total - before_total} units"
+    )
+
+
+def test_head_touch_drives_reverse_and_tail_touch_drives_forward():
+    """THE behavioral regression test. Fifteen cells, forty years of
+    literature, one assert. If this fails the demo is dead, and nothing else
+    in the suite would have told you."""
+    REVERSE, FORWARD = 2, 1
+
+    reset_sim(); stimulate("ALML", 40.0); run_steps(400); classify()
+    assert read_behavior()["state"] == REVERSE
+
+    reset_sim(); stimulate("PLML", 40.0); run_steps(400); classify()
+    assert read_behavior()["state"] == FORWARD
+
+
+def test_classifier_does_not_flicker_at_the_crossover():
+    """A bare argmax oscillates when the two drives are close, and a flickering
+    worm reads as broken. Hysteresis plus dwell is what stops it."""
+    reset_sim(); stimulate("ALML", 12.0); stimulate("PLML", 12.0)
+    seen = []
+    for _ in range(10):
+        run_steps(40); classify()
+        seen.append(read_behavior()["state"])
+    assert len(set(seen)) <= 2, f"state thrashed across {set(seen)}"
+
+
+def test_trace_event_is_the_expected_size():
+    """302 int16 millivolts plus an 8-byte tail. The tail keeps the payload
+    8-aligned so web/src/chain.ts can build an Int16Array VIEW over the
+    received buffer instead of copying it."""
+    out = run_steps(4, emit=True)
+    assert len(last_event_bytes(out)) == 302 * 2 + 8
+
+
+def test_gap_settlement_emits_the_transfers_it_made():
+    """Task 11 could not prove settlement moves anything per-synapse: `thru
+    txn execute`'s output carries no per-operation trace. The program now
+    reports its own gap transfers as an event, so the claim is checkable —
+    and checkable against the chain's OWN balance deltas, not against a
+    replay of the same formula, which would only prove the program agrees
+    with itself."""
+    reset_sim()
+    run_steps(20)
+    before = read_balances()
+    out = run_steps(20, gap=True)
+    after = read_balances()
+
+    xs = read_transfer_event(out)
+    assert xs, "gap settlement reported no transfers at all"
+
+    implied = [0] * len(before)
+    for pre, post, amt in xs:
+        assert amt > 0, f"transfer {pre}->{post} carries {amt} units"
+        implied[pre] -= amt
+        implied[post] += amt
+    assert sum(implied) == 0, "reported transfers are not conservative"
+    assert [a - b for a, b in zip(after, before)] == implied, (
+        "reported transfers disagree with the balance deltas the chain applied"
     )

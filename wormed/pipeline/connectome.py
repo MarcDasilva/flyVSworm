@@ -130,6 +130,36 @@ class Physiology:
     provenance: dict = field(default_factory=dict)
 
 
+# TASK-12: the escape-response pathway, and ONLY it, is set by function
+# rather than by contact count. The sqrt(contact) proxy below measures
+# anatomical contact area; it does not measure physiological gain, and for
+# this one circuit the gain is documented behaviour (Chalfie et al. 1985,
+# "The neural circuit for touch sensitivity in C. elegans"): a single touch
+# reliably reverses the animal, which is only possible if the sensory ->
+# command path dominates the ~13 units of conductance a command interneuron
+# already sums from its other ~70 inputs. Under the proxy alone it does not:
+# ALML's largest command-layer output in Varshney et al. is to PVC (forward),
+# so an untuned head touch drives FORWARD — the opposite of forty years of
+# ablation studies. Every pair below is an edge that EXISTS in the source
+# data; none are invented, and nothing outside this table is touched.
+ESCAPE_G = 2.0
+
+# Anterior touch -> reverse: ALM (and AVM, electrically coupled to it) onto
+# the AVD/AVE layer, AVD/AVE onto AVA. Posterior touch -> forward: PLM onto
+# PVC, PVC onto AVB. Both sides of each bilateral pair, so the right half of
+# the worm behaves like the left.
+ESCAPE_CHEM = {
+    ("ALML", "AVDR"), ("ALML", "AVEL"),
+    ("AVDL", "AVAL"), ("AVDR", "AVAL"), ("AVEL", "AVAL"),
+    ("AVDL", "AVAR"), ("AVDR", "AVAR"), ("AVER", "AVAR"),
+    ("PVCL", "AVBL"), ("PVCR", "AVBR"), ("PVCL", "AVBR"), ("PVCR", "AVBL"),
+}
+ESCAPE_GAP = {
+    frozenset(("ALML", "AVM")), frozenset(("AVM", "AVDL")),
+    frozenset(("PLML", "PVCL")), frozenset(("PLMR", "PVCR")),
+}
+
+
 def assign_physiology(c: Connectome) -> Physiology:
     """Synaptic sign is ASSIGNED from transmitter identity, NEVER measured —
     the connectome data has no polarity field. GABAergic presynaptic
@@ -157,11 +187,41 @@ def assign_physiology(c: Connectome) -> Physiology:
     # Conductance proxy: contact count, square-rooted to compress the long tail,
     # then scaled so a median synapse sits near 0.1 (dimensionless, vs g_leak=1.0).
     import math
+    hit_chem: set = set()
+    hit_gap: set = set()
     for pre, post, w in c.chem:
         p.chem_E_mV.append(GABA_E_MV if c.names[pre] in gaba else EXCITATORY_E_MV)
-        p.chem_g.append(0.1 * math.sqrt(w))
+        key = (c.names[pre], c.names[post])
+        if key in ESCAPE_CHEM:
+            hit_chem.add(key)
+            p.chem_g.append(ESCAPE_G)
+        else:
+            p.chem_g.append(0.1 * math.sqrt(w))
     for a, b, w in c.gap:
-        p.gap_g.append(0.05 * math.sqrt(w))
+        key = frozenset((c.names[a], c.names[b]))
+        if key in ESCAPE_GAP:
+            hit_gap.add(key)
+            p.gap_g.append(ESCAPE_G)
+        else:
+            p.gap_g.append(0.05 * math.sqrt(w))
+
+    # A misspelt cell name would silently leave the escape pathway at its
+    # proxy conductance, and the only symptom is a worm that walks forward
+    # when you touch its head — 400 steps and a chain round trip away from
+    # here. Fail at build time instead.
+    assert hit_chem == ESCAPE_CHEM, f"escape chem edges not in connectome: {ESCAPE_CHEM - hit_chem}"
+    assert hit_gap == ESCAPE_GAP, f"escape gap edges not in connectome: {ESCAPE_GAP - hit_gap}"
+
+    p.provenance["escape_pathway_conductance"] = ESCAPE_G
+    p.provenance["escape_pathway_edges"] = (
+        sorted("->".join(k) for k in ESCAPE_CHEM)
+        + sorted("<->".join(sorted(k)) for k in ESCAPE_GAP)
+    )
+    p.provenance["escape_pathway_caveat"] = (
+        "These 16 edges are set by documented function (Chalfie et al. 1985), "
+        "not by contact count. Every other conductance is the contact-count "
+        "proxy. State this in the README."
+    )
 
     p.params = [NeuronParam() for _ in c.names]
     return p

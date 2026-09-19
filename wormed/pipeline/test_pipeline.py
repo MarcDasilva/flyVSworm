@@ -415,3 +415,41 @@ def test_provenance_records_which_order_slot_map_used():
     build_all()
     prov = json.loads((DATA / "provenance.json").read_text())
     assert prov.get("slot_map_order") in ("cli", "python-fallback")
+
+
+def test_touch_reflex_drives_the_right_command_neurons():
+    """The behavioural claim, checked offline against the reference sim so a
+    conductance change fails in three seconds instead of after a two-minute
+    chain round trip. Head touch must drive the REVERSE command layer harder
+    than the FORWARD one and past the classifier's 0.35 threshold, and tail
+    touch the reverse — with nobody touching the worm, both must read ~0.
+
+    Under the raw contact-count conductance proxy this fails: ALML's largest
+    command-layer output in Varshney et al. is to PVC, so an untuned head
+    touch reads fwd > rev. connectome.ESCAPE_CHEM / ESCAPE_GAP exist to fix
+    exactly that, and this test is what stops them being quietly reverted."""
+    from wormed.pipeline.refsim import FloatSim
+    THRESH_ON = 0.35
+    # Rebuild first: FloatSim reads data/topology.bin, so without this the
+    # assert measures whatever the last test to call build_all() left on
+    # disk rather than the physiology in the working tree.
+    build_all()
+
+    def drives(stim: dict[str, float]) -> tuple[float, float]:
+        s = FloatSim()
+        for name, amt in stim.items():
+            s.stimulate(name, amt)
+        s.step(400)
+        d = lambda n: max(0.0, min(1.0, (s.V[s.names.index(n)]
+                                         - s.V_rest_mV[s.names.index(n)]) / 20.0))
+        return (0.5 * d("AVAL") + 0.3 * d("AVDL") + 0.2 * d("AVEL"),
+                0.6 * d("AVBL") + 0.4 * d("PVCL"))
+
+    rev, fwd = drives({})
+    assert rev < 0.1 and fwd < 0.1, f"untouched worm already driving: rev={rev} fwd={fwd}"
+
+    rev, fwd = drives({"ALML": 40.0})
+    assert rev > THRESH_ON and rev > fwd, f"head touch: rev={rev} fwd={fwd}"
+
+    rev, fwd = drives({"PLML": 40.0})
+    assert fwd > THRESH_ON and fwd > rev, f"tail touch: rev={rev} fwd={fwd}"

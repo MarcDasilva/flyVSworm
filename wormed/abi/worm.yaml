@@ -1,0 +1,216 @@
+# ABI for the on-chain C. elegans program (seed hello-worm-v1, Thru alphanet).
+# Without this, scan.thru.org shows opaque bytes — and the explorer is the
+# evidence for the whole claim.
+#
+# The plan's draft of this file was written against a schema that does not
+# exist. The real one, recovered field by field from `thru abi flatten`'s
+# own errors (thru 0.3.16): top level is `abi:` + `types:`; every type has a
+# `kind` newtype variant (struct/union/enum/array/size-discriminated-union/
+# primitive/type-ref); struct fields use `field-type`, not `type`; array
+# needs `element-type` and an expression `size`; a tagged union is an `enum`
+# whose `tag-ref` is a field-ref expression into a sibling field. Primitive
+# names are u8/u16/u32/u64/i8/i16/i32/i64, not uint32.
+abi:
+  package: worm
+  abi-version: 1
+  package-version: 1
+  description: "C. elegans nervous system: 302 neurons as accounts, synapses as transfers"
+  options:
+    program-metadata:
+      root-types:
+        instruction-root: WormInstruction
+        account-root: WormAccount
+
+types:
+  # --- Instructions -------------------------------------------------------
+  - name: UploadChunk
+    kind:
+      struct:
+        fields:
+          - { name: offset, field-type: { primitive: u32 } }
+          - { name: len, field-type: { primitive: u32 } }
+          - name: bytes
+            field-type:
+              array:
+                element-type: { primitive: u8 }
+                size: { field-ref: { path: [len] } }
+
+  - name: CreateNeurons
+    kind:
+      struct:
+        comment: "count * { u16 acct_idx; u16 neuron_idx; char name[8]; u8 seed[32]; u32 proof_sz; u8 proof[] } follows — the records are variable-length and are not modelled here"
+        fields:
+          - { name: count, field-type: { primitive: u16 } }
+
+  - name: CreateSingletons
+    kind:
+      struct:
+        comment: "count * { u16 acct_idx; u32 data_sz; u8 seed[32]; u32 proof_sz; u8 proof[] } follows"
+        fields:
+          - { name: count, field-type: { primitive: u16 } }
+
+  - name: Stimulate
+    kind:
+      struct:
+        fields:
+          - { name: neuron_idx, field-type: { primitive: u16 } }
+          - name: current
+            field-type: { primitive: i32 }
+            comment: "Q16.16 mV"
+          - { name: acc_topology, field-type: { primitive: u16 } }
+          - { name: acc_reservoir, field-type: { primitive: u16 } }
+          - { name: acc_behavior, field-type: { primitive: u16 } }
+
+  - name: Step
+    kind:
+      struct:
+        fields:
+          - { name: n_steps, field-type: { primitive: u32 } }
+          - name: flags
+            field-type: { primitive: u32 }
+            comment: "bit0 settle against reservoir, bit1 emit trace, bit2 reset, bit3 gap-junction transfers"
+          - { name: settle_every, field-type: { primitive: u32 } }
+          - { name: acc_topology, field-type: { primitive: u16 } }
+          - { name: acc_reservoir, field-type: { primitive: u16 } }
+          - { name: acc_behavior, field-type: { primitive: u16 } }
+          - { name: _pad, field-type: { primitive: u16 } }
+
+  - name: Classify
+    kind:
+      struct:
+        fields:
+          - { name: acc_topology, field-type: { primitive: u16 } }
+          - { name: acc_reservoir, field-type: { primitive: u16 } }
+          - { name: acc_behavior, field-type: { primitive: u16 } }
+
+  - name: ResizeScratch
+    kind:
+      struct:
+        fields:
+          - { name: acct_idx, field-type: { primitive: u16 } }
+          - { name: min_size, field-type: { primitive: u32 } }
+
+  - name: WormInstruction
+    kind:
+      struct:
+        packed: true
+        fields:
+          - { name: instruction_type, field-type: { primitive: u32 } }
+          - name: body
+            field-type:
+              enum:
+                tag-ref: { field-ref: { path: [instruction_type] } }
+                variants:
+                  - { name: upload_chunk, tag-value: 1, variant-type: { type-ref: { name: UploadChunk } } }
+                  - { name: create_neurons, tag-value: 2, variant-type: { type-ref: { name: CreateNeurons } } }
+                  - { name: stimulate, tag-value: 3, variant-type: { type-ref: { name: Stimulate } } }
+                  - { name: step, tag-value: 4, variant-type: { type-ref: { name: Step } } }
+                  - { name: classify, tag-value: 5, variant-type: { type-ref: { name: Classify } } }
+                  - { name: create_singletons, tag-value: 6, variant-type: { type-ref: { name: CreateSingletons } } }
+                  - { name: resize_scratch, tag-value: 7, variant-type: { type-ref: { name: ResizeScratch } } }
+
+  # --- Accounts -----------------------------------------------------------
+  # 28 bytes, not the 32 the plan claimed: 302 accounts already exist on
+  # chain with this exact layout and re-creating them is not free.
+  - name: Neuron
+    kind:
+      struct:
+        packed: true
+        fields:
+          - { name: index, field-type: { primitive: u16 } }
+          - name: name
+            field-type:
+              array:
+                element-type: { primitive: u8 }
+                size: { literal: { u64: 8 } }
+          - { name: _pad0, field-type: { primitive: u16 } }
+          - name: v_next
+            field-type: { primitive: i32 }
+            comment: "Q16.16 mV — the simulation's source of truth, not the balance"
+          - name: i_stim
+            field-type: { primitive: i32 }
+            comment: "Q16.16"
+          - name: step_tag
+            field-type: { primitive: u32 }
+            comment: "absolute simulated step this voltage was written at"
+          - { name: _pad1, field-type: { primitive: u32 } }
+
+  - name: Behavior
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: state
+            field-type: { primitive: u8 }
+            comment: "0=PAUSE 1=FORWARD 2=REVERSE 3=OMEGA"
+          - name: _pad
+            field-type:
+              array:
+                element-type: { primitive: u8 }
+                size: { literal: { u64: 3 } }
+          - { name: gain, field-type: { primitive: i32 } }
+          - { name: drive_fwd, field-type: { primitive: i32 } }
+          - { name: drive_rev, field-type: { primitive: i32 } }
+          - { name: entered_at, field-type: { primitive: u32 } }
+          - { name: step, field-type: { primitive: u32 } }
+          - name: block_time
+            field-type: { primitive: u64 }
+            comment: "Unix ns, from the block context"
+
+  - name: WormAccount
+    kind:
+      size-discriminated-union:
+        variants:
+          - { name: neuron, expected-size: 28, variant-type: { type-ref: { name: Neuron } } }
+          - { name: behavior, expected-size: 32, variant-type: { type-ref: { name: Behavior } } }
+
+  # --- Events -------------------------------------------------------------
+  # The runtime strips the emitted buffer's first 8 bytes into event_type and
+  # trims trailing zeros, so these describe the DELIVERED payload: the 8-byte
+  # tag is gone, and the trailing `end` byte exists purely to stop the trim.
+  # event_type 0x454352544d524f57 ("WORMTRCE") selects Trace,
+  # 0x585041474d524f57 ("WORMGAPX") selects GapTransfers.
+  - name: Trace
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: mV
+            field-type:
+              array:
+                element-type: { primitive: i16 }
+                size: { literal: { u64: 302 } }
+            comment: "whole-millivolt membrane potential, dense neuron index"
+          - { name: step, field-type: { primitive: u32 } }
+          - { name: state, field-type: { primitive: u8 } }
+          - name: _pad
+            field-type:
+              array:
+                element-type: { primitive: u8 }
+                size: { literal: { u64: 2 } }
+          - { name: end, field-type: { primitive: u8 } }
+
+  - name: GapTransfer
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: pre
+            field-type: { primitive: u16 }
+            comment: "dense neuron index that LOST the units"
+          - { name: post, field-type: { primitive: u16 } }
+          - { name: amount, field-type: { primitive: i32 } }
+
+  - name: GapTransfers
+    kind:
+      struct:
+        packed: true
+        fields:
+          - { name: step, field-type: { primitive: u32 } }
+          - { name: count, field-type: { primitive: u32 } }
+          - name: xfer
+            field-type:
+              array:
+                element-type: { type-ref: { name: GapTransfer } }
+                size: { field-ref: { path: [count] } }
+          - { name: end, field-type: { primitive: u8 } }

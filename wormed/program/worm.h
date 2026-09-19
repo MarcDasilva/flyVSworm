@@ -26,6 +26,7 @@
 #define ERR_STALE_STEP_TAG    0x1005u
 #define ERR_ACCOUNT_COUNT     0x1006u
 #define ERR_TRANSFER_FAILED   0x1007u
+#define ERR_XFER_OVERFLOW     0x1008u
 
 /* Topology header. EVERY array below starts 8-byte aligned — ThruVM faults on
  * unaligned access AND on any access spanning a 4KB page boundary. 4096 is a
@@ -101,6 +102,72 @@ typedef struct {
 } worm_behavior_t;       /* 32 bytes */
 _Static_assert(sizeof(worm_behavior_t) == 32,
     "worm_behavior_t size drifted from 32 bytes — pipeline/deploy.py's create_singletons() hardcodes this size");
+
+/* TASK-12 PLATFORM FINDING, verified against a live alphanet transaction:
+ * `tsys_emit_event` does NOT deliver the buffer you hand it verbatim. The
+ * runtime splits it — the FIRST 8 BYTES become the event's `event_type`
+ * (little-endian u64) and never appear in the payload, and TRAILING ZERO
+ * BYTES are stripped from what remains. A 612-byte trace whose first field
+ * was mV[0] came back as 597 bytes starting at mV[4]: four voltages eaten by
+ * the type field, the seven zero bytes of the tail trimmed off, and nothing
+ * anywhere reporting an error. Both event structs below therefore open with
+ * an explicit 8-byte type tag (which IS the discriminator the explorer and
+ * the front-end switch on — no in-payload magic needed) and close with a
+ * NON-ZERO terminator, so nothing can be trimmed. The receipt's
+ * `events_size` counts the emitted buffer; the delivered payload is 8 bytes
+ * shorter. */
+#define WORM_EVENT_TRACE 0x454352544d524f57ull   /* "WORMTRCE" */
+#define WORM_EVENT_XFER  0x585041474d524f57ull   /* "WORMGAPX" */
+#define WORM_EVENT_END   0xA5u       /* never zero — see the finding above */
+
+/* One frame of the whole brain as int16 millivolts, then the absolute step
+ * and the behavior state. Streaming this beats polling 302 accounts by every
+ * measure the front-end cares about.
+ *
+ * mV is at offset 0 OF THE DELIVERED PAYLOAD (the type tag above it is
+ * stripped in transit), which is what lets web/src/chain.ts build an
+ * Int16Array VIEW over the received buffer instead of copying it. Do not put
+ * another field in front of mV. */
+typedef struct __attribute__((packed)) {
+    int16_t  mV[N_NEURONS];
+    uint32_t step;
+    uint8_t  state;
+    uint8_t  _pad[2];
+    uint8_t  end;      /* WORM_EVENT_END */
+} worm_trace_t;
+_Static_assert(sizeof(worm_trace_t) == N_NEURONS * 2 + 8,
+    "worm_trace_t must stay 612 bytes — pipeline/test_chain.py and the published ABI both pin it");
+
+typedef struct __attribute__((packed)) {
+    uint64_t     type;    /* WORM_EVENT_TRACE — consumed as event_type */
+    worm_trace_t frame;
+} worm_trace_event_t;
+
+/* One settled gap-junction transfer. `amount` is native balance units and is
+ * always positive: direction is carried by which neuron is pre and which is
+ * post, so a consumer can sum -amount/+amount per neuron and get exactly the
+ * balance delta the chain applied. */
+typedef struct __attribute__((packed)) {
+    uint16_t pre;      /* dense neuron index that LOST the units */
+    uint16_t post;     /* dense neuron index that gained them */
+    int32_t  amount;
+} worm_xfer_t;
+_Static_assert(sizeof(worm_xfer_t) == 8, "worm_xfer_t must stay 8 bytes — the ABI and the front-end both decode 8-byte triples");
+
+/* The gap CSR stores both directions, so the real pair count is N_GAP/2 and
+ * a settlement can never report more transfers than that. */
+#define XFER_MAX (N_GAP / 2)
+
+/* Variable length: only the first `count` triples are emitted, and the
+ * terminator moves with them — worm.c writes it at xfer[count]. */
+typedef struct __attribute__((packed)) {
+    uint64_t    type;     /* WORM_EVENT_XFER — consumed as event_type */
+    uint32_t    step;
+    uint32_t    count;
+    worm_xfer_t xfer[XFER_MAX];
+    uint8_t     end;      /* WORM_EVENT_END, relocated to follow xfer[count] */
+} worm_xfer_event_t;
+#define WORM_XFER_EVENT_SZ(count) (8u + 4u + 4u + (count) * 8u + 1u)
 
 /* Voltage <-> native balance. uint64 balance cannot go negative; biological
  * voltage can. The +100mV offset is what makes hyperpolarizing transfers safe.

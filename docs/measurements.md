@@ -160,3 +160,47 @@ at slot `12723125`:
   `eecfc00000000000` has a transposed byte and does not match the correct
   little-endian encoding of `0xC0FFEE`; `eeffc00000000000` is the value
   actually required by, and produced from, the program's own source).
+
+## Task 12 — classifier, behavior state and events (live alphanet, 2026-09-19)
+
+Program `taXILSqS99UxmqBxrvpcETPQ8j6zd-xmFmK6EQ5xFWrvgQ`, seed `hello-worm-v1`.
+
+1. **`INSTR_CLASSIFY` costs ~336,780 CU.** Two runs, 336,773 and 336,781. It
+   page-faults the same 305-account writable array a step does and then reads
+   302 voltages, so it is essentially the fixed cost of touching the brain
+   with no timestep on top — cheaper than a single step (363,236 CU marginal).
+
+2. **Trace event: 620 bytes emitted, 612 delivered, +8,669 CU.** A 40-step
+   transaction cost 14,960,777 CU without `emit` and 14,969,446 with it —
+   0.06% for one frame. `events_size` in the receipt reports the EMITTED
+   size (620); the payload the client receives is 612 (see finding 4).
+
+3. **Gap-transfer event: 334 transfers, 2,689 bytes emitted, +378,152 CU for
+   settlement AND the event together** (14,960,873 -> 15,339,025 over 40
+   steps, 2.5%). 334 of 517 junctions clear the 0.1 mV rounding floor with
+   the Task 12 conductances (Task 11 measured 339 before the escape-pathway
+   retune). The transfers summed to 1,874 units, largest single transfer 104.
+
+4. **PLATFORM FINDING — `tsys_emit_event` reframes the buffer you give it.**
+   Verified against transaction
+   `tsRXqoX04nVA22XJs_QGTmTwag20Gl9DvpaBgpOBBCujXnIR891ZShz7jLut4rS9-sqRiaWmVtaDGhwdrd8BL-Bh6a`:
+   the runtime takes the FIRST 8 BYTES of the emitted buffer as the event's
+   `event_type` (little-endian u64, never repeated in the payload) and STRIPS
+   TRAILING ZERO BYTES from the remainder. A 612-byte trace whose first field
+   was `mV[0]` came back as 597 bytes starting at `mV[4]`, with no error
+   anywhere: `event_type` decoded to `0xffbdffbbffbcffbc`, which is four
+   membrane potentials. Both worm events now open with an explicit 8-byte
+   type tag (`WORMTRCE` / `WORMGAPX`, which is what the explorer and the
+   front-end switch on) and close with a non-zero terminator byte so nothing
+   can be trimmed.
+
+5. **Event payloads are NOT in the `txn execute` response.** It reports
+   `events_count` and `events_size` only. `thru txn get <signature>` carries
+   them under `events[].data` as `{"type": "hex", "value": ...}`. There is no
+   `thru txn last` subcommand.
+
+6. **ABI published**: account `taTUnO3Mr-xryw6pCHLYhs1oVG1N9JgcBvplQofLjyzxXV`,
+   meta `ta5eGgn8DsrXAE6cQkd7IcgL8iNK0YqzyJmGSjzo7RWKh-`, 8,680 bytes of YAML,
+   state OPEN (deliberately not finalized — Task 15 may still need to change
+   it). `thru program publish-abi` does not exist; the command is
+   `thru abi account create <seed> <file>`.
