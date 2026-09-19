@@ -125,8 +125,8 @@ export async function loadLaptop(scene: THREE.Scene): Promise<THREE.Group> {
   });
 
   group.scale.setScalar(LAPTOP_SCALE);
-  // Square to the table, screen towards the viewer.
-  group.rotation.y = 0;
+  // Square to the table, screen towards the terrarium — the worm's side.
+  group.rotation.y = Math.PI;
 
   // Sit it ON the table rather than trusting the model's origin to be at its
   // feet: the origin is wherever the .abc author left it, so at any other
