@@ -195,3 +195,62 @@ def test_edges_json_is_the_strongest_1500_chemical_edges_by_contact_count():
     got_top = edges[0]
     got_top_weight = next(w for pre, post, w in c.chem if (pre, post) == tuple(got_top))
     assert got_top_weight == expected_top_weight, "edges.json is not ranked by contact count descending"
+
+
+# --- Task 6: NumPy float64 reference simulator -----------------------------
+
+def test_resting_state_is_stable():
+    """With no input, the network must settle to A fixed point and STAY there.
+    Drift after convergence means the backward-Euler solve is wrong, and every
+    later bit-for-bit assert would be comparing two wrong answers.
+
+    Deviation from the task-6 brief: the brief asserts every neuron sits AT
+    -70mV (its leak reversal). That only holds for a neuron with zero edges,
+    because chem_g summed over a well-connected postsynaptic neuron (AVAL:
+    74 incoming edges, sum(chem_g) ~= 12 vs g_leak = 1.0) dwarfs the leak
+    conductance even though the presynaptic sigmoid is barely open
+    (s(-70mV) ~= 0.029) — so the true fixed point for a connected neuron is
+    pulled toward the synaptic reversal potentials, not -70mV. Verified by
+    hand against the raw topology.bin data, independent of FloatSim, in the
+    task report. The 23 neurons with NO chemical or gap edges (20
+    pharyngeal + CANL/CANR/VC6, see connectome.NO_SYNAPSE_DATA_NEURONS) have
+    no such pull and must land exactly on their leak potential — that part
+    of the brief's assertion is kept, scoped to those neurons."""
+    import numpy as np
+    from wormed.pipeline.refsim import FloatSim
+    from wormed.pipeline.connectome import NO_SYNAPSE_DATA_NEURONS
+    s = FloatSim()
+    s.step(400)
+    v_converged = s.V.copy()
+    s.step(50)
+    assert np.allclose(s.V, v_converged, atol=1e-6), \
+        f"still drifting after 400 steps: {np.max(np.abs(s.V - v_converged))}"
+    isolated = [s.names.index(n) for n in NO_SYNAPSE_DATA_NEURONS]
+    assert np.allclose(s.V[isolated], -70.0, atol=0.5), \
+        f"isolated neuron off leak potential: {s.V[isolated]}"
+
+def test_stimulating_alm_depolarizes_ava_not_avb():
+    """Anterior touch drives the reversal command neuron. If AVB moves more
+    than AVA, either the sign assignment or the CSR direction is flipped."""
+    from wormed.pipeline.refsim import FloatSim
+    s = FloatSim()
+    base = s.V.copy()
+    s.stimulate("ALML", 40.0)
+    s.step(200)
+    names = s.names
+    d_ava = s.V[names.index("AVAL")] - base[names.index("AVAL")]
+    d_avb = s.V[names.index("AVBL")] - base[names.index("AVBL")]
+    assert d_ava > 1.0, f"AVA did not depolarize: {d_ava}"
+    assert d_ava > d_avb, f"AVB ({d_avb}) beat AVA ({d_ava}) on anterior touch"
+
+def test_backward_euler_is_stable_at_large_conductance():
+    """The whole reason for backward Euler. Forward Euler oscillates and blows
+    up here; this test is what stops someone 'simplifying' it back."""
+    import numpy as np
+    from wormed.pipeline.refsim import FloatSim
+    s = FloatSim()
+    s.chem_g *= 50.0
+    s.stimulate("ALML", 100.0)
+    s.step(500)
+    assert np.all(np.isfinite(s.V))
+    assert s.V.max() < 200.0 and s.V.min() > -300.0, "solution diverged"
