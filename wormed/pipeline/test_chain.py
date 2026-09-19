@@ -136,3 +136,40 @@ def test_gap_settlement_emits_the_transfers_it_made():
     assert [a - b for a, b in zip(after, before)] == implied, (
         "reported transfers disagree with the balance deltas the chain applied"
     )
+
+
+def test_sustained_reversal_releases_into_an_omega_turn():
+    """OMEGA is the one classifier state nothing else covers, and it is
+    reachable by ONE path only (worm.c do_classify): a REVERSE held for
+    OMEGA_HOLD (160 steps) whose reverse drive has since fallen back under
+    THRESH_OFF. Get the dwell arithmetic wrong in either direction and the
+    worm either never turns — it just backs up and resumes, which is not the
+    escape response anyone recognises — or it turns on every release.
+
+    Step counts are read off the offline FixedSim, not guessed: a head touch
+    saturates rev at 0.686 within ~30 steps, and releasing it puts rev under
+    0.06 within 20. The 210-step tail asserts the other half of the state
+    machine, that OMEGA times out into FORWARD on its own rather than
+    latching."""
+    THRESH_OFF = int(0.20 * 65536)
+    FORWARD, REVERSE, OMEGA = 1, 2, 3
+
+    reset_sim()
+    stimulate("ALML", 40.0)
+    run_steps(80)          # past DWELL_MIN (60) with rev saturated
+    classify()
+    assert read_behavior()["state"] == REVERSE, "head touch did not enter REVERSE"
+
+    stimulate("ALML", 0.0)  # let go
+    run_steps(170)          # held >= OMEGA_HOLD, and rev has decayed
+    classify()
+    b = read_behavior()
+    assert b["drive_rev"] < THRESH_OFF, (
+        f"reverse drive {b['drive_rev'] / 65536:.3f} never fell back under "
+        "THRESH_OFF, so this run could not have tested the release condition")
+    assert b["state"] == OMEGA, (
+        f"released reversal went to {b['state']}, not OMEGA")
+
+    run_steps(210)          # OMEGA runs to completion: 200 steps, then FORWARD
+    classify()
+    assert read_behavior()["state"] == FORWARD, "OMEGA latched instead of timing out"

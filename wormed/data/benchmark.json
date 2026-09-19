@@ -1,0 +1,304 @@
+{
+  "recorded": "2026-09-19T15:55:25Z",
+  "neurons": 302,
+  "steps": 60000,
+  "steps_per_tx": 3000,
+  "dt_ms": 5,
+  "settle_every": 20,
+  "sim_seconds": 300.0,
+  "wall_seconds": 103.97,
+  "chain_seconds": 90.61,
+  "realtime_ratio": 2.886,
+  "chain_realtime_ratio": 3.311,
+  "tx_latency_seconds": {
+    "min": 3.7,
+    "max": 6.25,
+    "mean": 4.53
+  },
+  "compute_units_total": 23463222550,
+  "fee_units_spent": 9020,
+  "fee_payer_balance_before": 239222,
+  "fee_payer_balance_after": 230202,
+  "behavior_trace": [
+    {
+      "batch": 0,
+      "touch": [],
+      "signature": "tsWBbwYx5h3A540HQcgzS087Jju8Eoqj_mMBUmmre4FsLjn_D4w-GbDwvRHag4P4OwZE3Rnr6f-aptGUg_FX84Ah8y",
+      "compute_units": 1172484875,
+      "chain_seconds": 4.61,
+      "step": 3000,
+      "state": 0,
+      "state_name": "PAUSE",
+      "drive_fwd": 0.0154,
+      "drive_rev": 0.0067,
+      "gain": 0.0154
+    },
+    {
+      "batch": 1,
+      "touch": [],
+      "signature": "tsQWGliGcfwtX_eWjeIro2LGzI87ekqpL4ckzrnN5Cv2hBLDw3F4L8KBTqnnZT7YEidHeko7w86at3xTl-62DmAyGh",
+      "compute_units": 1172441483,
+      "chain_seconds": 4.0,
+      "step": 6000,
+      "state": 0,
+      "state_name": "PAUSE",
+      "drive_fwd": 0.0154,
+      "drive_rev": 0.0067,
+      "gain": 0.0154
+    },
+    {
+      "batch": 2,
+      "touch": [],
+      "signature": "tsKba9wRF2YSVM5AtsoxwEmtZW_xSs__DB6XrwmFzn93IsFEUIx9cjb3K0pYsiXPPM7Cy6DE1YhtG6vKrSlyFPBiDJ",
+      "compute_units": 1172441483,
+      "chain_seconds": 4.14,
+      "step": 9000,
+      "state": 0,
+      "state_name": "PAUSE",
+      "drive_fwd": 0.0154,
+      "drive_rev": 0.0067,
+      "gain": 0.0154
+    },
+    {
+      "batch": 3,
+      "touch": [],
+      "signature": "tsu4pUXsh8jQ3um4clzmrph2oxkrju5R7dcmLDXsPmI_N6FRaM1JjUxtzRJmpNHbOBa6uD95b6HbgA5YlHIgehACGf",
+      "compute_units": 1172441483,
+      "chain_seconds": 3.86,
+      "step": 12000,
+      "state": 0,
+      "state_name": "PAUSE",
+      "drive_fwd": 0.0154,
+      "drive_rev": 0.0067,
+      "gain": 0.0154
+    },
+    {
+      "batch": 4,
+      "touch": [
+        [
+          "ALML",
+          40.0
+        ]
+      ],
+      "signature": "tsYMZmSLYsEWSzx5GYqVCKQXWD840vjQeS7YWdcZRe3m9aLPG-MJ7xbAND4l7cLff0jHBUlr6-LI7qNUNNnQA6Bh-g",
+      "compute_units": 1175476101,
+      "chain_seconds": 3.88,
+      "step": 15000,
+      "state": 2,
+      "state_name": "REVERSE",
+      "drive_fwd": 0.5108,
+      "drive_rev": 0.686,
+      "gain": 0.686
+    },
+    {
+      "batch": 5,
+      "touch": [],
+      "signature": "ts4a8MAaPloXKzmTmiapHALxTjKaZXXXWGBicaQ9B0ohqMYtPTm5UCmpUegAg0KoRDaQpkZG6JasvpZOp08K8pBxzp",
+      "compute_units": 1175439683,
+      "chain_seconds": 4.86,
+      "step": 18000,
+      "state": 2,
+      "state_name": "REVERSE",
+      "drive_fwd": 0.5108,
+      "drive_rev": 0.686,
+      "gain": 0.686
+    },
+    {
+      "batch": 6,
+      "touch": [],
+      "signature": "ts_At_S9peWgz9AJT9ZPshJ8BiNv1D6S6ph_Eu3a5dsqikhgfMtHCjzmM_Ijxf0_5fv2oP8nocD1MD4J_xskQHBh-d",
+      "compute_units": 1175439683,
+      "chain_seconds": 4.37,
+      "step": 21000,
+      "state": 2,
+      "state_name": "REVERSE",
+      "drive_fwd": 0.5108,
+      "drive_rev": 0.686,
+      "gain": 0.686
+    },
+    {
+      "batch": 7,
+      "touch": [
+        [
+          "ALML",
+          0.0
+        ]
+      ],
+      "signature": "tsat5NSV429PvnRUPKC1L6dTYSUMeKSTR1SzMQPsh3sXvut3LYEsUpqeIEpWkOVJGEUM4p_Rhfnz8RHHcVovlcAhzG",
+      "compute_units": 1172441457,
+      "chain_seconds": 4.53,
+      "step": 24000,
+      "state": 3,
+      "state_name": "OMEGA",
+      "drive_fwd": 0.0155,
+      "drive_rev": 0.0067,
+      "gain": 0.0155
+    },
+    {
+      "batch": 8,
+      "touch": [],
+      "signature": "tsuZ_kuPoLBckZG0cwyRkeMbfTfLYShEPwkzOkwBmg00Q86DMS-VDg0Fz6DDzYeelLrBelXm1s-UBrUWTaIQwpBh3V",
+      "compute_units": 1172405483,
+      "chain_seconds": 5.01,
+      "step": 27000,
+      "state": 1,
+      "state_name": "FORWARD",
+      "drive_fwd": 0.0155,
+      "drive_rev": 0.0067,
+      "gain": 0.0155
+    },
+    {
+      "batch": 9,
+      "touch": [],
+      "signature": "tseuunLkTJEk6jrNvK_U3aWEJYyXfZw5gX3dkBmJXFjlIHSjEKbS0gLz-sG0EK-vWoQD3-09Hy_MFU8TCnBfklDCA7",
+      "compute_units": 1172405483,
+      "chain_seconds": 3.7,
+      "step": 30000,
+      "state": 0,
+      "state_name": "PAUSE",
+      "drive_fwd": 0.0155,
+      "drive_rev": 0.0067,
+      "gain": 0.0155
+    },
+    {
+      "batch": 10,
+      "touch": [],
+      "signature": "tsYAx4pyUa4SU0u6bg8XJ_2cpqVSe6LXzzCtGScq4rYx0b6-DsjdrJESzEM1K5kFdD8YvJwM6rc8WtpIPN7n0nByGZ",
+      "compute_units": 1172405483,
+      "chain_seconds": 6.25,
+      "step": 33000,
+      "state": 0,
+      "state_name": "PAUSE",
+      "drive_fwd": 0.0155,
+      "drive_rev": 0.0067,
+      "gain": 0.0155
+    },
+    {
+      "batch": 11,
+      "touch": [],
+      "signature": "tsHQ9Piw-yiFAKq2Arp2Yzhnv8a9ofxwSPsUvNt3_IJz-9yp_YsjtS9TJboS6vXi2dqKZJl0Tqrm11-6DIB3-3AR75",
+      "compute_units": 1172405483,
+      "chain_seconds": 4.55,
+      "step": 36000,
+      "state": 0,
+      "state_name": "PAUSE",
+      "drive_fwd": 0.0155,
+      "drive_rev": 0.0067,
+      "gain": 0.0155
+    },
+    {
+      "batch": 12,
+      "touch": [
+        [
+          "PLML",
+          40.0
+        ]
+      ],
+      "signature": "ts1fPA_xUHn1NXuJn3Ze3Ej2NuAKYZKiaHx05oM8M-w2AI0lS4TAYx_woKE4GjRPo_8sPoN59RVVFPGmIryc_bCR4g",
+      "compute_units": 1174335693,
+      "chain_seconds": 4.52,
+      "step": 39000,
+      "state": 1,
+      "state_name": "FORWARD",
+      "drive_fwd": 0.5354,
+      "drive_rev": 0.2353,
+      "gain": 0.5354
+    },
+    {
+      "batch": 13,
+      "touch": [],
+      "signature": "tsJXB0ILRZ2rfDGBfdpGLoE73uX_x05ps2x0XjjsBWPoTtRKA1-9fHdmAySpebjDdHwVL1Fr7Pkc7JC4ygAVsaBiDQ",
+      "compute_units": 1174305983,
+      "chain_seconds": 5.18,
+      "step": 42000,
+      "state": 1,
+      "state_name": "FORWARD",
+      "drive_fwd": 0.5354,
+      "drive_rev": 0.2353,
+      "gain": 0.5354
+    },
+    {
+      "batch": 14,
+      "touch": [],
+      "signature": "tszM1Isx86w9BnC9tb7GlQJgY1489n3hvv7moGKsYNKmCfcl3yAZYcTVScQtUxSTFmmA6AyvmqtyTOg59g_aPnBh7X",
+      "compute_units": 1174305983,
+      "chain_seconds": 4.31,
+      "step": 45000,
+      "state": 1,
+      "state_name": "FORWARD",
+      "drive_fwd": 0.5354,
+      "drive_rev": 0.2353,
+      "gain": 0.5354
+    },
+    {
+      "batch": 15,
+      "touch": [
+        [
+          "PLML",
+          0.0
+        ]
+      ],
+      "signature": "tsyN6nMXybL3H1DTcM1zfvUao_2iXI-hF_V8dLXo8InNWZZZN5xUV0T__JIyTvrKqpzehmdkprlDl5WmSjeMHRDCCo",
+      "compute_units": 1172424779,
+      "chain_seconds": 4.01,
+      "step": 48000,
+      "state": 0,
+      "state_name": "PAUSE",
+      "drive_fwd": 0.0155,
+      "drive_rev": 0.0067,
+      "gain": 0.0155
+    },
+    {
+      "batch": 16,
+      "touch": [],
+      "signature": "tsbpHn0r-52G_daYZGRhgXECOhhjPw27FP-mPGTfmxtUPmmKZ4GusinHHVoyHDt22QkhOBXXq7LNYDHoYqVj4tDh-i",
+      "compute_units": 1172405483,
+      "chain_seconds": 3.91,
+      "step": 51000,
+      "state": 0,
+      "state_name": "PAUSE",
+      "drive_fwd": 0.0155,
+      "drive_rev": 0.0067,
+      "gain": 0.0155
+    },
+    {
+      "batch": 17,
+      "touch": [],
+      "signature": "tsLnGJcrxXWV2qLt6kGxjcvPt42jS_6O0XcIsT7IcCwX2ZYaQBuHC_c51woaFbHuiMG8GctnItjCuKPsH7ZFUCAh9v",
+      "compute_units": 1172405483,
+      "chain_seconds": 4.44,
+      "step": 54000,
+      "state": 0,
+      "state_name": "PAUSE",
+      "drive_fwd": 0.0155,
+      "drive_rev": 0.0067,
+      "gain": 0.0155
+    },
+    {
+      "batch": 18,
+      "touch": [],
+      "signature": "tsjhcOWx-LahTlq7sZ0OE76XKtUkN4BpqrxkURvLdQTxIPeluzFJQKn665A-0iFE4qTsTr6WCzIsibgXJG7I76Dx1N",
+      "compute_units": 1172405483,
+      "chain_seconds": 4.65,
+      "step": 57000,
+      "state": 0,
+      "state_name": "PAUSE",
+      "drive_fwd": 0.0155,
+      "drive_rev": 0.0067,
+      "gain": 0.0155
+    },
+    {
+      "batch": 19,
+      "touch": [],
+      "signature": "tsJX2DIq5PuejL3j02jGDD-me5yhlFd--c8DVJ0D0v4-nAb0DaDJ7tYTCpD-TrDQACUk60vDNkqY1AZhPJGRP7Dh8F",
+      "compute_units": 1172405483,
+      "chain_seconds": 5.84,
+      "step": 60000,
+      "state": 0,
+      "state_name": "PAUSE",
+      "drive_fwd": 0.0155,
+      "drive_rev": 0.0067,
+      "gain": 0.0155
+    }
+  ]
+}

@@ -103,19 +103,18 @@ typedef struct {
 _Static_assert(sizeof(worm_behavior_t) == 32,
     "worm_behavior_t size drifted from 32 bytes — pipeline/deploy.py's create_singletons() hardcodes this size");
 
-/* TASK-12 PLATFORM FINDING, verified against a live alphanet transaction:
- * `tsys_emit_event` does NOT deliver the buffer you hand it verbatim. The
- * runtime splits it — the FIRST 8 BYTES become the event's `event_type`
- * (little-endian u64) and never appear in the payload, and TRAILING ZERO
- * BYTES are stripped from what remains. A 612-byte trace whose first field
- * was mV[0] came back as 597 bytes starting at mV[4]: four voltages eaten by
- * the type field, the seven zero bytes of the tail trimmed off, and nothing
- * anywhere reporting an error. Both event structs below therefore open with
- * an explicit 8-byte type tag (which IS the discriminator the explorer and
- * the front-end switch on — no in-payload magic needed) and close with a
- * NON-ZERO terminator, so nothing can be trimmed. The receipt's
- * `events_size` counts the emitted buffer; the delivered payload is 8 bytes
- * shorter. */
+/* TASK-12 PLATFORM FINDING, verified against a live alphanet transaction, and
+ * AMENDED BY TASK 15: an emitted buffer does not reach every consumer whole.
+ * `thru txn get` splits it — the FIRST 8 BYTES become the receipt's
+ * `event_type` (little-endian u64) and never appear in `events[].data`, and
+ * TRAILING ZERO BYTES are stripped from what remains. A 612-byte trace whose
+ * first field was mV[0] came back as 597 bytes starting at mV[4]: four
+ * voltages read as the type field, the seven zero bytes of the tail trimmed,
+ * and nothing anywhere reporting an error. Both event structs below therefore
+ * open with an explicit 8-byte type tag (which IS the discriminator the
+ * explorer and the front-end switch on — no in-payload magic needed) and
+ * close with a NON-ZERO terminator, so nothing can be trimmed. The receipt's
+ * `events_size` counts the emitted buffer. */
 #define WORM_EVENT_TRACE 0x454352544d524f57ull   /* "WORMTRCE" */
 #define WORM_EVENT_XFER  0x585041474d524f57ull   /* "WORMGAPX" */
 #define WORM_EVENT_END   0xA5u       /* never zero — see the finding above */
@@ -124,10 +123,17 @@ _Static_assert(sizeof(worm_behavior_t) == 32,
  * and the behavior state. Streaming this beats polling 302 accounts by every
  * measure the front-end cares about.
  *
- * mV is at offset 0 OF THE DELIVERED PAYLOAD (the type tag above it is
- * stripped in transit), which is what lets web/src/chain.ts build an
- * Int16Array VIEW over the received buffer instead of copying it. Do not put
- * another field in front of mV. */
+ * THE TWO TRANSPORTS DISAGREE ABOUT WHERE mV STARTS, and only the in-payload
+ * tag makes them safe to write against (TASK-15, measured on alphanet):
+ *   - `thru txn get` (pipeline/deploy.py's read_events): the leading tag is
+ *     split off into `event_type`, so mV is at byte 0 of `events[].data`.
+ *   - the gRPC event stream (web/src/chain.ts): the node delivers the WHOLE
+ *     emitted buffer, tag included — 620 bytes beginning 574f524d54524345 —
+ *     so mV is at byte 8. StreamEventsResponse has no `event_type` field at
+ *     all.
+ * Both readers are correct for their own transport. mV stays immediately
+ * after the tag so the browser can build an Int16Array VIEW at offset 8
+ * instead of copying; do not put another field in front of it. */
 typedef struct __attribute__((packed)) {
     int16_t  mV[N_NEURONS];
     uint32_t step;
