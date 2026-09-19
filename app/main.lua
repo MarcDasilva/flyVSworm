@@ -457,6 +457,11 @@ local function build_map()
     refresh_map()
   end
   screens.MAP.tick = function(now)
+    -- MAP holds no wake lock and the player is looking at the screen, so
+    -- unlike WALK it can afford to animate: show fill progress toward the
+    -- next encounter, falling back to the ambient idle breathe when the
+    -- meter is empty so an idle badge is not left with one stuck LED.
+    led_scene(meter > 0 and "step_meter" or "map_idle")
     step_pump()
   end
   screens.MAP.button = function(b)

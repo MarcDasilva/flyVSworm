@@ -53,11 +53,33 @@ assert(own.steps() == start + 200, "steps must persist through own")
 assert(spawn_meter() >= 0 and spawn_target() >= 40 and spawn_target() <= 80,
   "spawn target must be 40-80 steps, got " .. spawn_target())
 
--- Crossing the target must move to an encounter and reset the meter.
-show("WALK")
-while current() == "WALK" do add_step_for_test(); on_tick() end
-assert(current() == "ENCOUNTER", "filling the step meter must spawn an encounter")
-assert(spawn_meter() == 0, "the meter must reset after spawning")
+-- Crossing the target must move to an encounter and reset the meter. Do
+-- this across several respawns, not one: refresh_map divides by target,
+-- so a reseed that is usually fine but occasionally lands on zero would
+-- be a divide-by-zero on a badge with no pcall, and a single respawn is
+-- not enough to catch a formula that only fails sometimes.
+for i = 1, 5 do
+  show("WALK")
+  while current() == "WALK" do add_step_for_test(); on_tick() end
+  assert(current() == "ENCOUNTER",
+    "filling the step meter must spawn an encounter, respawn " .. i)
+  assert(spawn_meter() == 0, "the meter must reset after spawning, respawn " .. i)
+  assert(spawn_target() ~= 0,
+    "respawned target must never be zero, respawn " .. i)
+  assert(spawn_target() >= 40 and spawn_target() <= 80,
+    "respawned target must be 40-80, got " .. spawn_target() ..
+    " on respawn " .. i)
+end
+
+-- The spawn meter must animate on MAP once it has any progress, not just
+-- breathe idly forever - a fixed LED scene here is dead code that would
+-- silently regress if the switch to step_meter were ever removed.
+show("MAP")
+for _ = 1, 20 do add_step_for_test() end
+M.tick(10)
+local smc = M.leds[1]
+assert(smc[1] == 0 and smc[2] == 60 and smc[3] == 30,
+  "MAP must switch to the step_meter LED scene once steps have accrued")
 
 -- Steps must NOT accrue on screens where the badge is being thrown, or a
 -- throw registers as a walk.
