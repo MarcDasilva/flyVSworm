@@ -79,9 +79,12 @@ this verbatim:
 
 Every one of the sixteen is a real anatomical connection in the Varshney data,
 with 1 to 19 contacts; none are invented. But setting them all to 2.0
-overrides the proxy by **4.6x to 40x**, and the three largest — `ALML~AVM`,
-`PLML~PVCL`, `PLMR~PVCR`, each a single-contact gap junction — are stretched
-40x. The justification: sqrt(contact count) measures contact *area*, not
+overrides the proxy by **4.9x to 40x** per edge record, and the three largest
+— `ALML~AVM`, `PLML~PVCL`, `PLMR~PVCR`, each a single-contact gap junction —
+are stretched 40x. The sixteen named pairs expand to 23 edge records, because
+the source lists monadic and polyadic contacts as separate rows and the
+override applies per record: `AVDL->AVAR` totals 19 contacts across its rows
+but its largest single record is 17, which is where the 4.9x floor comes from. The justification: sqrt(contact count) measures contact *area*, not
 synaptic gain. Under the untuned proxy, ALML's largest command-layer output is
 to PVC, so a head touch reads fwd = 0.147 against rev = 0.095 — the worm crawls
 *toward* the thing that touched it, which is the opposite of forty years of
