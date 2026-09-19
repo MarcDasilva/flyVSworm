@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { WormBody, BEHAVIOR, type BehaviorState } from "./body.js";
+import { WormBody, ChainClock, BEHAVIOR, type BehaviorState } from "./body.js";
 import { WormMesh } from "./worm.js";
 import { BrainCloud, parseMorphology } from "./brain.js";
 import { ChainFeed, type Behavior, type ChainConfig, type RelayStatus } from "./chain.js";
@@ -48,6 +48,10 @@ const [positions, names, morphology] = await Promise.all([
 ]);
 
 const body = new WormBody(24, ARENA);
+// The body advances on worm-time the chain delivered, never on wall clock.
+// See ChainClock: without it the animal keeps crawling off a stale behaviour
+// byte when the chain stops, which is a moving picture of nothing.
+const clock = new ChainClock();
 const worm = new WormMesh(scene);
 const brain = new BrainCloud(scene, positions, names, morphology);
 buildTerrarium(scene);
@@ -101,6 +105,7 @@ feed.onFrame(f => {
   voltages = f.mV;
   frameSig = f.signature;
   lastFrameAt = performance.now();
+  clock.deliver(f.step, cfg.dtMs);
   const strongest = f.transfers.length > FIRING_PER_FRAME
     ? [...f.transfers].sort((a, b) => b.amount - a.amount).slice(0, FIRING_PER_FRAME)
     : f.transfers;
@@ -225,15 +230,19 @@ let fps = 60;
 
 function frame(now: number): void {
   const real = (now - last) / 1000;
-  // dt is CLAMPED so one slow frame cannot teleport the body; fps must be
-  // measured from the UNCLAMPED time or it reports 20 on a 1 fps renderer.
+  // dt drives the LOOK of things — the connector fade — so it runs on the
+  // wall clock and is clamped against one slow frame. The body does not use
+  // it; that comes off the ChainClock below. fps must be measured from the
+  // UNCLAMPED time or it reports 20 on a 1 fps renderer.
   const dt = Math.min(0.05, real);
   last = now;
   if (real > 0) fps += (1 / real - fps) * 0.05;
 
   feed.tick();                       // paces the chain's frames onto the scene
   tickCount++;
-  body.update(dt, behavior);
+  // dt is the RENDER frame; what the body actually animates is however much
+  // simulated time the chain has handed over. No frames, no movement.
+  body.update(clock.take(real), behavior);
   worm.update(body.points);
   brain.setVoltages(voltages);
   brain.tick(dt);

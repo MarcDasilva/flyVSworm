@@ -1,6 +1,6 @@
 // Run: npx tsx src/test_body.ts
 import { strict as assert } from "node:assert";
-import { WormBody, BODY_LENGTH_MM, type BehaviorState } from "./body.js";
+import { WormBody, ChainClock, BODY_LENGTH_MM, type BehaviorState } from "./body.js";
 
 const SEGMENTS = 24;
 const SEG = BODY_LENGTH_MM / SEGMENTS;
@@ -211,6 +211,66 @@ function assertInextensible(w: WormBody, where: string) {
   }
   for (const dt of [0, -1, NaN]) w.update(dt, FWD);
   assertInextensible(w, "hostile input");
+}
+
+// THE ANIMAL IS A READOUT. It may only move on simulated time the chain
+// actually delivered, because the behaviour account keeps returning its last
+// byte forever after the chain stops and the browser reads that account
+// directly. Before ChainClock existed this was measured live: 24 seconds
+// after the relay was killed the worm was still moving in 8 of 12 samples,
+// stuck in FORWARD.
+{
+  const DT_MS = 5;             // chain.json dtMs
+  const STEPS_PER_FRAME = 10;  // relay SETTLE_EVERY
+
+  // A starved clock hands out nothing, and nothing is what the body moves.
+  const idle = new ChainClock();
+  assert.equal(idle.take(1 / 60), 0, "a clock with no frames still paid out");
+  const frozen = new WormBody(SEGMENTS);
+  const at0 = [...frozen.points[0]];
+  for (let i = 0; i < 600; i++) frozen.update(idle.take(1 / 60), FWD);
+  assert.equal(dist(frozen.points[0], at0), 0,
+    "the worm moved across 10 s with the chain delivering nothing");
+
+  // The first frame credits nothing: with no previous step there is no
+  // interval to measure, and assuming one would invent worm-time.
+  const c = new ChainClock();
+  c.deliver(1000, DT_MS);
+  assert.equal(c.pending, 0, "the first frame invented time out of nothing");
+
+  // Thereafter a frame is worth exactly its step interval.
+  c.deliver(1000 + STEPS_PER_FRAME, DT_MS);
+  assert.ok(Math.abs(c.pending - 0.05) < 1e-9,
+    `10 steps at 5 ms should be 0.05 worm-seconds, got ${c.pending}`);
+
+  // A rewind — a replay or a reset_sim — must not credit backwards or
+  // re-credit time already animated.
+  c.deliver(10, DT_MS);
+  assert.ok(Math.abs(c.pending - 0.05) < 1e-9, `a rewind moved the debt to ${c.pending}`);
+  c.deliver(10 + STEPS_PER_FRAME, DT_MS);
+  assert.ok(Math.abs(c.pending - 0.10) < 1e-9, "the clock did not resume after a rewind");
+
+  // Everything delivered is eventually animated, and never more than that.
+  const drain = new ChainClock();
+  drain.deliver(0, DT_MS);
+  let delivered = 0;
+  for (let f = 1; f <= 200; f++) { drain.deliver(f * STEPS_PER_FRAME, DT_MS); delivered += 0.05; }
+  let taken = 0;
+  for (let i = 0; i < 4000; i++) taken += drain.take(1 / 60);
+  assert.ok(Math.abs(taken - delivered) < 1e-6,
+    `paid out ${taken} worm-seconds against ${delivered} delivered`);
+  assert.equal(drain.take(1 / 60), 0, "the clock kept paying after the debt cleared");
+
+  // Catch-up is BOUNDED. A whole transaction lands at once; without a ceiling
+  // the body would animate three seconds of crawl in one render frame and
+  // teleport across the pen.
+  const burst = new ChainClock();
+  burst.deliver(0, DT_MS);
+  burst.deliver(600, DT_MS);          // one 600-step transaction = 3 s of worm
+  assert.ok(burst.pending > 2.9, "a full transaction should owe ~3 s");
+  const one = burst.take(1 / 60);
+  assert.ok(one <= 1 / 60 * 2 + 1e-9,
+    `one render frame animated ${one} worm-seconds of a 3 s burst`);
 }
 
 console.log("OK: body kinematics invariants hold");

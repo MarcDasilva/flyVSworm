@@ -211,6 +211,25 @@ click-to-move demo, in which the animal stands still until asked. The
 automatic touches cost about 2,000 units/minute on top of the stepper's
 4,500.
 
+**The animal moves only while the chain is delivering.** `ChainClock` in
+`body.ts` advances the body by the worm-seconds the played frames actually
+carry — step delta times dt — and never by the wall clock. With nothing
+arriving it hands out zero, and `WormBody.update` treats zero as a no-op, so
+the worm stops. This is not cosmetic. The browser reads the behaviour account
+directly, that account keeps returning its last byte forever after the chain
+stops, and driving the gait from it was measured doing exactly the wrong
+thing: 24 seconds after the relay was killed the animal was still crawling in
+8 of 12 samples, stuck in FORWARD, with no transactions behind it at all.
+With the clock in place the same test freezes it in 0 of 12.
+
+A timeout could not do this job. Gaps between played frames reach 10.7 s in
+healthy operation (p90 6.1 s), so any threshold tight enough to catch a stall
+promptly also fires constantly while the chain is fine. The cost of doing it
+properly is visible: motion is intermittent, because the chain's delivery is
+intermittent. Measured with nobody clicking, the terrarium changes in about
+18 of 45 two-second samples rather than all of them. The worm pausing between
+bursts is the alphanet's latency made visible, not a dropped frame.
+
 **13. The geometry is measured; where a synapse is drawn is not.** Neuron
 shapes and soma positions come from the tracing and are checked against known
 anatomy in `wormed/pipeline/test_morphology.py`. Synapse *sites* are not in

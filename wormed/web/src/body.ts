@@ -234,3 +234,54 @@ export class WormBody {
     return [...this.path[this.path.length - 1]] as Vec3;
   }
 }
+
+/** Never animate more than this multiple of real time while catching up. The
+ *  chain delivers worm-time in bursts of one transaction; without a ceiling a
+ *  burst arriving after a stall would jump the body across the pen. */
+const CHAIN_CATCHUP = 2;
+
+/**
+ * Worm-seconds the chain has simulated but the body has not yet animated.
+ *
+ * The animal is a READOUT of the chain, so it may only move on time the chain
+ * ACTUALLY SIMULATED. Driving the body from the wall clock instead lets it
+ * keep crawling with the relay dead and nothing on chain at all — measured
+ * before this existed: 24 seconds after the relay was killed the worm was
+ * still moving in 8 of 12 samples, stuck in FORWARD, because the behaviour
+ * account still held its last byte and the browser reads that account
+ * directly.
+ *
+ * A timeout cannot replace this. Healthy alphanet gaps between played frames
+ * reach 10.7 s (p90 6.1 s), so any threshold tight enough to catch a stall
+ * promptly also fires constantly during normal operation.
+ */
+export class ChainClock {
+  private owed = 0;
+  /** -1 means no frame yet. NEVER use 0 as that sentinel: step 0 is a real
+   *  step number after a reset, and treating it as "nothing seen" silently
+   *  drops the next frame's worth of worm-time. */
+  private lastStep = -1;
+
+  /** One played frame, at the simulation step it carries. */
+  deliver(step: number, dtMs: number): void {
+    // Only ever credit FORWARD progress. A replay or a reset rewinds the step
+    // counter, and crediting the difference would hand the body a large
+    // negative or re-credit time it already animated.
+    if (this.lastStep >= 0 && step > this.lastStep) {
+      this.owed += (step - this.lastStep) * dtMs / 1000;
+    }
+    this.lastStep = step;
+  }
+
+  /** Worm-seconds to animate for a render frame `real` seconds long. Returns
+   *  0 when the chain has delivered nothing, which WormBody.update treats as
+   *  a no-op — that zero is the whole mechanism. */
+  take(real: number): number {
+    const step = Math.min(this.owed, Math.max(0, real) * CHAIN_CATCHUP, MAX_SUBSTEP * 8);
+    this.owed = Math.max(0, this.owed - step);
+    return step;
+  }
+
+  /** Worm-seconds still owed; the HUD reports it as playback backlog. */
+  get pending(): number { return this.owed; }
+}
