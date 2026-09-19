@@ -249,11 +249,19 @@ def ensure_scratch() -> dict:
 
 
 def run_steps(n: int, settle_every: int = 0, emit: bool = False,
-              reset: bool = False) -> dict:
+              reset: bool = False, gap: bool = False) -> dict:
     """flags: bit0 settle (reconcile balances against the reservoir), bit1
     emit trace, bit2 reset, bit3 gap-junction transfers (worm.c step_args_t).
-    settle_every requests bit0 automatically, matching do_step's chunking."""
-    flags = (1 if settle_every else 0) | (2 if emit else 0) | (4 if reset else 0)
+    settle_every requests bit0 automatically, matching do_step's chunking.
+    `gap` requests bit3 independently — TASK-11 R6: the two settlement halves
+    are separate flags on purpose, so a caller (the conservation test) can run
+    gap-only transfers WITHOUT the reservoir reconciliation touching neuron
+    balances for an unrelated reason and making the conservation assert
+    meaningless. settle_every=0 with gap=True still settles exactly once,
+    after the full n-step chunk (do_step's do-while runs one chunk when
+    settle_every is 0)."""
+    flags = (1 if settle_every else 0) | (2 if emit else 0) | (4 if reset else 0) \
+          | (8 if gap else 0)
     payload = struct.pack("<IIII", INSTR_STEP, n, flags, settle_every) \
             + struct.pack("<HHHH", *_slots(), 0)
     # thru txn execute's own default (300,000,000) covers roughly the first
@@ -264,6 +272,23 @@ def run_steps(n: int, settle_every: int = 0, emit: bool = False,
     print(f"run_steps(n={n}, flags={flags}) -> {out['signature']} "
           f"cu={out['compute_units_consumed']} su={out['state_units_consumed']}")
     return out
+
+
+def count_transfers_in_last_tx(output: dict) -> int:
+    """FINDING (task-11-report.md): `thru --json txn execute`'s real output
+    (confirmed against a live run_steps(20, settle_every=20) transaction) has
+    no per-operation trace at all — no "transfer" substring anywhere in its
+    keys or values, and `events`/`events_count` are empty because worm.c
+    never calls tsys_emit_event. The brief's line-count approach (grep the
+    stdout for "transfer") therefore always returns 0 against the real CLI;
+    there is nothing to fall back to parsing either. Kept for interface
+    parity with the brief, but callers that need an actual transfer count
+    should derive it from the CU delta instead (tsys_account_transfer is a
+    flat 512 CU/call — see docs/measurements.md's settlement-overhead entry)
+    or, for gap junctions specifically, replay the same fixed-point formula
+    settle_transfers uses against topology.bin + read_voltages() off-chain."""
+    text = json.dumps(output)
+    return text.lower().count("transfer")
 
 
 def stimulate(name: str, current_mV: float) -> dict:
@@ -296,6 +321,17 @@ def _account_infos() -> list[dict]:
 
 def read_balances() -> list[int]:
     return [int(info["balance"]) for info in _account_infos()]
+
+
+def read_reservoir_balance() -> int:
+    """The reservoir is a singleton, not one of the 302 addresses
+    read_balances() covers — settle_transfers moves its BALANCE only (never
+    its DATA, which is worm_scratch_t; see worm.c). TASK-11 R6's second
+    conservation assert (all neurons + reservoir conserved under bit0) needs
+    this read separately from read_balances()."""
+    r = subprocess.run(["thru", "--json", "account", "info", _reservoir_account()],
+                       capture_output=True, text=True, check=True)
+    return int(json.loads(r.stdout)["account_info"]["balance"])
 
 
 def read_voltages() -> list[int]:

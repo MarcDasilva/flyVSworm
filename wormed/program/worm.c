@@ -153,10 +153,16 @@ typedef struct __attribute__((packed)) {
     uint16_t _pad;
 } step_args_t;
 
-/* Forward declarations: do_step calls both. Tasks 11 and 12 supply the bodies;
- * Step 3 of this task adds no-op stubs so it compiles today. */
+/* Forward declarations: do_step calls both. Tasks 11 and 12 supply the bodies.
+ * settle_transfers takes a scratch pointer (struct worm_scratch_s, defined
+ * below as worm_scratch_t once its members are known) rather than reading
+ * global state — do_step's `scratch` is a local bound into the reservoir's
+ * own DATA (see the TASK-10 finding above worm_scratch_t), and there is no
+ * other way to reach it from here. */
+struct worm_scratch_s;
 static void emit_trace(uint32_t step);
-static void settle_transfers(uint32_t flags);
+static void settle_transfers(struct worm_scratch_s *scratch, uint32_t flags,
+                              uint16_t acc_reservoir);
 
 typedef struct __attribute__((packed)) {
     uint32_t instr;
@@ -198,7 +204,7 @@ typedef struct __attribute__((packed)) {
  * field moved by tsys_account_transfer) — that field is free and is exactly
  * what settle_transfers should move. If a fourth field is ever needed here,
  * give it its OWN account; do not grow into this one. */
-typedef struct {
+typedef struct worm_scratch_s {
     worm_sim_t sim;
     int32_t    V[N_NEURONS];
     int32_t    stim[N_NEURONS];
@@ -338,7 +344,7 @@ static void do_step(uchar const *data, ulong sz) {
         /* bit0: reservoir reconciliation. bit3: gap-junction transfers. Both
          * are Task 11's settlement bodies; either one firing is reason to
          * call in. */
-        if (flags & (1u | 8u)) settle_transfers(flags);
+        if (flags & (1u | 8u)) settle_transfers(scratch, flags, acc_reservoir);
     } while (done < n_steps);
 
     store_state(scratch, done, (flags & 4u) != 0);
@@ -365,7 +371,107 @@ static void do_stimulate(uchar const *data, ulong sz) {
 }
 
 static void emit_trace(uint32_t step) { (void)step; }          /* Task 12 */
-static void settle_transfers(uint32_t flags) { (void)flags; }  /* Task 11 */
+
+/* Voltage -> settled balance PROJECTION (worm.h R14): balance = (V_mV + 100)
+ * * BAL_SCALE. NEVER invert this to recover V — v_next (Q16.16) is the ONLY
+ * source of truth (load_state above, TASK-10 R5). num is clamped at 0 only
+ * to stop a uint64 wraparound if V ever drops below -100mV; BAL_MIN/BAL_MAX
+ * are deliberately NOT re-applied here, because the bit-for-bit test
+ * (test_balance_encodes_voltage_within_rounding) computes its expected value
+ * from this exact unclamped formula. */
+static uint64_t v_to_balance(int32_t v_q16) {
+    int64_t num = (int64_t)v_q16 + (int64_t)BAL_OFFSET_MV * Q16;
+    if (num < 0) num = 0;
+    return (uint64_t)((num * BAL_SCALE) / Q16);
+}
+
+/* Gap junctions settle as TRANSFERS because they are conservative: current
+ * out of one cell IS current into the other. Chemical synapses (bundled here
+ * with leak and stimulus current, none of which are conservative either)
+ * settle against the reservoir — a chemical synapse gates a conductance, the
+ * presynaptic cell does not lose what the postsynaptic gains. The two ledger
+ * operations match the two physics; that is the claim on stage.
+ *
+ * Order matters when both flags fire in the same call: gap transfers run
+ * FIRST, moving balance neuron-to-neuron; reservoir reconciliation runs
+ * SECOND and only has to make up whatever the gap pass didn't already move.
+ * Reconciling first would push every neuron to v_to_balance(V) and then the
+ * gap pass would immediately pull balance back OFF that exact value — double
+ * counting the gap component instead of isolating it. */
+static void settle_transfers(worm_scratch_t *scratch, uint32_t flags,
+                              uint16_t acc_reservoir) {
+    uint32_t const N = scratch->sim.hdr->n_neurons;
+
+    /* One transfer per anatomical junction (517 real undirected pairs; the
+     * CSR stores both directions symmetrically, so j > i takes each pair
+     * once) in the direction of net current — current leaves the
+     * higher-voltage cell. R14: BAL_SCALE=10 resolves 0.1 mV, so a junction
+     * whose |g*(Vi-Vj)| is under that floor rounds to a zero-unit transfer
+     * and is skipped outright (see task-11-report.md for how many of the 517
+     * clear the bar during a real settlement). */
+    if (flags & 8u) {
+        for (uint32_t i = 0; i < N; i++) {
+            for (uint32_t e = scratch->sim.gap_rowptr[i]; e < scratch->sim.gap_rowptr[i + 1]; e++) {
+                uint32_t j = scratch->sim.gap_col[e];
+                if (j <= i) continue;
+                int32_t  g_fixed  = (int32_t)scratch->sim.gap_g[e] << 8; /* Q8.8 -> Q16.16 */
+                int32_t  dV       = scratch->V[i] - scratch->V[j];      /* Q16.16 mV */
+                int64_t  flow     = (int64_t)q16_mul(g_fixed, dV);      /* Q16.16 g*dV */
+                int64_t  abs_flow = flow < 0 ? -flow : flow;
+                uint64_t amt      = (uint64_t)((abs_flow * BAL_SCALE) / Q16);
+                if (amt == 0) continue;
+
+                uint16_t si   = scratch->neuron_to_slot[i];
+                uint16_t sj   = scratch->neuron_to_slot[j];
+                uint16_t from = (flow > 0) ? si : sj;   /* higher-V cell loses charge */
+                uint16_t to   = (flow > 0) ? sj : si;
+
+                /* R8: native balance is uint64 and cannot go negative — skip
+                 * rather than revert if this would breach the BAL_MIN floor.
+                 * There are 516 other junctions to show. */
+                uint64_t from_bal = tsdk_get_account_meta(from)->balance;
+                if (from_bal < amt + BAL_MIN) continue;
+                if (tsys_account_transfer(from, to, amt) != TSDK_SUCCESS)
+                    tsdk_revert(ERR_TRANSFER_FAILED);
+            }
+        }
+    }
+
+    /* Reconcile every neuron's balance to its simulated voltage. Whatever the
+     * gap pass above didn't already settle is, by elimination, the
+     * non-conservative (chemical + leak + stimulus) component — moved
+     * against the reservoir's BALANCE only, never its DATA (see the TASK 11
+     * comment above worm_scratch_t: the reservoir's data bytes belong to this
+     * struct, with no framing, and a stray write there is a wild pointer read
+     * on the next do_step call, not a clean revert). */
+    if (flags & 1u) {
+        for (uint32_t i = 0; i < N; i++) {
+            uint16_t slot = scratch->neuron_to_slot[i];
+            uint64_t want = v_to_balance(scratch->V[i]);
+            uint64_t have = tsdk_get_account_meta(slot)->balance;
+            if (want == have) continue;
+            if (want > have) {
+                uint64_t amt = want - have;
+                /* R8: the reservoir is funded (deploy.py's fund_reservoir),
+                 * but skip rather than revert if it ever runs dry — repeat
+                 * with `thru faucet withdraw worm 10000`. */
+                uint64_t res_bal = tsdk_get_account_meta(acc_reservoir)->balance;
+                if (res_bal < amt) continue;
+                if (tsys_account_transfer(acc_reservoir, slot, amt) != TSDK_SUCCESS)
+                    tsdk_revert(ERR_TRANSFER_FAILED);
+            } else {
+                uint64_t amt = have - want;
+                /* R8: leave BAL_MIN headroom below resting potential so a
+                 * later hyperpolarizing transfer always has somewhere to
+                 * come from — skip this neuron's settlement rather than
+                 * revert the whole transaction over it. */
+                if (have < amt + BAL_MIN) continue;
+                if (tsys_account_transfer(slot, acc_reservoir, amt) != TSDK_SUCCESS)
+                    tsdk_revert(ERR_TRANSFER_FAILED);
+            }
+        }
+    }
+}
 
 TSDK_ENTRYPOINT_FN void start(void) {
     tsdk_txn_t const *txn = tsdk_get_txn();

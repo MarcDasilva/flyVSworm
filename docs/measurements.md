@@ -55,7 +55,7 @@ operation (`thru account create`), not a syscall exposed to program code in
 this SDK version — later tasks that assumed an in-program
 `tsys_account_create` syscall should re-check this before relying on it.
 
-## Four measurements
+## Seven measurements
 
 1. **MAX_BLOCK_COMPUTE_UNITS = 2147483648000000** — read via the Explorer MCP
    server (`https://scan.thru.org/api/mcp`, tool `get_block`) for slot
@@ -98,7 +98,41 @@ this SDK version — later tasks that assumed an in-program
    the first ~824 steps unassisted; `pipeline.deploy.run_steps` now passes an
    explicit budget (1.5x the measured fixed+marginal estimate) above that.
 
-4. **STATE_UNITS_PER_CREATE ≈ 0.1 (1 state unit per 10-account create batch)** —
+5. **SETTLEMENT_OVERHEAD ≈ +0.99% (settle_every=20 vs no settlement, 100 steps)** —
+   measured on-chain (program `taXILSqS99UxmqBxrvpcETPQ8j6zd-xmFmK6EQ5xFWrvgQ`,
+   seed `hello-worm-v1`, 2026-09-19), both immediately following a
+   `reset_sim()` in the same Python session: `run_steps(100)` (flags=0, no
+   settlement) consumed `36,746,075` CU; `run_steps(100, settle_every=20)`
+   (flags=1, reservoir reconciliation only — no gap transfers) consumed
+   `37,111,033` CU. `delta = 364,958 CU`, `364,958 / 36,746,075 = 0.993%`.
+   `tsys_account_transfer` is a flat 512 CU/call, so this delta implies
+   `364,958 / 512 ≈ 713` real transfers across the 5 settlement calls the
+   run makes (steps 20/40/60/80/100) — roughly 143 of the 302 neurons per
+   call, not all 302, because only neurons whose balance actually drifted
+   from `v_to_balance(V)` since the last settlement generate a transfer
+   (`worm.c`'s `want == have` skip). This comes in far below the spec's
+   ~6% estimate, which was sized for ~1,400 gap junctions firing every
+   settlement; the real connectome has 517 gap-junction pairs (three of
+   which are self-loops that never transfer — see task-11-report.md), and
+   this measurement doesn't even include the gap pass (bit3), only the
+   reservoir reconciliation (bit0).
+
+6. **GAP_JUNCTION_YIELD: 339 of 517 pairs (65.6%) transfer non-zero balance
+   in a real settlement** — computed by replaying `settle_transfers`'s exact
+   fixed-point formula (`program/worm.c`) in Python against the real
+   `V` snapshot read back from chain (`read_voltages()`) after
+   `reset_sim(); run_steps(20)` — the identical state the on-chain program
+   used for `test_gap_junction_settlement_conserves_total_balance`'s
+   gap-only pass. Of the 517 undirected pairs in `topology.bin`, 3 are
+   self-loops (RIBL, RIBR, VA8, each wired to itself — a topology-data
+   artifact, not a bug) that the `j <= i` dedup guard always skips
+   regardless of voltage, leaving 514 genuine inter-neuron pairs; 339 of
+   those (65.9%) clear the BAL_SCALE=10 (0.1 mV-equivalent) rounding floor
+   in this snapshot. Transfer sizes ranged 1-17 balance units (mean 3.1).
+   This will vary with the voltage state (a more polarized worm settles
+   more junctions); see task-11-report.md for the reproduction script.
+
+7. **STATE_UNITS_PER_CREATE ≈ 0.1 (1 state unit per 10-account create batch)** —
    measured on-chain across the 31 `INSTR_CREATE_NEURONS` transactions that
    created all 302 neuron accounts (program `taXILSqS99UxmqBxrvpcETPQ8j6zd-xmFmK6EQ5xFWrvgQ`,
    seed `hello-worm-v1`, 2026-09-19). Every 10-neuron batch (each doing 10x
