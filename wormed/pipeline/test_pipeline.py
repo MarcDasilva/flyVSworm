@@ -254,3 +254,42 @@ def test_backward_euler_is_stable_at_large_conductance():
     s.step(500)
     assert np.all(np.isfinite(s.V))
     assert s.V.max() < 200.0 and s.V.min() > -300.0, "solution diverged"
+
+
+# --- Task 7: Q16.16 reference simulator and the test-vector dump -----------
+
+def test_fixed_tracks_float_within_a_tenth_of_a_millivolt():
+    """If fixed-point drifts from float, the model and the arithmetic are BOTH
+    suspect and you cannot tell which. 0.1 mV over 400 steps is the budget."""
+    import numpy as np
+    from wormed.pipeline.refsim import FloatSim, FixedSim, Q16
+    f, x = FloatSim(), FixedSim()
+    f.stimulate("ALML", 40.0); x.stimulate("ALML", 40.0)
+    f.step(400); x.step(400)
+    fixed_mV = np.array(x.V, dtype=np.float64) / Q16
+    assert np.max(np.abs(fixed_mV - f.V)) < 0.1
+
+def test_fixed_sim_is_deterministic():
+    """Two runs must be bit-identical, or the C comparison in Task 10 is
+    meaningless."""
+    from wormed.pipeline.refsim import FixedSim
+    a, b = FixedSim(), FixedSim()
+    a.stimulate("PLML", 40.0); b.stimulate("PLML", 40.0)
+    a.step(120); b.step(120)
+    assert a.V == b.V
+
+def test_accumulator_does_not_overflow_on_the_most_connected_neuron():
+    """AVA has 300+ incoming edges. In Q16.16 the products overflow int32 and
+    silently wrap. This is the bug the int64 accumulator exists to prevent."""
+    from wormed.pipeline.refsim import FixedSim, Q16
+    x = FixedSim()
+    for n in ("ALML", "ALMR", "AVM", "PLML", "PLMR"):
+        x.stimulate(n, 80.0)
+    x.step(200)
+    ava = x.V[x.names.index("AVAL")] / Q16
+    assert -200.0 < ava < 200.0, f"AVA wrapped: {ava} mV"
+
+def test_vector_dump_shape_is_exactly_what_the_c_harness_expects():
+    from wormed.pipeline.refsim import dump_vectors
+    p = dump_vectors()
+    assert p.stat().st_size == 401 * 302 * 4
