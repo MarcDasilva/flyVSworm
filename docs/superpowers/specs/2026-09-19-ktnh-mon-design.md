@@ -2,8 +2,12 @@
 
 Status: approved for implementation. Target: 2026 Hack the North Hacker Badge.
 
+Sources: `docs/badge-ide-README.md` for the API contract, and
+`badge.hackthenorth.com` plus the public Hacker Badge Instruction Manual for
+the physical specification.
+
 A creature collecting game in the shape of Pokemon GO, built for a 320x240
-ESP32 badge with a Lua OS. The real world supplies the map: NFC stickers are
+ESP32-C3 badge with a Lua OS. The real world supplies the map: NFC stickers are
 nests and Pokestops, walking spawns encounters, and other attendees' badges
 are live opponents.
 
@@ -20,13 +24,38 @@ are live opponents.
 | Duels | Two badges over radio; each stakes one pokemon, winner takes it |
 | Duel sync | Host-authoritative full snapshot, no acknowledgements |
 | Build order | Shell, battle engine, radio PvP, catching, economy, extras |
+| Wake lock | Off by manifest; taken at runtime in Walk mode and duels only |
+| Tag roles | Derived from NFC UID hash, since the badge cannot write tags |
 
 The starter is shielded and can never be wagered, stolen, or traded. That bit
 already exists in `app/monster.lua`.
 
 ## 2. Hardware contract
 
-Every number below comes from `docs/badge-ide-README.md`. They are the
+Physical specification, from the badge site and the instruction manual:
+
+| Part | Detail |
+|---|---|
+| SoC | **ESP32-C3** - single-core RISC-V, ~400 KB SRAM total, no PSRAM |
+| Screen | 320x240 full colour |
+| Buttons | **8**: directionals left, A and B right, HOME and START bottom |
+| LEDs | 6 RGB |
+| NFC | **Reader only**. The badge cannot write tags, from Lua or otherwise |
+| Radio | Bluetooth. Lua gets a restricted broadcast channel, no Wi-Fi |
+| Power | **Two AA alkaline cells.** "Battery life is limited and low batteries cause glitches" |
+
+The ESP32-C3 is why the memory numbers are what they are. Roughly 400 KB of
+SRAM is shared by the LVGL framebuffer, the BLE stack, littlefs and the Lua
+heap, and there is no PSRAM to spill into. That is the origin of the guide's
+`free=59588 largest=49152` reading, and it is why `heap_kb=96` is a quota
+rather than a promise.
+
+`badge.input.BUTTON` also defines `AUX1`, but the manual lists eight physical
+buttons and `AUX1` is not among them. **Never bind a control to `AUX1`.**
+This design uses A, B, UP, DOWN, LEFT, RIGHT, START and HOME - exactly the
+eight that exist.
+
+Every limit below comes from `docs/badge-ide-README.md`. They are the
 budget, not guidance.
 
 | Resource | Limit |
@@ -55,13 +84,48 @@ failure suspends it immediately. Without `pcall` there is no recovery inside
 the app, so every input from outside the app - radio payloads, NFC text,
 saved files, sensor returns - MUST be validated before use.
 
+### Power budget, and what it does to the walking loop
+
+Two constraints combine into a design problem that is easy to miss:
+
+1. **Apps run only in the foreground.** A tick handler or radio listener
+   stops the moment the player returns HOME. There is no background
+   execution of any kind.
+2. **The badge runs on two AA alkalines,** and the official manual tells
+   attendees to "turn it off when not using it" because "low batteries cause
+   glitches."
+
+So a Pokemon GO step counter that quietly accrues all weekend is impossible.
+Steps only exist while this app is open, on screen, and holding a wake lock -
+which is the most expensive way the badge can be run.
+
+The design accommodates this rather than pretending otherwise:
+
+- **`wake_lock` is 0 in the manifest** and taken at runtime with
+  `badge.sys.wake_lock(true)` only in Walk mode and during an active duel.
+  Every other screen lets the badge sleep normally.
+- **Walk mode is an explicit screen,** not an ambient background state. It
+  dims to a near-black UI, stops all per-tick repainting, drops the LEDs to a
+  single dim pulse every two seconds, and does nothing but count steps.
+- **The spawn threshold is tuned for a walk between rooms, not a marathon.**
+  40 to 80 steps, roughly one minute, so a trip to get coffee is worth
+  opening the app for.
+- Steps also accrue free on any other screen while the app happens to be
+  open. Walk mode is the deliberate version, not the only one.
+- The MAP screen shows the tradeoff in plain words the first time Walk mode
+  is opened.
+
+A corollary for troubleshooting: an app that dies or behaves strangely
+mid-session may be flat batteries, not a bug. Check cells before debugging
+code.
+
 ## 3. Architecture
 
 Ten files, plus an optional `icon.bin`, against the 16-file bundle cap.
 
 | File | Responsibility | Depends on |
 |---|---|---|
-| `manifest.cfg` | slug `ktnh_mon`, `api=2`, `heap_kb=96`, `wake_lock=1`, `confirm_home=1` | - |
+| `manifest.cfg` | slug `ktnh_mon`, `api=2`, `heap_kb=96`, `wake_lock=0`, `confirm_home=1` | - |
 | `main.lua` | Lifecycle, screen router, input dispatch, LED driver | all |
 | `fsm.lua` | Mode state machine and timeouts | `monster` |
 | `dex.lua` | Species lookup, art decode, box-run renderer, type chart | - |
@@ -92,7 +156,7 @@ Each module is testable on a host Lua with no badge present.
 
 ## 4. Screens
 
-Ten screens, each a full-screen container box created once and shown or
+Eleven screens, each a full-screen container box created once and shown or
 hidden. Widgets are never recreated.
 
 | Screen | Contents | Controls |
@@ -100,7 +164,8 @@ hidden. Widgets are never recreated.
 | TITLE | Logo, trainer name and role colour, loading state | A start |
 | EGG | Egg drawn from the art pool, shake meter | Shake to hatch |
 | STARTER | One starter at a time as a carousel | LEFT/RIGHT cycle, A pick |
-| MAP | Level, XP, step meter, balls, dex count, nearby trainers, radio state | A scan, UP dex, DOWN party, LEFT duel, RIGHT radio toggle |
+| MAP | Level, XP, step meter, balls, dex count, nearby trainers, radio state | A scan, UP dex, DOWN party, LEFT duel, RIGHT radio toggle, START walk |
+| WALK | Step count and meter only, near-black, low power | B back to MAP |
 | ENCOUNTER | Wild creature art, name, level, type, ball count, throw prompt or bar | Throw, or A to stop the bar, B flee |
 | DEX | 8 per page, owned marked | UP/DOWN page, A detail, B back |
 | PARTY | Up to 6 held creatures | UP/DOWN select, A set active, START set wager, B back |
@@ -108,7 +173,8 @@ hidden. Widgets are never recreated.
 | BATTLE | Opponent art and HP, your name and HP, up to four unlocked moves | LEFT/RIGHT pick, A use, B switch, HOME forfeit |
 | STOP | Pokestop reward reveal | A collect |
 
-Only the opponent gets pixel art in BATTLE. Your side is a name, a HP bar and
+WALK is three widgets and costs nothing. Only the opponent gets pixel art in
+BATTLE. Your side is a name, a HP bar and
 a type colour, so exactly one art canvas ever repaints.
 
 ### Widget budget and staged construction
@@ -261,6 +327,13 @@ packed last actions, effect flags.
 The session id is a 16-bit random value chosen by the host. Every frame after
 the beacon is filtered on it, so two duels in the same room never collide.
 
+**Pairing cannot use bump.** The badge's built-in Connect app pairs by
+physically bumping two badges together, and that is the natural gesture for
+starting a duel, but bump and sync are system frames: Lua "can neither emit
+nor observe" them. Pairing is therefore beacon plus on-screen selection from
+the PAIR list, ordered by signal strength so the nearest trainer sorts
+first.
+
 A friendly duel sends an all-zero creature as its stake. The protocol is
 identical, which is why staked duels need no protocol work when they land in
 phase 4.
@@ -356,10 +429,16 @@ LED ring as a travelling light.
 There is no step API. `catch.lua` derives steps from accelerometer magnitude:
 deviation from calibrated gravity, peak detection with hysteresis, and a
 250 ms refractory period. A wild encounter spawns every `40 + random(40)`
-steps. The six LEDs fill clockwise as the meter charges.
+steps - about a minute of walking, deliberately short, for the battery
+reasons in section 2. The six LEDs fill clockwise as the meter charges.
 
-Step counting is suppressed on every screen except MAP, so throwing the badge
-does not also register as walking.
+Step counting runs on MAP and in Walk mode only. It is suppressed everywhere
+else so that throwing the badge does not also register as walking.
+
+Walk mode is the low-power variant of MAP: near-black UI, no per-tick
+repaint, one dim LED pulse every two seconds, `badge.sys.wake_lock(true)`
+held, and nothing on screen but the step count and the meter. It exits to
+ENCOUNTER when the meter fills.
 
 ## 9. NFC
 
@@ -368,17 +447,33 @@ by disabling the nest and stop features and saying so on the MAP screen.
 NDEF text reads involve hardware work and are never done per tick - the app
 reads text only when `badge.nfc.card()` reports a UID it has not just seen.
 
-Tag roles come from the NDEF text:
+### Roles come from the UID, not from authored tags
 
-| Text contains | Role |
+The original plan read the NDEF text for keywords like `stop`. That does not
+survive contact with the venue. **The badge is a reader only and cannot write
+tags**, so a player has no way to author their own - they would need a phone
+and blank NTAG stickers. Meanwhile the venue is already covered in
+flower-pattern stickers for the official Scanner app, whose NDEF payloads are
+Hack the North's and say nothing about this game.
+
+So the role is **derived from a hash of the tag UID** instead:
+
+| `hash(uid) % 8` | Role |
 |---|---|
-| `stop` | Pokestop: grants balls and XP |
-| `rocket` | Arms a Team Rocket heist on the next encounter (phase 6) |
-| anything else, or no text | Nest: spawns a wild creature |
+| 0 | Pokestop: grants balls and XP |
+| 1-7 | Nest: family is `hash >> 3 % 8`, spawning that family's creatures |
 
-A nest's family is derived from a hash of the tag UID, so a given sticker is
-consistently the same kind of nest for everyone. The stage and level vary per
-visit.
+Every sticker in the building becomes playable content with nothing to set
+up, one stop for roughly every eight tags, and the same sticker is the same
+place for every player - which is what makes a nest worth telling a friend
+about.
+
+NDEF text is still read and still honoured as an **override** when it
+contains `stop` or `rocket`, so a player who does own an NFC writer can
+author a Pokestop or arm a heist deliberately. It is a bonus path, never the
+mechanism.
+
+A nest's family is fixed by its UID; stage and level vary per visit.
 
 ### Cooldowns without a clock
 
@@ -531,6 +626,9 @@ Additional asserted checks:
 | 24 generated creatures looking alike | Eight distinct family body plans, stages that add markings, not just scale |
 | Wagering is grief-able over an anonymous channel | Starters are shielded and cannot be staked; a wager is set only from the PARTY screen and confirmed again before the duel starts |
 | Trainer walks away mid-duel | 15 seconds without a peer frame shows connection lost and offers forfeit; the stake does not transfer |
+| Two AA alkalines, and the manual warns that low batteries cause glitches | `wake_lock` off by default and taken only in Walk mode and duels; Walk mode stops repainting and dims the LEDs; save on every meaningful event so a brownout costs at most one action |
+| Steps cannot accrue in the background, so the GO-style walking loop is weakened | Spawn threshold cut to 40-80 steps; steps accrue on MAP too, not only in Walk mode; NFC stickers remain the primary spawn source |
+| `badge.input.BUTTON.AUX1` exists in the enum but not on the board | Controls use only the eight physical buttons; asserted in the mock harness |
 
 ## 16. Explicitly out of scope
 
