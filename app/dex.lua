@@ -105,4 +105,70 @@ function M.first_of_type(t)
   return nil
 end
 
+-- Row-run decoding. A 16x16 creature averages about 25 runs and peaks near
+-- 34, against 256 cells - which is why one 64-box pool can serve every
+-- screen instead of the renderer eating half the widget cap.
+function M.runs(id)
+  local art = M.art(id)
+  local out = {}
+  if not art then return out end
+  for row = 0, 15 do
+    local base = row * 16
+    local col = 0
+    while col < 16 do
+      local c = string.byte(art, base + col + 1) - 48
+      if c == 0 then
+        col = col + 1
+      else
+        local len = 1
+        while col + len < 16
+          and (string.byte(art, base + col + len + 1) - 48) == c do
+          len = len + 1
+        end
+        out[#out + 1] = {row = row, col = col, len = len, palette = c}
+        col = col + len
+      end
+    end
+  end
+  return out
+end
+
+function M.new_pool(parent, size)
+  local pool = {}
+  for i = 1, size do
+    local b = badge.ui.box(parent, 1, 1)
+    b:hidden(true)
+    pool[i] = b
+  end
+  return pool
+end
+
+function M.hide_pool(pool)
+  for i = 1, #pool do pool[i]:hidden(true) end
+end
+
+-- Paints species `id` into `pool`. Colours come from the type palette, not
+-- from the art, so one grid renders in all six type colours.
+function M.paint(pool, id, x, y, cell)
+  local runs = M.runs(id)
+  local t = M.type(id)
+  local pal = t and M.TYPE_COLOR[t]
+  if not pal or #runs == 0 then
+    M.hide_pool(pool)
+    return 0
+  end
+  local n = #runs
+  if n > #pool then n = #pool end
+  for i = 1, n do
+    local r = runs[i]
+    local b = pool[i]
+    b:set_pos(x + r.col * cell, y + r.row * cell)
+    b:set_size(r.len * cell, cell)
+    b:set_color(pal[r.palette])
+    b:hidden(false)
+  end
+  for i = n + 1, #pool do pool[i]:hidden(true) end
+  return n
+end
+
 return M
