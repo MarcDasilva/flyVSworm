@@ -9,3 +9,6 @@ vendor/luavgl/
 #sprites/*
 #!sprites/SOURCES.txt
 #!sprites/fetch-numbered.ps1
+
+# Generator bytecode
+tools/__pycache__/
