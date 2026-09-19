@@ -1,1 +1,1 @@
-$(call make-bin,hello,hello,,-ltn_sdk)
+$(call make-bin,hello,hello sim,,-ltn_sdk)
