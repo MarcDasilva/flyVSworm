@@ -53,4 +53,30 @@ assert(y == 1000, "default accel must read 1g on y")
 local M2 = mock.install({accel = function() return nil, "unavailable" end})
 assert(badge.sensor.accel() == nil, "nil accel must pass through")
 
+-- reset() must clear every recorded table, not just sent/now, or a later
+-- task that resets between cases inherits contaminated state.
+local M3 = mock.install()
+badge.ui.label(M3.root, "leftover")
+badge.led.set(2, 5, 6, 7)
+badge.led.show()
+badge.fs.write("appdata/leftover.dat", "x")
+badge.store.set_str("leftover", "v")
+badge.radio.enable()
+badge.radio.send("STALE")
+M3.ms(500)
+M3.reset()
+assert(M3.widget_count() == 0, "reset must clear widgets, got " .. M3.widget_count())
+assert(M3.leds[2][1] == 0, "reset must re-dark leds")
+assert(next(M3.files) == nil, "reset must clear files")
+assert(next(M3.store) == nil, "reset must clear store")
+assert(#M3.sent == 0, "reset must clear sent")
+assert(M3.now == 0, "reset must zero the clock")
+assert(M3.root ~= nil, "reset must leave a usable root handle")
+badge.ui.label(M3.root, "after reset")
+assert(M3.widget_count() == 1, "root handle after reset must still parent new widgets")
+-- Show with no set/clear since reset: a stale staged frame would leak led 2's
+-- old {5,6,7} back in here, since show() only copies staged into M.leds.
+badge.led.show()
+assert(M3.leds[2][1] == 0, "reset must clear the internal staged led frame too")
+
 print("test_mock: OK")

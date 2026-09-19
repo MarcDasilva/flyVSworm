@@ -6,8 +6,10 @@ local mock = {}
 
 local function widget(M, kind, is_root)
   local w = {__kind = kind}
-  -- root is host-provided, not app-created; widget_count() tracks only what
-  -- the app itself allocates, matching the interface's "live widgets created".
+  -- root is host-provided, not app-created, so widget_count() excludes it.
+  -- Root is STILL a live native LVGL object on real hardware, so the true
+  -- 512-widget budget an app can spend is 511, ONE less than this mock's cap.
+  -- A later task asserting the raw 512 limit against widget_count() is wrong.
   if not is_root then M.widgets[#M.widgets + 1] = w end
   function w:set_text(t) M.texts[self] = t end
   function w:set_pos(x, y)
@@ -166,8 +168,14 @@ function mock.install(opts)
   M.root = widget(M, "box", true)
 
   function M.reset()
-    M.sent = {}
+    M.widgets, M.texts, M.pos, M.size, M.align, M.color = {}, {}, {}, {}, {}, {}
+    M.value, M.range, M.style, M.hidden = {}, {}, {}, {}
+    M.sent, M.files, M.store = {}, {}, {}
+    for i = 1, 6 do M.leds[i] = {0, 0, 0}; staged[i] = {0, 0, 0} end
     M.now = 0
+    -- Re-create root last so callers keep a live handle after reset, same
+    -- is_root exclusion as install() -- see the widget_count budget note above.
+    M.root = widget(M, "box", true)
   end
   function M.ms(v) M.now = v end
   function M.advance(n) M.now = M.now + n end
