@@ -1,4 +1,19 @@
+import json
+import struct
+from pathlib import Path
+
 from wormed.pipeline.connectome import load_connectome, assign_physiology, neuron_positions
+from wormed.pipeline.pack import build_all, LAYOUT
+
+DATA = Path(__file__).resolve().parent.parent / "data"
+
+# Every array pack.build_all() must emit into topology.bin. A LAYOUT dict
+# that is empty, or missing one of these, would let the alignment test below
+# pass vacuously — this set is what makes it actually check something.
+EXPECTED_ARRAYS = {
+    "slot_map", "chem_rowptr", "chem_col", "chem_g", "chem_E",
+    "gap_rowptr", "gap_col", "gap_g", "params", "lut",
+}
 
 def test_connectome_has_302_neurons_and_expected_edge_counts():
     """The hermaphrodite connectome is a fixed, published quantity. If these
@@ -87,3 +102,96 @@ def test_positions_are_spread_not_degenerate():
     xs = sorted(p[0] for p in pos)
     assert xs[-1] - xs[0] > 0.5, "all neurons collapsed onto one point"
     assert len({round(p[0], 3) for p in pos}) > 50, "too many neurons share an x"
+
+
+def test_every_array_offset_is_8_byte_aligned():
+    """ThruVM raises an exception on unaligned access and on any access that
+    spans a 4KB page boundary. 4096 is a multiple of 8, so 8-alignment kills
+    both. This assert is the entire defense — so it must genuinely check
+    every emitted array, not pass on an empty or partial LAYOUT."""
+    build_all()
+    assert LAYOUT, "LAYOUT is empty — the alignment check below would be vacuous"
+    assert set(LAYOUT.keys()) == EXPECTED_ARRAYS, f"LAYOUT covers {set(LAYOUT.keys())}, expected {EXPECTED_ARRAYS}"
+    for name, (off, length) in LAYOUT.items():
+        assert off % 8 == 0, f"{name} starts at {off}, not 8-byte aligned"
+
+
+def test_header_offsets_match_the_layout_table():
+    build_all()
+    blob = (DATA / "topology.bin").read_bytes()
+    magic, version, n_neurons, n_chem, n_gap = struct.unpack_from("<IIIII", blob, 0)
+    assert magic == 0x574F524D
+    assert version == 1
+    assert n_neurons == 302
+    off_slot_map, off_chem_rowptr, off_chem_col = struct.unpack_from("<III", blob, 0x14)
+    assert off_slot_map == LAYOUT["slot_map"][0]
+    assert off_chem_rowptr == LAYOUT["chem_rowptr"][0]
+    assert off_chem_col == LAYOUT["chem_col"][0]
+
+
+def test_csr_rowptr_is_monotonic_and_terminates_at_edge_count():
+    """A non-monotonic rowptr makes the inner loop read out of bounds, which on
+    ThruVM is an access violation and a reverted transaction, not a wrong number."""
+    build_all()
+    blob = (DATA / "topology.bin").read_bytes()
+    n_chem = struct.unpack_from("<I", blob, 0x0C)[0]
+    off = LAYOUT["chem_rowptr"][0]
+    ptrs = struct.unpack_from("<303I", blob, off)
+    assert ptrs[0] == 0
+    assert all(ptrs[i] <= ptrs[i + 1] for i in range(302))
+    assert ptrs[302] == n_chem
+
+
+def test_gap_junctions_are_stored_symmetrically():
+    """A gap junction is ohmic and bidirectional. Storing one direction gives
+    a rectifying junction, which is a different piece of physics."""
+    build_all()
+    blob = (DATA / "topology.bin").read_bytes()
+    n_gap = struct.unpack_from("<I", blob, 0x10)[0]
+    assert n_gap == 2 * len(load_connectome().gap)
+
+
+def test_sidecar_json_files_are_complete():
+    build_all()
+    names = json.loads((DATA / "names.json").read_text())
+    pos = json.loads((DATA / "positions.json").read_text())
+    prov = json.loads((DATA / "provenance.json").read_text())
+    assert len(names) == 302 and len(pos) == 302
+    assert "caveat" in prov
+
+
+def test_provenance_records_cli_derivation():
+    """Task 5 derives addresses by shelling out to `thru program
+    derive-address` rather than reimplementing PDA derivation. If this ever
+    silently falls back to a Python reimplementation, addresses could drift
+    from what the deployed program actually computes."""
+    build_all()
+    prov = json.loads((DATA / "provenance.json").read_text())
+    assert prov.get("derivation") == "cli"
+
+
+def test_addresses_sidecar_has_one_entry_per_neuron():
+    build_all()
+    addrs = json.loads((DATA / "addresses.json").read_text())
+    c = load_connectome()
+    assert len(addrs) == len(c.names) == 302
+    assert len(set(addrs)) == 302, "duplicate derived addresses"
+
+
+def test_edges_json_is_the_strongest_1500_chemical_edges_by_contact_count():
+    """The front-end renders these as connectome lines; taking a random 1500
+    instead of the strongest 1500 would draw noise edges and omit the
+    circuits that actually carry signal."""
+    build_all()
+    c = load_connectome()
+    edges = json.loads((DATA / "edges.json").read_text())
+    assert len(edges) == min(1500, len(c.chem))
+    assert all(len(e) == 2 for e in edges)
+    n = len(c.names)
+    assert all(0 <= pre < n and 0 <= post < n for pre, post in edges)
+
+    ranked = sorted(c.chem, key=lambda e: -e[2])
+    expected_top_weight = ranked[0][2]
+    got_top = edges[0]
+    got_top_weight = next(w for pre, post, w in c.chem if (pre, post) == tuple(got_top))
+    assert got_top_weight == expected_top_weight, "edges.json is not ranked by contact count descending"

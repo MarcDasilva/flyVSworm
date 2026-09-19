@@ -10,6 +10,8 @@ Program deployed for these measurements: `hello-worm-v1`
 
 Task 5 needs the program account above for address derivation.
 
+PROGRAM_ADDRESS: taXILSqS99UxmqBxrvpcETPQ8j6zd-xmFmK6EQ5xFWrvgQ
+
 ## SDK accessors
 
 Confirmed by reading the installed C SDK headers directly (see
