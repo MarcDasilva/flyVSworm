@@ -105,6 +105,17 @@ for id = 1, 36 do
   assert(table.concat(grid) == dex.art(id), "runs do not reconstruct species " .. id)
 end
 
+-- Find the widest and narrowest species by measured run count, not by a
+-- hardcoded id, so the repaint test below keeps meaning if dex.txt is ever
+-- regenerated with different art.
+local counts = {}
+for id = 1, 36 do counts[id] = #dex.runs(id) end
+local wide_id, wide_n, narrow_id, narrow_n = 1, counts[1], 1, counts[1]
+for id = 2, 36 do
+  if counts[id] > wide_n then wide_id, wide_n = id, counts[id] end
+  if counts[id] < narrow_n then narrow_id, narrow_n = id, counts[id] end
+end
+
 -- Painting: every geometry value handed to a widget must be an integer, or
 -- LVGL rejects it. The mock asserts this inside set_pos and set_size.
 -- Use M2, not M: the missing-file test above already called mock.install()
@@ -113,17 +124,30 @@ end
 -- an empty hidden/pos/color table and pass for the wrong reason.
 local pool = dex.new_pool(M2.root, 64)
 assert(#pool == 64)
-local painted = dex.paint(pool, 1, 88, 40, 9)
-assert(painted >= 1 and painted <= 64)
-assert(M2.hidden[pool[64]] == true, "unused boxes must be hidden, not left stale")
+local painted = dex.paint(pool, wide_id, 88, 40, 9)
+assert(painted == wide_n)
+-- Both directions, or the check is vacuous: a box the paint call actually
+-- lit must be visible, and the box right after the painted run must be
+-- untouched/hidden -- not merely "still hidden since new_pool", which
+-- proves nothing about paint's own hide-unused-boxes loop.
+assert(M2.hidden[pool[painted]] == false, "a painted box must be visible")
+assert(M2.hidden[pool[painted + 1]] == true, "unused boxes must be hidden, not left stale")
 local first = pool[1]
 assert(M2.pos[first][1] >= 88 and M2.pos[first][2] >= 40, "art must be placed at the offset")
 assert(M2.color[first] ~= nil, "each run must be coloured from the type palette")
 
--- Repainting a different species must not leave boxes from the previous one.
-dex.paint(pool, 1, 88, 40, 9)
-local wide = dex.paint(pool, 36, 88, 40, 9)
-for i = wide + 1, 64 do
+-- Repainting a NARROWER species must clear every box the wider one lit.
+-- Paint wide first, then narrow: boxes narrow_n+1 .. wide_n were genuinely
+-- shown by the first paint, so this is the only ordering that exercises
+-- dex.paint's "hide unused boxes" loop. Painting narrow-then-wide (as an
+-- earlier version of this test did) only inspects tail slots that were
+-- hidden since new_pool and were never at risk of going stale -- on
+-- hardware that gap is what shows as two creatures drawn on top of each
+-- other.
+dex.paint(pool, wide_id, 88, 40, 9)
+local narrow = dex.paint(pool, narrow_id, 88, 40, 9)
+assert(narrow == narrow_n)
+for i = narrow + 1, wide_n do
   assert(M2.hidden[pool[i]] == true, "stale box " .. i .. " left visible after repaint")
 end
 
