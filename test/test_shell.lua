@@ -20,8 +20,24 @@ assert(current() == "TITLE")
 M.press(badge.input.BUTTON.A)
 assert(current() == "TITLE", "A must be ignored while still loading")
 
--- Construction completes within a couple of seconds of ticks.
-M.tick(120)
+-- Construction completes within a couple of seconds of ticks, and no SINGLE
+-- tick may create more than BUILD_WIDGETS widgets - the old-firmware on_tick
+-- allowance is 6 ms, and creating dozens of widgets in one call (e.g. the
+-- whole 64-box art pool at once) blows straight through it. Sample the
+-- widget count around each individual on_tick, not just the total at the
+-- end, or a single oversized tick could hide behind an otherwise-fine sum.
+local BUILD_WIDGETS = 12
+local ticks = 0
+while not ready() and ticks < 120 do
+  local before = M.widget_count()
+  M.advance(20)
+  on_tick()
+  local delta = M.widget_count() - before
+  assert(delta <= BUILD_WIDGETS,
+    "tick " .. (ticks + 1) .. " created " .. delta ..
+    " widgets; exceeds the " .. BUILD_WIDGETS .. "-widget per-tick budget")
+  ticks = ticks + 1
+end
 assert(ready(), "staged construction did not finish within 120 ticks")
 local total = M.widget_count()
 assert(total > after_enter, "ticks must actually build something")

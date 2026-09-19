@@ -8,7 +8,14 @@ local dex = require("dex")
 local own = require("own")
 
 local W, H = 320, 240
-local BUILD_BATCH = 10        -- widgets per tick during staged construction
+-- TRUF (Codex P1): budget is WIDGETS actually created, not queue entries
+-- drained. The old-firmware on_tick allowance is 6 ms; a queue entry that
+-- fans out into dozens of badge.ui calls (the shared art pool) must not
+-- share a tick with several more of its kind, or a single tick blows the
+-- allowance exactly the way on_enter's own budget forced this file's
+-- staged-construction split in the first place.
+local BUILD_WIDGETS = 12     -- widget-creation ceiling per tick while loading
+local POOL_CHUNK = 8         -- boxes per staged art_pool defer (8 chunks x 8 = 64)
 local LED_MS = 80             -- LED frames are expensive; 12 fps is plenty
 
 screens = {}
@@ -29,6 +36,12 @@ local dex_ok = false
 -- an accidental global in the ticks between this task and that one.
 local screens_parent = nil
 
+-- Widgets created so far THIS tick. label/panel/build_root bump it as the
+-- ONE ground truth the drain loop measures against; nothing else may create
+-- a widget during staged construction. Reset to 0 at the top of each
+-- on_tick before the queue is touched.
+local built_count = 0
+
 art_pool = nil
 
 -- ---------------------------------------------------------------- helpers
@@ -36,17 +49,28 @@ art_pool = nil
 local function label(parent, text, font, colour)
   local l = badge.ui.label(parent, text)
   l:style({text_font = font or 16, text_color = colour or 0xF5F5F5})
+  built_count = built_count + 1
   return l
 end
 
 local function panel(parent, w, h, colour)
   local b = badge.ui.box(parent, w, h)
   b:style({bg_color = colour or 0x1E2530})
+  built_count = built_count + 1
   return b
 end
 
-function defer(fn)
-  queue[#queue + 1] = fn
+-- `cost` is the caller's declared upper bound on how many widgets `fn` will
+-- create. It is ONLY a scheduling hint - the drain loop below uses it to
+-- decide whether a SECOND entry may share this tick with the one that just
+-- ran, because built_count (the real count) is not known until after fn()
+-- runs and a widget, once created, is NEVER deleted to walk it back. Omit
+-- cost (nil) and the loop treats fn as unsized and never chains anything
+-- after it - safe, just less packed. A single entry ALWAYS runs regardless
+-- of cost, sized or not, or an entry whose cost alone exceeds the tick
+-- budget would stall construction forever.
+function defer(fn, cost)
+  queue[#queue + 1] = {fn = fn, cost = cost}
 end
 
 function ready()
@@ -119,6 +143,7 @@ local function build_root(name)
   b:style({bg_color = 0x101418})
   b:hidden(true)
   screens[name] = {root = b}
+  built_count = built_count + 1
   return b
 end
 
@@ -162,15 +187,29 @@ function on_enter(root)
 
   -- TRUF R4: 64 boxes, not 48 - Task 5 sized the shared pool contract at 64
   -- and measured the worst-case creature (34 runs) against it.
-  defer(function() art_pool = dex.new_pool(screens_parent, 64) end)
+  --
+  -- TRUF (Codex P1): dex.new_pool(parent, 64) in ONE defer put 64 badge.ui
+  -- calls in a single queue entry, and BUILD_WIDGETS only gates what the
+  -- drain loop below is willing to run per tick - it cannot see inside an
+  -- entry it hasn't called yet. Eight defers of 8 boxes each, merged here
+  -- (never inside dex.lua, which Task 5 owns), keeps every entry small
+  -- enough that the loop's per-tick ceiling actually holds.
+  art_pool = {}
+  for i = 1, 8 do
+    defer(function()
+      local chunk = dex.new_pool(screens_parent, POOL_CHUNK)
+      for j = 1, #chunk do art_pool[#art_pool + 1] = chunk[j] end
+      built_count = built_count + #chunk
+    end, POOL_CHUNK)
+  end
   for i = 2, #SCREEN_ORDER do
     local name = SCREEN_ORDER[i]
-    defer(build_stub(name))
+    defer(build_stub(name), 2)  -- build_root + one label, always exactly 2
   end
   defer(function()
     is_ready = true
     screens.TITLE.status:set_text(dex_ok and "Ready" or "dex.txt missing")
-  end)
+  end, 0)
 end
 
 function on_tick()
@@ -183,11 +222,21 @@ function on_tick()
   last_tick_ms = now
 
   if not is_ready then
-    local built = 0
-    while qhead <= #queue and built < BUILD_BATCH do
-      queue[qhead]()
+    built_count = 0
+    while qhead <= #queue do
+      local item = queue[qhead]
+      -- The FIRST entry of a tick always runs, sized or not, or one
+      -- oversized entry (the art-pool chunks, at 8 of a 12 budget) stalls
+      -- construction forever. Every entry after it only runs if its
+      -- declared cost still fits what's left of BUILD_WIDGETS - checked
+      -- BEFORE the call, because a widget once created is never deleted
+      -- and built_count (the real count) is only known AFTER fn() runs.
+      if built_count > 0 then
+        local cost = item.cost
+        if not cost or built_count + cost > BUILD_WIDGETS then break end
+      end
+      item.fn()
       qhead = qhead + 1
-      built = built + 1
     end
   end
 
