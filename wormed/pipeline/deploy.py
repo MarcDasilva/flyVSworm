@@ -11,6 +11,8 @@ room for the header, account addresses, state proofs and hex-encoding
 overhead (state proofs run ~200 bytes each and dominate a creation batch's
 payload, not the topology chunks).
 """
+import base64
+import concurrent.futures
 import json
 import struct
 import subprocess
@@ -77,8 +79,14 @@ def _make_proof(addr: str) -> bytes:
     return bytes.fromhex(d["makeStateProof"]["proof_data_hex"])
 
 
-def _exec(readwrite: list[str], hexdata: str, fee: int) -> dict:
+def _exec(readwrite: list[str], hexdata: str, fee: int, compute_units: int | None = None) -> dict:
     cmd = ["thru", "--json", "txn", "execute", "--fee-payer", FEE_PAYER, "--fee", str(fee)]
+    if compute_units is not None:
+        # thru txn execute defaults to 300,000,000 — enough for a step batch up
+        # to roughly (300e6 - FIXED_CU) / MARGINAL_CU steps (docs/measurements.md).
+        # Larger batches (up to STEPS_PER_TX) need this raised explicitly, capped
+        # at req_compute_units' own uint32 ceiling (4,294,967,295).
+        cmd += ["--compute-units", str(min(compute_units, 4_294_967_295))]
     for a in readwrite:
         cmd += ["--readwrite-accounts", a]   # clap wants the flag repeated, not comma-joined
     cmd += [_program_id(), hexdata]
@@ -160,3 +168,157 @@ def create_all_neurons(batch: int = 10) -> None:
         out = _exec(rw, bytes(body).hex(), fee)
         print(f"neurons {start:3d}-{group[-1]:3d} -> {out['signature']} "
               f"cu={out['compute_units_consumed']} su={out['state_units_consumed']}")
+
+
+# --- Stepping (Task 10) -----------------------------------------------------
+#
+# INSTR_STEP / INSTR_STIMULATE / INSTR_RESIZE_SCRATCH from worm.h. Kept as
+# literal ints here (not imported) to match this file's existing convention —
+# the create/upload instructions above (1, 2, 6) are literals too.
+INSTR_STEP = 4
+INSTR_STIMULATE = 3
+INSTR_RESIZE_SCRATCH = 7
+
+# Flat fee. A step transaction's real ceiling is `--compute-units`, which
+# `thru txn execute` defaults to 300,000,000 — comfortably above even a
+# 51-step transaction's measured cost (docs/measurements.md) — so the fee
+# paid here doesn't need to scale with n_steps the way create-batch fees
+# scale with neuron count.
+FEE_STEP = 200
+
+# Measured on-chain (docs/measurements.md, 2026-09-19): CU@1=785569,
+# CU@51=18947369 -> marginal=(CU@51-CU@1)/50, fixed=CU@1-marginal. Both come
+# in well under the spec's ~600k/~1.30M predictions — the real connectome has
+# 3,607 CSR rows, not the 9,800 the spec budgeted for.
+FIXED_CU = 422_333
+MARGINAL_CU = 363_236
+REQ_COMPUTE_UNITS_MAX = 4_294_967_295  # req_compute_units is a uint32 — the
+# real per-transaction ceiling; the block-level figure (2.1e15) is not a
+# throttle a single transaction can hit.
+
+# STEPS_PER_TX = floor(0.8 * REQ_COMPUTE_UNITS_MAX - FIXED_CU) / MARGINAL_CU —
+# the brief's formula, with the u32 req_compute_units ceiling substituted for
+# MAX_BLOCK_COMPUTE_UNITS per the ruling that the block figure isn't a real
+# throttle. The 0.8 factor leaves headroom for per-step cost drifting with
+# future topology changes (more synapses -> more CSR rows walked per step).
+STEPS_PER_TX = int((0.8 * REQ_COMPUTE_UNITS_MAX - FIXED_CU) // MARGINAL_CU)
+
+
+def _step_accounts() -> list[str]:
+    """Thru sorts the ENTIRE writable account array ascending by address, so
+    the three singletons interleave with the neurons wherever their
+    addresses land. _sort_order (== `thru txn sort`, via
+    pack_addr.chain_order_index) is the ONE definition of ascending order in
+    this codebase — Python's sorted() on the raw address strings disagrees
+    with the chain at effectively every position (task-9-report.md) and must
+    never be substituted here, unlike the brief's literal draft of this
+    function."""
+    addrs = json.loads((DATA / "addresses.json").read_text()) \
+          + [_topology_account(), _reservoir_account(), _behavior_account()]
+    order = _sort_order(addrs)
+    return sorted(addrs, key=lambda a: order[a])
+
+
+def _slots() -> tuple[int, int, int]:
+    """Account index of topology, reservoir, behavior in the sorted writable
+    array _step_accounts() builds. Index 0 is the fee payer and index 1 is
+    the program, so the writable array itself starts at 2."""
+    topo, reservoir, behavior = _topology_account(), _reservoir_account(), _behavior_account()
+    ordered = _step_accounts()
+    return (ordered.index(topo) + 2,
+            ordered.index(reservoir) + 2,
+            ordered.index(behavior) + 2)
+
+
+def ensure_scratch() -> dict:
+    """TASK-10 FINDING (task-10-report.md): ThruVM has no usable static-global
+    or large-stack storage for a program's own working set — writing to a
+    global faults the instant the same transaction also touches an account,
+    and the per-call stack is a few KB (a single N_NEURONS int32 array
+    already overflows it). The heap escape hatch
+    (tsys_increment_anonymous_segment_sz) returns -21 (unimplemented) on this
+    alphanet build. worm.c's fix: do_step/do_stimulate keep their working set
+    (worm_scratch_t: the sim struct + V/i_stim/neuron_to_slot arrays) inside
+    the RESERVOIR account's own DATA region, sized by this call. Idempotent —
+    do_resize_scratch's min_size is a floor, so calling this more than once
+    is harmless; callers only need to call it once before the first
+    run_steps/stimulate."""
+    reservoir = _reservoir_account()
+    payload = struct.pack("<IHI", INSTR_RESIZE_SCRATCH, 2, 0)  # reservoir alone -> slot 2
+    return _exec([reservoir], payload.hex(), BASE_FEE)
+
+
+def run_steps(n: int, settle_every: int = 0, emit: bool = False,
+              reset: bool = False) -> dict:
+    """flags: bit0 settle (reconcile balances against the reservoir), bit1
+    emit trace, bit2 reset, bit3 gap-junction transfers (worm.c step_args_t).
+    settle_every requests bit0 automatically, matching do_step's chunking."""
+    flags = (1 if settle_every else 0) | (2 if emit else 0) | (4 if reset else 0)
+    payload = struct.pack("<IIII", INSTR_STEP, n, flags, settle_every) \
+            + struct.pack("<HHHH", *_slots(), 0)
+    # thru txn execute's own default (300,000,000) covers roughly the first
+    # 824 steps; pass an explicit budget (50% margin over the measured
+    # fixed+marginal cost) so larger n doesn't silently starve on CU.
+    compute_units = min(REQ_COMPUTE_UNITS_MAX, int(1.5 * (FIXED_CU + MARGINAL_CU * max(n, 1))))
+    out = _exec(_step_accounts(), payload.hex(), FEE_STEP, compute_units=compute_units)
+    print(f"run_steps(n={n}, flags={flags}) -> {out['signature']} "
+          f"cu={out['compute_units_consumed']} su={out['state_units_consumed']}")
+    return out
+
+
+def stimulate(name: str, current_mV: float) -> dict:
+    names = json.loads((DATA / "names.json").read_text())
+    payload = struct.pack("<IHi", INSTR_STIMULATE, names.index(name), int(current_mV * 65536)) \
+            + struct.pack("<HHH", *_slots())
+    out = _exec(_step_accounts(), payload.hex(), FEE_STEP)
+    print(f"stimulate({name!r}, {current_mV}) -> {out['signature']} "
+          f"cu={out['compute_units_consumed']}")
+    return out
+
+
+def _account_infos() -> list[dict]:
+    """One subprocess per account — `thru` has no batch-account-query
+    subcommand (checked: `thru --help`; only single-account
+    getaccountinfo/account info exist). Fetched with a thread pool because
+    302 sequential network round trips would make every read after a step
+    take minutes; ex.map preserves addrs' order so callers can zip against
+    addresses.json / names.json directly."""
+    addrs = json.loads((DATA / "addresses.json").read_text())
+
+    def fetch(addr: str) -> dict:
+        r = subprocess.run(["thru", "--json", "account", "info", addr],
+                           capture_output=True, text=True, check=True)
+        return json.loads(r.stdout)["account_info"]
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=16) as ex:
+        return list(ex.map(fetch, addrs))
+
+
+def read_balances() -> list[int]:
+    return [int(info["balance"]) for info in _account_infos()]
+
+
+def read_voltages() -> list[int]:
+    """TASK-10 R5: account DATA's v_next (worm_neuron_t, int32 Q16.16 at byte
+    offset 12 — index u16 + name[8] + pad u16 = 12) is the simulation's
+    source of truth, NOT balance. Balance only resolves BAL_SCALE=10 (0.1
+    mV) and is the settled projection Task 11 writes separately — decoding V
+    from it here would cap precision at 0.1 mV and make the bit-for-bit
+    assert against native C's ~1.5e-5 mV resolution mathematically
+    impossible. `data` in `account info`'s JSON is base64, not hex."""
+    out = []
+    for info in _account_infos():
+        raw = base64.b64decode(info["data"])
+        out.append(struct.unpack_from("<i", raw, 12)[0])
+    return out
+
+
+def reset_sim() -> dict:
+    """Reset V to the leak potentials and request settlement, so once Task 11
+    lands, every neuron account ends up holding real balance rather than the
+    zero it was created with. n_steps=0 with settle_every=1 still triggers
+    exactly one settle_transfers call in do_step's do-while (see worm.c).
+    Calls ensure_scratch() first — do_step/do_stimulate both need the
+    reservoir's scratch region sized before they can run at all."""
+    ensure_scratch()
+    return run_steps(0, settle_every=1, reset=True)

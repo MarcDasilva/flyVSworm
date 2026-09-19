@@ -76,7 +76,27 @@ this SDK version — later tasks that assumed an in-program
    measured wall-clock delta gives 5.8 blocks/sec — recorded here so Task 11
    can pick whichever is more conservative.
 
-3. **CU_PER_STEP_STUB = PENDING** — deferred to Task 11.
+3. **CU_PER_STEP: marginal ≈ 363,236 CU/step, fixed ≈ 422,333 CU/tx** —
+   measured on-chain (program `taXILSqS99UxmqBxrvpcETPQ8j6zd-xmFmK6EQ5xFWrvgQ`,
+   seed `hello-worm-v1`, 2026-09-19) with `pipeline.deploy.run_steps` against
+   all 305 writable accounts (302 neurons + topology + reservoir +
+   behavior): a 1-step `INSTR_STEP` transaction (after `reset_sim()`)
+   consumed `CU@1 = 785,569`; a 51-step transaction consumed
+   `CU@51 = 18,947,369`. `marginal = (CU@51 - CU@1) / 50 = 363,236`;
+   `fixed = CU@1 - marginal = 422,333`. Both come in well under the spec's
+   ~600k/~1.30M predictions — the real connectome has 3,607 CSR rows, not
+   the 9,800 the spec budgeted for. Build used
+   `-march=rv64imc_zba_zbb_zbc_zbs_zknh` at `-O3` (Task 8's Makefile flags,
+   unchanged); the marginal cost already beats the spec without needing
+   `-Os`.
+   `STEPS_PER_TX = floor(0.8 * REQ_COMPUTE_UNITS_MAX - FIXED_CU) / MARGINAL_CU
+   = 9,458` steps, where `REQ_COMPUTE_UNITS_MAX = 4,294,967,295` — the
+   `req_compute_units` transaction header field's own `uint32` ceiling is the
+   real per-transaction throttle, not `MAX_BLOCK_COMPUTE_UNITS` (2.1e15,
+   measurement 1 above), which a single transaction can never approach.
+   `thru txn execute`'s own `--compute-units` default (300,000,000) covers
+   the first ~824 steps unassisted; `pipeline.deploy.run_steps` now passes an
+   explicit budget (1.5x the measured fixed+marginal estimate) above that.
 
 4. **STATE_UNITS_PER_CREATE ≈ 0.1 (1 state unit per 10-account create batch)** —
    measured on-chain across the 31 `INSTR_CREATE_NEURONS` transactions that

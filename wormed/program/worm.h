@@ -16,6 +16,7 @@
 #define INSTR_STEP               4u
 #define INSTR_CLASSIFY           5u
 #define INSTR_CREATE_SINGLETONS  6u
+#define INSTR_RESIZE_SCRATCH     7u
 
 /* Error codes. Returned via tsdk_revert(). */
 #define ERR_BAD_INSTR_SIZE    0x1001u
