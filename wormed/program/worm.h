@@ -53,7 +53,14 @@ typedef struct {
     int16_t C;         /* Q8.8 */
     int16_t V_half_mV;
     int16_t k_recip;   /* Q8.8 reciprocal of slope — no division in the hot loop */
-    int16_t _pad[3];
+    int16_t V_rest_mV; /* MEASURED steady state at zero input, not E_leak. The
+                         * presynaptic sigmoid is not closed at leak potential,
+                         * so a well-connected neuron's true fixed point sits
+                         * well off E_leak (pipeline/refsim.py:
+                         * compute_resting_state). The classifier normalises
+                         * drive against this baseline — using E_leak instead
+                         * reads nonzero drive with nobody touching the worm. */
+    int16_t _pad[2];
 } worm_param_t;        /* 16 bytes */
 
 /* Per-neuron account data. Voltage lives in the account BALANCE, not here. */

@@ -11,11 +11,17 @@ from pathlib import Path
 
 from .connectome import load_connectome, assign_physiology, neuron_positions
 from .pack_addr import derive_addresses
+from .refsim import compute_resting_state
 
 DATA = Path(__file__).resolve().parent.parent / "data"
 HDR_SZ = 64
 LUT_ENTRIES = 257
 N_TOP_EDGES = 1500
+# worm.h's static upper bounds (headroom over the real 2573/1034). Kept in
+# sync by the assert below rather than by hand — a silent overrun here is a
+# buffer overrun in the on-chain program, not a wrong number.
+WORM_H_N_CHEM = 2600
+WORM_H_N_GAP = 1100
 LAYOUT: dict[str, tuple[int, int]] = {}
 
 
@@ -65,6 +71,18 @@ def build_all() -> Path:
             gap_g.append(_q88(p.gap_g[e]))
         gap_rowptr.append(len(gap_col))
 
+    # The real connectome must fit inside worm.h's static array bounds — those
+    # bounds are compile-time constants in the on-chain program, and silently
+    # exceeding them is a buffer overrun, not a wrong number.
+    assert len(chem_col) <= WORM_H_N_CHEM, (
+        f"chemical edge count {len(chem_col)} exceeds worm.h N_CHEM={WORM_H_N_CHEM} "
+        "— update N_CHEM in wormed/program/worm.h"
+    )
+    assert len(gap_col) <= WORM_H_N_GAP, (
+        f"gap edge count (both directions) {len(gap_col)} exceeds worm.h N_GAP={WORM_H_N_GAP} "
+        "— update N_GAP in wormed/program/worm.h"
+    )
+
     # --- Account-slot permutation. Thru sorts writable accounts ascending by
     # address, so slot k in the transaction is NOT neuron k.
     #
@@ -107,10 +125,20 @@ def build_all() -> Path:
     _align()
     off_params = HDR_SZ + len(body)
     LAYOUT["params"] = (off_params, n * 16)
-    for q in p.params:
-        body.extend(struct.pack("<hhhhh6x",
-                                _q88(q.g_leak), q.E_leak_mV, _q88(q.C),
-                                q.V_half_mV, _q88(1.0 / q.k_mV)))
+    params_start = len(body)
+
+    def _pack_params(v_rest_mV: list[int]) -> bytes:
+        buf = bytearray()
+        for q, v_rest in zip(p.params, v_rest_mV):
+            buf.extend(struct.pack("<hhhhhh4x",
+                                    _q88(q.g_leak), q.E_leak_mV, _q88(q.C),
+                                    q.V_half_mV, _q88(1.0 / q.k_mV), v_rest))
+        return bytes(buf)
+
+    # Placeholder V_rest_mV=0 for the bootstrap write below — FloatSim never
+    # reads this field to simulate, only the classifier (a later task) does.
+    body.extend(_pack_params([0] * n))
+    params_end = len(body)
 
     off_lut = _put("lut", "i", _sigmoid_lut())
     total = HDR_SZ + len(body)
@@ -123,6 +151,16 @@ def build_all() -> Path:
 
     DATA.mkdir(exist_ok=True)
     out = DATA / "topology.bin"
+    out.write_bytes(hdr + bytes(body))
+
+    # FINDING 1: the network does not rest at E_leak (see refsim.py:
+    # compute_resting_state). Solve for the real resting voltages against the
+    # topology.bin just written — every field FloatSim reads to simulate is
+    # already final, only V_rest_mV itself is a placeholder — then patch the
+    # params block in place and rewrite. Total size and every other offset
+    # are unchanged.
+    v_rest_mV = compute_resting_state()
+    body[params_start:params_end] = _pack_params(v_rest_mV)
     out.write_bytes(hdr + bytes(body))
 
     (DATA / "names.json").write_text(json.dumps(c.names))

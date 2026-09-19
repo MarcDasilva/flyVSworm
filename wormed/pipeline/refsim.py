@@ -32,6 +32,7 @@ class FloatSim:
         self.C       = par[:, 2].astype(np.float64) / 256.0
         self.V_half  = par[:, 3].astype(np.float64)
         self.k_recip = par[:, 4].astype(np.float64) / 256.0
+        self.V_rest_mV = par[:, 5].astype(np.float64)
 
         self.names = json.loads((DATA / "names.json").read_text())
         self.V = self.E_leak.copy()
@@ -60,6 +61,38 @@ class FloatSim:
 
             # Backward Euler. Unconditionally stable — this is why dt can be 5ms.
             self.V = (self.C * self.V + DT_MS * gE_tot) / (self.C + DT_MS * g_tot)
+
+
+def compute_resting_state(sim: "FloatSim | None" = None) -> list[int]:
+    """The classifier normalises drive against each neuron's TRUE resting
+    voltage, not E_leak: the presynaptic sigmoid is not closed at leak
+    potential (s(-70mV) ~= 0.029 with V_half=-35, k_recip=0.1), so a
+    well-connected neuron's fixed point sits well off E_leak — AVAL (74
+    incoming edges) converges to roughly -54mV, not -70mV. Normalising
+    against E_leak instead of this measured baseline reads nonzero drive at
+    every command neuron with nobody touching the worm (see
+    test_v_rest_mv_matches_converged_float_state_and_zeroes_command_drive_at_rest).
+    Runs a fresh zero-stimulus FloatSim to convergence in blocks, capped so a
+    topology change that stops converging fails loudly instead of hanging."""
+    if sim is None:
+        sim = FloatSim()
+    BLOCK = 50
+    MAX_STEPS = 20000
+    prev = sim.V.copy()
+    steps = 0
+    converged = False
+    delta = float("inf")
+    while steps < MAX_STEPS:
+        sim.step(BLOCK)
+        steps += BLOCK
+        delta = float(np.max(np.abs(sim.V - prev)))
+        if delta < 1e-6:
+            converged = True
+            break
+        prev = sim.V.copy()
+    assert converged, f"resting state did not converge within {MAX_STEPS} steps (last delta {delta} mV)"
+    return [int(round(v)) for v in sim.V]
+
 
 Q16 = 65536
 LUT_ENTRIES = 257
@@ -105,6 +138,7 @@ class FixedSim(FloatSim):
         self.q_C       = [par[i * 8 + 2] for i in range(self.n)]
         self.q_V_half  = [par[i * 8 + 3] for i in range(self.n)]
         self.q_k_recip = [par[i * 8 + 4] for i in range(self.n)]
+        self.q_V_rest_mV = [par[i * 8 + 5] for i in range(self.n)]
         self.dt = int(DT_MS * Q16)
 
     def stimulate(self, name: str, current: float) -> None:

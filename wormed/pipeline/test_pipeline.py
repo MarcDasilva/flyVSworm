@@ -144,11 +144,38 @@ def test_csr_rowptr_is_monotonic_and_terminates_at_edge_count():
 
 def test_gap_junctions_are_stored_symmetrically():
     """A gap junction is ohmic and bidirectional. Storing one direction gives
-    a rectifying junction, which is a different piece of physics."""
+    a rectifying junction, which is a different piece of physics.
+
+    The bare count check (n_gap == 2 * len(gap)) passes just as well if every
+    edge is stored TWICE IN THE SAME DIRECTION, which is exactly the
+    rectifying-junction bug this test exists to catch. Walk the packed CSR
+    instead and require the reverse edge to exist and carry equal
+    conductance."""
     build_all()
     blob = (DATA / "topology.bin").read_bytes()
+    n = 302
     n_gap = struct.unpack_from("<I", blob, 0x10)[0]
     assert n_gap == 2 * len(load_connectome().gap)
+
+    off_grp = LAYOUT["gap_rowptr"][0]
+    off_gc = LAYOUT["gap_col"][0]
+    off_gg = LAYOUT["gap_g"][0]
+    rowptr = struct.unpack_from(f"<{n + 1}I", blob, off_grp)
+    col = struct.unpack_from(f"<{n_gap}H", blob, off_gc)
+    g = struct.unpack_from(f"<{n_gap}h", blob, off_gg)
+
+    edge_g = {}
+    for i in range(n):
+        for e in range(rowptr[i], rowptr[i + 1]):
+            edge_g[(i, col[e])] = g[e]
+
+    assert edge_g, "no gap junctions stored"
+    for (i, j), gij in edge_g.items():
+        assert (j, i) in edge_g, f"gap junction {i}->{j} has no reverse edge {j}->{i}"
+        assert edge_g[(j, i)] == gij, (
+            f"gap junction {i}<->{j} conductance differs by direction: "
+            f"{gij} vs {edge_g[(j, i)]} — this is a rectifying junction, wrong physics"
+        )
 
 
 def test_sidecar_json_files_are_complete():
@@ -293,3 +320,49 @@ def test_vector_dump_shape_is_exactly_what_the_c_harness_expects():
     from wormed.pipeline.refsim import dump_vectors
     p = dump_vectors()
     assert p.stat().st_size == 401 * 302 * 4
+
+
+# --- Fix round 1: resting-state normalisation (FINDING 1) -------------------
+
+def test_v_rest_mv_matches_converged_float_state_and_zeroes_command_drive_at_rest():
+    """Regression for the broken classifier normalisation: d(n) =
+    (V[n]-E_leak[n])/20mV read AVAL 0.627, AVBL 0.512, AVDL 0.494, AVEL
+    0.682, PVCL 0.588 at rest — all above the 0.35 command threshold with
+    nobody touching the worm, putting a later behavioural demo in permanent
+    REVERSE. The fix normalises against the measured resting state
+    (worm_param_t.V_rest_mV) instead of E_leak. Checks both halves: the
+    packed V_rest_mV matches an independently converged float resting
+    voltage (not just self-consistent with compute_resting_state, which
+    could share its own bug), and (V_rest-V_rest)/20 — the actual fixed
+    normalisation — reads exactly zero for the five command neurons."""
+    import numpy as np
+    from wormed.pipeline.refsim import FloatSim, compute_resting_state
+    build_all()
+    blob = (DATA / "topology.bin").read_bytes()
+    off_params = LAYOUT["params"][0]
+    n = 302
+    par = struct.unpack_from(f"<{n * 8}h", blob, off_params)
+    v_rest_stored = [par[i * 8 + 5] for i in range(n)]
+
+    # Independent convergence loop — does not call compute_resting_state, so
+    # a bug inside that function cannot hide from this test.
+    sim = FloatSim()
+    prev = sim.V.copy()
+    for _ in range(400):
+        sim.step(50)
+        if np.max(np.abs(sim.V - prev)) < 1e-6:
+            break
+        prev = sim.V.copy()
+
+    for i in range(n):
+        assert abs(v_rest_stored[i] - sim.V[i]) < 1.0, (
+            f"neuron {i}: stored V_rest_mV={v_rest_stored[i]} vs converged float V={sim.V[i]}"
+        )
+
+    assert compute_resting_state() == v_rest_stored
+
+    names = json.loads((DATA / "names.json").read_text())
+    for name in ("AVAL", "AVBL", "AVDL", "AVEL", "PVCL"):
+        i = names.index(name)
+        drive = (v_rest_stored[i] - v_rest_stored[i]) / 20.0
+        assert drive == 0.0, f"{name} reads nonzero drive at rest: {drive}"
