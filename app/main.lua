@@ -22,6 +22,11 @@ screens = {}
 SCREEN_ORDER = {"TITLE", "EGG", "STARTER", "MAP", "WALK",
                 "ENCOUNTER", "DEX", "COLLECTION", "PAIR", "DUEL"}
 
+-- The classic opening trio, in carousel order. Type ids are wheel positions:
+-- 3 Fire, 1 Water, 5 Grass.
+STARTER_TYPES = {3, 1, 5}
+local SHAKES_TO_HATCH = 12
+
 local cur = nil
 local queue = {}
 local qhead = 1
@@ -31,6 +36,9 @@ local last_led = 0
 local last_tick_ms = 0
 local did_resume = false
 local dex_ok = false
+local star_idx = 1
+local egg_shakes = 0
+hatch_target = nil
 -- TRUF: on_enter assigns this; build_root reads it. Declared local HERE
 -- (rather than where the brief's later task introduces it) so it is never
 -- an accidental global in the ticks between this task and that one.
@@ -128,6 +136,14 @@ end
 
 function LED.off(t) end
 
+function LED.egg(t)
+  -- Pulse faster as the meter fills, so the badge feels like it is waking up.
+  local period = 1200 - egg_shakes * 70
+  if period < 200 then period = 200 end
+  local k = breathe(t, period)
+  badge.led.set_all(k, math.floor(k * 0.8), math.floor(k * 0.4))
+end
+
 local function draw_leds(t)
   badge.led.clear()
   local fn = LED[scene] or LED.off
@@ -158,6 +174,13 @@ local function build_title()
   local hint = label(root, "A start", 14, 0x8899AA)
   hint:align("bottom_mid", 0, -18)
   screens.TITLE.hint = hint
+
+  screens.TITLE.enter = function() led_scene("title") end
+  screens.TITLE.button = function(b)
+    if b ~= badge.input.BUTTON.A then return end
+    -- A player with no starter has never played; send them to the egg.
+    if own.starter() == 0 then show("EGG") else show("MAP") end
+  end
 end
 
 -- Placeholder builders. Tasks 8 through 24 replace each body; the router and
@@ -167,6 +190,139 @@ local function build_stub(name)
     local root = build_root(name)
     local l = label(root, name, 20)
     l:align("center", 0, 0)
+  end
+end
+
+-- The stage-1 member of the first family of each starter type. Stage 1 is
+-- always the weakest of its family, which keeps the permanently shielded
+-- starter off the trophy tier.
+function starter_ids()
+  local out = {}
+  for i = 1, #STARTER_TYPES do
+    out[i] = dex.first_of_type(STARTER_TYPES[i])
+  end
+  return out
+end
+
+function starter_index()
+  return star_idx
+end
+
+function paint_starter()
+  local id = starter_ids()[star_idx]
+  screens.STARTER.name:set_text(dex.name(id))
+  screens.STARTER.info:set_text(
+    dex.TYPE_NAME[dex.type(id)] .. "   STRENGTH " .. dex.strength(id))
+  dex.paint(art_pool, id, 88, 66, 9)
+end
+
+-- Weighted away from strength, so eggs are a trickle toward the types you
+-- have not met rather than a shortcut past hunting. Starters are excluded so
+-- an egg can NEVER hand out the classic trio a second way.
+function roll_hatch()
+  local total, starters = 0, {}
+  for _, id in ipairs(starter_ids()) do starters[id] = true end
+  for id = 1, dex.COUNT do
+    if not starters[id] then total = total + (11 - dex.strength(id)) end
+  end
+  local r = badge.sys.random(total)
+  for id = 1, dex.COUNT do
+    if not starters[id] then
+      r = r - (11 - dex.strength(id))
+      if r < 0 then return id end
+    end
+  end
+  return 1
+end
+
+local function build_egg()
+  local root = build_root("EGG")
+  local t = label(root, "SHAKE TO HATCH", 20, 0xFFD9A8)
+  t:align("top_mid", 0, 24)
+  screens.EGG.meter = badge.ui.bar(root, 0, SHAKES_TO_HATCH, 0)
+  built_count = built_count + 1
+  screens.EGG.meter:set_size(220, 18)
+  screens.EGG.meter:align("bottom_mid", 0, -44)
+  screens.EGG.msg = label(root, "An egg!", 16, 0x8899AA)
+  screens.EGG.msg:align("bottom_mid", 0, -18)
+
+  screens.EGG.enter = function()
+    egg_shakes = 0
+    screens.EGG.meter:set_value(0)
+    -- The very first egg leads to the carousel; every later one, bought with
+    -- a chest, reveals a single creature.
+    if own.starter() == 0 then
+      hatch_target = nil
+      screens.EGG.msg:set_text("Your first partner is inside")
+    else
+      hatch_target = roll_hatch()
+      screens.EGG.msg:set_text("Eggs left: " .. own.eggs())
+    end
+    led_scene("egg")
+  end
+
+  screens.EGG.tick = function(now)
+    -- A HOME confirmation pauses ticks. Restarting the meter is kinder than
+    -- silently keeping progress the player cannot see accumulating.
+    if resumed() then
+      egg_shakes = 0
+      screens.EGG.meter:set_value(0)
+    end
+    if badge.sensor.shake() then
+      egg_shakes = egg_shakes + 1
+      screens.EGG.meter:set_value(math.min(egg_shakes, SHAKES_TO_HATCH))
+    end
+    if egg_shakes >= SHAKES_TO_HATCH then
+      egg_shakes = 0
+      -- MUST agree with enter()'s branch: enter() decided whether this egg
+      -- is the carousel-opener or a single hatch, and that choice cannot
+      -- flip between the two without stranding a player mid-shake.
+      if own.starter() == 0 then
+        show("STARTER")
+      else
+        own.take_egg()
+        own.record_catch(hatch_target)
+        own.save()
+        show("MAP")
+      end
+    end
+  end
+
+  screens.EGG.button = function(b)
+    if b == badge.input.BUTTON.B and own.starter() ~= 0 then show("MAP") end
+  end
+end
+
+local function build_starter()
+  local root = build_root("STARTER")
+  local t = label(root, "CHOOSE YOUR PARTNER", 18, 0x7CFF9A)
+  t:align("top_mid", 0, 12)
+  screens.STARTER.name = label(root, "", 20)
+  screens.STARTER.name:align("top_mid", 0, 42)
+  screens.STARTER.info = label(root, "", 14, 0x8899AA)
+  screens.STARTER.info:align("bottom_mid", 0, -40)
+  local hint = label(root, "LEFT RIGHT choose   A confirm", 14, 0x8899AA)
+  hint:align("bottom_mid", 0, -16)
+
+  screens.STARTER.enter = function()
+    star_idx = 1
+    paint_starter()
+  end
+  screens.STARTER.button = function(b)
+    local B = badge.input.BUTTON
+    if b == B.RIGHT then
+      star_idx = star_idx % 3 + 1
+      paint_starter()
+    elseif b == B.LEFT then
+      star_idx = (star_idx + 1) % 3 + 1
+      paint_starter()
+    elseif b == B.A then
+      -- Persist NOW, not on_exit: a power cut right after picking is the
+      -- worst moment to lose the only creature the player has.
+      own.set_starter(starter_ids()[star_idx])
+      own.save()
+      show("MAP")
+    end
   end
 end
 
@@ -202,9 +358,20 @@ function on_enter(root)
       built_count = built_count + #chunk
     end, POOL_CHUNK)
   end
+  -- EGG (root + 2 labels + 1 bar = 4) and STARTER (root + 4 labels = 5) get
+  -- their real widget counts here; every other name is still a build_stub
+  -- placeholder at its fixed root+label cost of 2. A wrong number here just
+  -- re-widens the per-tick overrun Task 7 closed - see BUILD_WIDGETS above.
+  local builders = {EGG = build_egg, STARTER = build_starter}
+  local builder_cost = {EGG = 4, STARTER = 5}
   for i = 2, #SCREEN_ORDER do
     local name = SCREEN_ORDER[i]
-    defer(build_stub(name), 2)  -- build_root + one label, always exactly 2
+    local fn = builders[name]
+    if fn then
+      defer(fn, builder_cost[name])
+    else
+      defer(build_stub(name), 2)  -- build_root + one label, always exactly 2
+    end
   end
   defer(function()
     is_ready = true
