@@ -282,19 +282,34 @@ def neuron_positions(c: Connectome) -> list[tuple[float, float, float]]:
     """Worm-shaped point cloud: nerve ring cluster at the head, ventral cord
     running the body, tail ganglion at the back. Deterministic — the same
     connectome always yields the same layout, so replays line up."""
-    import hashlib, math
+    import hashlib, math, re
     out = []
-    # Ventral-cord cells are numbered (DA1..DA9); the number IS the position.
-    cord_rank: dict[str, int] = {}
-    cord_names = sorted(n for n in c.names if _ganglion_of(n) == "ventral_cord")
-    for i, n in enumerate(cord_names):
-        cord_rank[n] = i
-    n_cord = max(len(cord_names) - 1, 1)
+    # Each cord class (DA1..DA9, VD1..VD13, ...) spans the WHOLE cord, so a
+    # cell's position comes from its number WITHIN ITS OWN CLASS. Ranking every
+    # cord name in one sorted list instead stacks the classes into disjoint
+    # 4%-wide blocks and orders them lexicographically, which puts VD12
+    # anterior to VD3 — see pipeline/test_pipeline.py for the guard.
+    cord_frac: dict[str, float] = {}
+    cord_max: dict[str, int] = {}
+    for n in c.names:
+        if _ganglion_of(n) != "ventral_cord":
+            continue
+        m = re.fullmatch(r"([A-Z]+)(\d+)", n)
+        if m:
+            cord_max[m.group(1)] = max(cord_max.get(m.group(1), 1), int(m.group(2)))
+    for n in c.names:
+        if _ganglion_of(n) != "ventral_cord":
+            continue
+        m = re.fullmatch(r"([A-Z]+)(\d+)", n)
+        # An unnumbered cord cell has no anatomical rank to read — park it
+        # mid-cord rather than inventing an order for it.
+        cord_frac[n] = ((int(m.group(2)) - 1) / max(cord_max[m.group(1)] - 1, 1)
+                        if m else 0.5)
 
     for name in c.names:
         g = _ganglion_of(name)
         if g == "ventral_cord":
-            x = 0.30 + 0.45 * (cord_rank[name] / n_cord)
+            x = 0.30 + 0.45 * cord_frac[name]
         else:
             x = GANGLION_X[g]
         # Deterministic radial scatter keyed on the name, so left/right pairs

@@ -453,3 +453,32 @@ def test_touch_reflex_drives_the_right_command_neurons():
 
     rev, fwd = drives({"PLML": 40.0})
     assert fwd > THRESH_ON and fwd > rev, f"tail touch: rev={rev} fwd={fwd}"
+
+
+def test_each_ventral_cord_class_spans_the_cord_in_number_order():
+    """Cord cells are numbered head-to-tail and each class runs the WHOLE cord.
+    Ranking all cord names in one sorted list — the original bug — compressed
+    every class into a ~4% band and ordered them lexicographically, so VD12 sat
+    anterior to VD3 and DA9 sat at 0.446 instead of near the tail. Nothing else
+    in the suite looks at position ORDER, and the render still looked plausible,
+    so only this test catches it."""
+    import re
+    from wormed.pipeline.connectome import load_connectome, neuron_positions, _ganglion_of
+
+    c = load_connectome()
+    x = {n: p[0] for n, p in zip(c.names, neuron_positions(c))}
+    classes: dict[str, list[tuple[int, float]]] = {}
+    for n in c.names:
+        m = re.fullmatch(r"([A-Z]+)(\d+)", n)
+        if m and _ganglion_of(n) == "ventral_cord":
+            classes.setdefault(m.group(1), []).append((int(m.group(2)), x[n]))
+
+    assert len(classes) >= 5, f"expected the cord motor classes, got {sorted(classes)}"
+    for cls, cells in classes.items():
+        cells.sort()
+        xs = [v for _, v in cells]
+        assert xs == sorted(xs), f"{cls} is not ordered by number: {cells}"
+        if len(cells) >= 5:
+            assert xs[-1] - xs[0] > 0.30, (
+                f"{cls} spans only {xs[-1] - xs[0]:.3f} of the cord — classes "
+                f"are stacked in blocks again")
