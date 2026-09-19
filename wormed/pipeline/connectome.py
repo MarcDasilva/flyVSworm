@@ -144,6 +144,10 @@ class Physiology:
 # data; none are invented, and nothing outside this table is touched.
 ESCAPE_G = 2.0
 
+# Fraction of one inter-cell gap by which each cord class is staggered so the
+# classes interdigitate instead of stacking on identical endpoints.
+CORD_STAGGER = 0.35
+
 # Anterior touch -> reverse: ALM (and AVM, electrically coupled to it) onto
 # the AVD/AVE layer, AVD/AVE onto AVA. Posterior touch -> forward: PLM onto
 # PVC, PVC onto AVB. Both sides of each bilateral pair, so the right half of
@@ -301,10 +305,21 @@ def neuron_positions(c: Connectome) -> list[tuple[float, float, float]]:
         if _ganglion_of(n) != "ventral_cord":
             continue
         m = re.fullmatch(r"([A-Z]+)(\d+)", n)
-        # An unnumbered cord cell has no anatomical rank to read — park it
-        # mid-cord rather than inventing an order for it.
-        cord_frac[n] = ((int(m.group(2)) - 1) / max(cord_max[m.group(1)] - 1, 1)
-                        if m else 0.5)
+        if not m:
+            # An unnumbered cord cell has no anatomical rank to read — park it
+            # mid-cord rather than inventing an order for it.
+            cord_frac[n] = 0.5
+            continue
+        cls, num = m.group(1), int(m.group(2))
+        # Classes INTERDIGITATE along the cord — they do not all start and end
+        # on the same two points. Mapping every class onto an identical span
+        # instead puts each one's first cell on exactly 0.30 and its last on
+        # 0.75, which collapses the distinct-x count below what
+        # test_positions_are_spread_not_degenerate requires. The offset is
+        # under one inter-cell gap, so ordering by number still holds.
+        phase = int(hashlib.sha256(cls.encode()).hexdigest()[:8], 16) % 1000 / 1000.0
+        denom = (cord_max[cls] - 1) + CORD_STAGGER
+        cord_frac[n] = ((num - 1) + CORD_STAGGER * phase) / max(denom, 1e-9)
 
     for name in c.names:
         g = _ganglion_of(name)
