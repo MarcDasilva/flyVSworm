@@ -15,9 +15,9 @@ const WALL_H = 0.42;       // rim height in body lengths; the worm is 1.0 long
 const WALL_T = 0.11;       // rim thickness
 const SOIL_D = 0.35;       // soil depth below the floor
 const STAND_TOP = 0.45;    // plinth top, a hair above the rim
-const STAND_W = 1.15;      // plinth footprint; must stay wider than the laptop
-const STAND_D = 0.8;       //   or the machine overhangs its own table
-const LAPTOP_SCALE = 0.22; // the .obj ships ~3.46 units wide; this is ~0.76
+const STAND_W = 1.7;       // plinth footprint; must stay wider than the laptop
+const STAND_D = 1.2;       //   or the machine overhangs its own table
+const LAPTOP_SCALE = 0.33; // the .obj ships ~3.46 units wide; this is ~1.14
 const SOIL_RELIEF = 0.012; // surface bumps; MUST stay under the worm radius
 
 /** Random grey lattice, upscaled by the canvas's own bilinear filter. */
@@ -235,10 +235,9 @@ export async function loadLaptop(scene: THREE.Scene): Promise<THREE.Group> {
   }
 
   group.scale.setScalar(LAPTOP_SCALE);
-  // Three-quarters on, display towards the camera: square to the tank hides
-  // the wallpaper behind its own lid, square to the camera hides the keyboard
-  // behind the screen. Set 0 to turn the machine back towards the worm.
-  group.rotation.y = Math.PI;
+  // Square to the tank: the display faces the worm, so the camera gets the
+  // lid and the keyboard. Math.PI turns the wallpaper back towards the viewer.
+  group.rotation.y = 0;
 
   // Sit it ON the table rather than trusting the model's origin: this one is
   // authored a long way off-centre, so the bounds decide where it goes. Drop

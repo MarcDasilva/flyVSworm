@@ -18,7 +18,7 @@ rim.position.set(-3, 2, -2);
 scene.add(rim);
 
 const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.01, 100);
-camera.position.set(0, 2.8, 4.2);
+camera.position.set(0, 3.1, 5.1);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
