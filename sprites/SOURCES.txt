@@ -1,0 +1,27 @@
+Local sprite dump for the Hack the North 2026 badge (320x240, 42x42 icon.bin).
+
+These files are Nintendo / Game Freak artwork mirrored by fan databases.
+The sprites/ folder is gitignored. Do not commit or redistribute it.
+
+Sources
+- PokeAPI:  https://github.com/PokeAPI/sprites
+- veekun:   https://veekun.com/dex/downloads
+
+Layout (~81 MB, numbered files are National Dex IDs)
+
+  pokeapi/generation-i/     3322 PNG  Game Boy Red/Blue, Red/Green JP, Yellow
+                            (front, back, gbc, gray, transparent)
+  pokeapi/generation-ii/    6644 PNG + 554 GIF  Gold/Silver/Crystal + shinies
+  pokeapi/generation-iii/   7112 PNG  Ruby/Sapphire, Emerald, FireRed/LeafGreen
+  pokeapi/icons/            1493 PNG  Gen 5 32x32 menu icons (full dex)
+  standard-96x96/           151 PNG   PokeAPI default fronts (Kanto 1-151)
+  shiny-96x96/              151 PNG   PokeAPI shiny fronts (Kanto 1-151)
+  icons-32/                 151 PNG   Gen 5 icons for Kanto only
+  veekun/                   5940 files  Complete Gen I + Gen II packs
+
+Closest to the badge 42x42 icon:
+  sprites/pokeapi/generation-i/red-blue/25.png      (Pikachu, ~40x40)
+  sprites/pokeapi/generation-i/yellow/gbc/25.png    (Pikachu, GBC color)
+
+Re-fetch Kanto numbered sets:
+  powershell -File sprites/fetch-numbered.ps1
