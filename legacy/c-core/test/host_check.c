@@ -41,6 +41,13 @@ static void test_monster(void)
     if (copy.bytes[0] != m.bytes[0] || copy.bytes[4] != m.bytes[4]) {
         fail("pack/unpack");
     }
+
+    monster_init(&m, SPECIES_RAYQUAZA, 127, TYPE_DRAGON, false, false, 7, 15, 15, 0xFF);
+    if (!monster_is_unbeatable(&m)) fail("rayquaza must be unbeatable");
+    if (monster_can_transfer(&m)) fail("unbeatable must not transfer");
+    if (!monster_species_is_unbeatable(SPECIES_GIRATINA)) fail("giratina species");
+    if (!monster_species_is_unbeatable(SPECIES_DIALGA)) fail("dialga species");
+    if (monster_species_is_unbeatable(25)) fail("pikachu is beatable");
 }
 
 static void test_fsm(void)

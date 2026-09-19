@@ -21,6 +21,19 @@ extern "C" {
  */
 #define MONSTER_BYTES 5
 
+/*
+ * Unbeatable bosses (Hoenn weather trio + Sinnoh creation trio).
+ * Wire species is one byte, so these sit at 250..255 instead of
+ * National Dex. Sprites live in sprites/iconic-36/legendary/.
+ */
+#define SPECIES_UNBEATABLE_MIN 250
+#define SPECIES_KYOGRE         250 /* dex 382, Water  */
+#define SPECIES_GROUDON        251 /* dex 383, Ground */
+#define SPECIES_RAYQUAZA       252 /* dex 384, Dragon */
+#define SPECIES_DIALGA         253 /* dex 483, Dragon */
+#define SPECIES_PALKIA         254 /* dex 484, Water  */
+#define SPECIES_GIRATINA       255 /* dex 487, Ghost  */
+
 typedef enum {
     TYPE_NORMAL = 0,
     TYPE_FIRE,
@@ -80,6 +93,10 @@ bool monster_has_move(const Monster *m, uint8_t slot);
 
 /* Starter is permanent: cannot be wagered, stolen, or traded. */
 bool monster_can_transfer(const Monster *m);
+
+/* Species 250..255: bosses that cannot be KO'd, caught, or transferred. */
+bool monster_species_is_unbeatable(uint8_t species);
+bool monster_is_unbeatable(const Monster *m);
 
 void monster_pack(const Monster *m, uint8_t out[MONSTER_BYTES]);
 void monster_unpack(Monster *m, const uint8_t in[MONSTER_BYTES]);
