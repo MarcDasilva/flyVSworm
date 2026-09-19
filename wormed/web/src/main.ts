@@ -73,10 +73,10 @@ let status: RelayStatus | undefined;
 let frameSig = "";
 let lastFrameAt = 0;
 
-// The particle pool holds 192 and a settlement moves ~340 junctions at once,
-// so the strongest few per frame are drawn and the HUD reports the true
-// count. Drawing all of them would evict each other within one frame anyway.
-const PARTICLES_PER_FRAME = 110;
+// A settlement moves ~340 junctions at once, so the strongest few per frame
+// are drawn and the HUD reports the true count. Drawing all of them would
+// recycle each other's pool slots within one frame anyway.
+const FIRING_PER_FRAME = 110;
 
 feed.onBehavior(b => { chainBehavior = b; behavior = { state: b.state, gain: b.gain }; });
 feed.onStatus(s => { status = s; });
@@ -97,8 +97,8 @@ feed.onFrame(f => {
   voltages = f.mV;
   frameSig = f.signature;
   lastFrameAt = performance.now();
-  const strongest = f.transfers.length > PARTICLES_PER_FRAME
-    ? [...f.transfers].sort((a, b) => b.amount - a.amount).slice(0, PARTICLES_PER_FRAME)
+  const strongest = f.transfers.length > FIRING_PER_FRAME
+    ? [...f.transfers].sort((a, b) => b.amount - a.amount).slice(0, FIRING_PER_FRAME)
     : f.transfers;
   for (const t of strongest) brain.fireEdge(t.pre, t.post, true);
 
@@ -139,14 +139,23 @@ document.getElementById("touch-tail")!.onclick = () => void touch("TAIL", "PLML"
 const esc = (t: string) => t.replace(/[&<>"]/g, c =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 
-// Paused only freezes the DRAWING — the relay's log keeps filling, so
-// resuming shows what happened meanwhile rather than a gap.
-let logPaused = false;
+// Pause freezes the WHOLE panel — rows and stat tiles together. Freezing
+// only the rows left the six counters ticking above a frozen list, which
+// reads as a half-broken button rather than a deliberate hold. The relay
+// keeps collecting either way, so resuming jumps to current instead of
+// replaying the gap.
+let panelPaused = false;
 const pauseBtn = document.getElementById("txpause") as HTMLButtonElement;
 pauseBtn.onclick = () => {
-  logPaused = !logPaused;
-  pauseBtn.textContent = logPaused ? "RESUME" : "PAUSE";
-  if (!logPaused) drawLog();
+  panelPaused = !panelPaused;
+  pauseBtn.textContent = panelPaused ? "RESUME" : "PAUSE";
+  // Repaint once in BOTH directions, bypassing the pause gate in the render
+  // loop. Entering matters most: the frozen rows would otherwise keep the
+  // live marker on whichever transaction was firing at the instant of the
+  // click, and that marker means "these synapses are on screen NOW" — left
+  // frozen it asserts something false for as long as the hold lasts.
+  drawStats();
+  drawLog();
 };
 
 /** The six numbers worth watching while it runs. */
@@ -168,7 +177,6 @@ function drawStats(): void {
  *  A row carries its own playback state, so the highlighted row is literally
  *  the transaction whose transfers are on screen right now. */
 function drawLog(): void {
-  if (logPaused) return;
   const rows: string[] = clicks.slice(0, 3).map(c => `<div class="row dim">${esc(c)}</div>`);
   for (const e of status?.log ?? []) {
     const ms = e.ms === undefined ? "" : `${(e.ms / 1000).toFixed(1)}s`;
@@ -179,7 +187,7 @@ function drawLog(): void {
       rows.push(`<div class="row fail">${op} FAILED ${esc(e.error.replace(/\s+/g, " ")).slice(0, 52)}…</div>`);
     } else if (e.sig) {
       const play = txPlay.get(e.sig);
-      const live = e.sig === frameSig && performance.now() - lastFrameAt < 1500;
+      const live = !panelPaused && e.sig === frameSig && performance.now() - lastFrameAt < 1500;
       const link = `<a href="${esc(cfg.explorer + e.sig)}" target="_blank" rel="noreferrer">${esc(e.sig.slice(0, 18))}…</a>`;
       const tail = play
         ? `  <span class="dim">${String(play.frames).padStart(2)}f</span> ${play.transfers.toLocaleString().padStart(6)} xfer`
@@ -244,8 +252,10 @@ function frame(now: number): void {
       `pacing   burst ${feed.stats.burstMs}ms  interval ${feed.stats.interval}ms  ticks/s ${tickRate.toFixed(0)}`,
       `neurons  ${n}   neurites ${brain.segments}   fps ${fps.toFixed(0)}`,
     ].join("\n");
-    drawLog();
-    drawStats();
+    if (!panelPaused) {
+      drawLog();
+      drawStats();
+    }
   }
 
   controls.update();

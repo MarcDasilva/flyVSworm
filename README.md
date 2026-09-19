@@ -203,11 +203,13 @@ shapes and soma positions come from the tracing and are checked against known
 anatomy in `wormed/pipeline/test_morphology.py`. Synapse *sites* are not in
 either source: `NeuronConnect.csv` gives pre/post pairs and a contact count,
 with no coordinate, and the morphology files carry no synapses at all. So a
-firing transfer is animated cell body to cell body, bowed onto the body
-midline, and the point where a particle appears to cross between two neurons
-is a drawing convention rather than a location. The two datasets are joined
-only by neuron name. Using the closest approach between two arbors would be a
-defensible estimate of where the contact sits, and is not what this does.
+firing transfer lights a drawn connector between the two cell bodies, routed
+along the body's own midline and offset onto one of a spread of tracts. That
+route is a drawing convention, not a path any process is known to take: the
+two datasets are joined only by neuron name. Using the closest approach
+between two arbors would be a defensible estimate of where the contact sits,
+and is not what this does. What the connector does report honestly is which
+two cells the chain moved charge between, and when.
 
 **14. The traced animal is a posed specimen.** It is bent into a crawling
 posture, and that bend is kept — the render shows the worm the tracing

@@ -157,8 +157,8 @@ assert.ok(moved > cold.length / 2, "setVoltages did not repaint the cloud");
 // THE POINT OF THE TRACED ANATOMY: a spike must light the neuron's WIRES,
 // not just its cell body. Painting only the 302 somas leaves 9,429 neurites
 // frozen at the resting colour and the render is a dot cloud again.
-const wires = scene.getObjectByProperty("isLineSegments2", true) as THREE.Mesh | undefined;
-assert.ok(wires, "no LineSegments2 in the scene — the arbors are not drawn");
+const wires = scene.getObjectByName("neurites") as THREE.Mesh | undefined;
+assert.ok(wires, "no object named \"neurites\" — the arbors are not drawn");
 const wireBuf = (wires.geometry.getAttribute("instanceColorStart") as THREE.InterleavedBufferAttribute)
   .data.array as Float32Array;
 assert.equal(wireBuf.length, morphology.segments * 6,
@@ -190,6 +190,90 @@ assert.equal(lit(target), 1, "AVAL's own arbor did not light up");
 for (const other of ["AVAR", "PLML", "IL1DL"])
   assert.equal(lit(names.indexOf(other)), 0, `${other} lit up when only AVAL fired`);
 brain.setVoltages(new Int16Array(302).fill(-70));
+
+// A FIRING CONNECTOR MUST STAY INSIDE THE ANIMAL. The specimen is traced in
+// a crawling curve, so a straight chord between two distant cell bodies
+// leaves the body for most of its length — it has to be routed along the
+// midline instead. Rebuild the body's own radius per slice from the traced
+// points, then fire head-to-tail pairs and check every drawn vertex lands
+// inside it. Nothing else in this file would notice a connector cutting
+// through open agar.
+const glow = scene.getObjectByName("firing") as THREE.Mesh | undefined;
+assert.ok(glow, "no object named \"firing\" — synaptic transfers are not drawn");
+const glowPos = (glow.geometry.getAttribute("instanceStart") as THREE.InterleavedBufferAttribute)
+  .data.array as Float32Array;
+
+const SPAN = 1.9, HEIGHT = 1.05, BINS = 40;
+const wx = (i: number) => morphology.verts[i] * SPAN;
+const wy = (i: number) => HEIGHT + morphology.verts[i + 1] * SPAN;
+const wz = (i: number) => morphology.verts[i + 2] * SPAN;
+let axLo = Infinity, axHi = -Infinity;
+for (let i = 0; i < morphology.verts.length; i += 3) {
+  axLo = Math.min(axLo, wx(i)); axHi = Math.max(axHi, wx(i));
+}
+const binOf = (x: number) => Math.min(BINS - 1, Math.max(0,
+  Math.floor((x - axLo) / (axHi - axLo + 1e-9) * BINS)));
+const cy = new Float64Array(BINS), cz = new Float64Array(BINS), cn = new Float64Array(BINS);
+for (let i = 0; i < morphology.verts.length; i += 3) {
+  const b = binOf(wx(i)); cy[b] += wy(i); cz[b] += wz(i); cn[b]++;
+}
+for (let b = 0; b < BINS; b++) if (cn[b]) { cy[b] /= cn[b]; cz[b] /= cn[b]; }
+const radius = new Float64Array(BINS);
+for (let i = 0; i < morphology.verts.length; i += 3) {
+  const b = binOf(wx(i));
+  radius[b] = Math.max(radius[b], Math.hypot(wy(i) - cy[b], wz(i) - cz[b]));
+}
+// Neighbour-max, so a connector crossing a bin boundary is not failed by a
+// slice that happens to hold only the thin part of the cord.
+const bodyR = radius.map((_, b) =>
+  Math.max(radius[Math.max(0, b - 1)], radius[b], radius[Math.min(BINS - 1, b + 1)]));
+
+const spans: [string, string][] = [["ALML", "PVCL"], ["IL1DL", "PHAL"], ["AVAL", "VA12"],
+                                 ["PLMR", "AVBR"], ["ASEL", "DA9"], ["RMED", "PQR"]];
+let worst = 0, worstAt = "";
+for (const [from, to] of spans) {
+  const i = names.indexOf(from), j = names.indexOf(to);
+  assert.ok(i >= 0 && j >= 0, `${from}/${to} missing from names.json`);
+  brain.fireEdge(i, j, true);
+  // fireEdge bakes the path on write and hands out slots round-robin, so the
+  // one just written is the slot before the cursor.
+  for (let slot = 0; slot < glowPos.length / 6; slot++) {
+    // Only look at the segments written this call: find them by matching the
+    // first vertex to the presynaptic cell body.
+    const o = slot * 6;
+    if (Math.abs(glowPos[o] - positions[i][0] * SPAN) > 1e-5) continue;
+    if (Math.abs(glowPos[o + 1] - (HEIGHT + positions[i][1] * SPAN)) > 1e-5) continue;
+    for (let seg = 0; seg < 6; seg++) {
+      for (const half of [0, 3]) {
+        const q = o + seg * 6 + half;
+        if (q + 2 >= glowPos.length) continue;
+        const b = binOf(glowPos[q]);
+        const d = Math.hypot(glowPos[q + 1] - cy[b], glowPos[q + 2] - cz[b]);
+        if (d / (bodyR[b] || 1) > worst) { worst = d / (bodyR[b] || 1); worstAt = `${from}->${to}`; }
+      }
+    }
+    break;
+  }
+}
+assert.ok(worst > 0, "no firing connector geometry was written");
+assert.ok(worst <= 1.02,
+  `a firing connector reaches ${worst.toFixed(2)}x the body radius at ${worstAt} — ` +
+  "it is cutting outside the animal instead of following the midline");
+
+// A connector fades to nothing and frees its slot. If the decay stops short
+// of zero the pool saturates and the whole nervous system stays washed out.
+const glowCol = (glow.geometry.getAttribute("instanceColorStart") as THREE.InterleavedBufferAttribute)
+  .data.array as Float32Array;
+brain.fireEdge(names.indexOf("AVAL"), names.indexOf("AVBL"), true);
+brain.tick(0.01);
+let litPeak = 0;
+for (let i = 0; i < glowCol.length; i++) litPeak = Math.max(litPeak, glowCol[i]);
+assert.ok(litPeak > 0.05, `a fired connector never lit up (peak ${litPeak})`);
+assert.ok(litPeak < 0.5, `a connector at ${litPeak} is not the dim glow it should be`);
+for (let f = 0; f < 60; f++) brain.tick(1 / 60);
+let stillLit = 0;
+for (let i = 0; i < glowCol.length; i++) stillLit = Math.max(stillLit, glowCol[i]);
+assert.equal(stillLit, 0, `connectors still lit at ${stillLit} a second after firing`);
 
 // Chain indices are not trusted input; a bad edge must be dropped, not thrown.
 brain.fireEdge(-1, 5);
