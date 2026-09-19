@@ -1,0 +1,107 @@
+"""Loads the C. elegans hermaphrodite connectome and remaps names to dense
+indices. The dense index order is FROZEN once topology.bin ships — every
+account address derives from it, so reordering invalidates the whole chain.
+"""
+import csv
+import re
+from dataclasses import dataclass, field
+from pathlib import Path
+
+RAW = Path(__file__).resolve().parent.parent / "data" / "raw" / "NeuronConnect.csv"
+
+# 20 pharyngeal neurons plus CANL/CANR/VC6: real, anatomically documented
+# cells that are simply absent from NeuronConnect.csv (see
+# wormed/data/raw/SOURCE.txt). NeuronConnect.csv covers only the 279
+# extrapharyngeal neurons that participate in a chemical or gap synapse;
+# the pharynx was reconstructed separately (Albertson & Thomson 1976) and
+# was never folded into this file, CANL/CANR never synapse with anything,
+# and VC6's only recorded connection here is an NMJ to muscle (out of
+# scope). They ship as isolated dense-index slots with zero edges rather
+# than being silently dropped, because Task 5 derives one on-chain account
+# per neuron and the canonical worm has 302, not 279.
+NO_SYNAPSE_DATA_NEURONS = [
+    "I1L", "I1R", "I2L", "I2R", "I3", "I4", "I5", "I6",
+    "M1", "M2L", "M2R", "M3L", "M3R", "M4", "M5",
+    "MCL", "MCR", "MI", "NSML", "NSMR",
+    "CANL", "CANR", "VC6",
+]
+
+_PADDED = re.compile(r"^([A-Z]+)(\d+)$")
+
+
+def _normalize(name: str) -> str:
+    """NeuronConnect.csv zero-pads numbered classes (AS01, DA01, VD01, ...).
+    WormAtlas's canonical short form (and the names Task 3's
+    neurotransmitters.csv and its GABA test use — DD1, VD1) drops the
+    padding. Strip it here ONCE so every downstream table agrees on one
+    spelling."""
+    m = _PADDED.match(name)
+    if not m:
+        return name
+    prefix, digits = m.groups()
+    return f"{prefix}{int(digits)}"
+
+
+@dataclass
+class Connectome:
+    names: list[str] = field(default_factory=list)
+    chem: list[tuple[int, int, int]] = field(default_factory=list)
+    gap: list[tuple[int, int, int]] = field(default_factory=list)
+
+
+def load_connectome(path: Path = RAW) -> Connectome:
+    """Parses NeuronConnect.csv (Varshney et al. 2011's connectivity table;
+    see wormed/data/raw/SOURCE.txt for provenance).
+
+    Row Type carries directional and physical meaning that must NOT be
+    read literally as (Neuron 1, Neuron 2) -> edge for every row:
+      - S / Sp: Neuron 1 sends a chemical synapse to Neuron 2 (monadic /
+        polyadic). This is the real, unambiguous synaptic direction.
+      - R / Rp: mirror bookkeeping rows for the SAME physical synapses as
+        (most of) the S/Sp rows above, listed with Neuron 1 and Neuron 2
+        swapped so the file can be looked up by either side. Consuming
+        these too would double every chemical connection.
+      - EJ: gap junction. Symmetric, and — like S/R — mirrored as two rows
+        (A,B,EJ) and (B,A,EJ) with matching weight. Consuming both directions
+        would double every gap conductance, which is real electrical current,
+        not a bookkeeping artifact.
+      - NMJ: neuromuscular junction. Neuron 2 is the literal string "NMJ",
+        not a neuron — these rows are dropped outright.
+    """
+    chem_rows: list[tuple[str, str, int]] = []
+    gap_pairs: dict[frozenset, tuple[str, str, int]] = {}
+    all_names: set[str] = set()
+
+    with open(path, newline="") as f:
+        for r in csv.DictReader(f):
+            pre = _normalize(r["Neuron 1"].strip().upper())
+            post_raw = r["Neuron 2"].strip()
+            kind = r["Type"].strip()
+            weight = int(float(r["Nbr"]))
+
+            if kind == "NMJ" or weight <= 0:
+                continue
+
+            post = _normalize(post_raw.upper())
+            all_names.add(pre)
+            all_names.add(post)
+
+            if kind in ("S", "Sp"):
+                chem_rows.append((pre, post, weight))
+            elif kind == "EJ":
+                # Keep the first-seen direction for a given unordered pair;
+                # this file's EJ mirrors never disagree on weight (verified
+                # at ingest time — see SOURCE.txt).
+                gap_pairs.setdefault(frozenset((pre, post)), (pre, post, weight))
+            # R / Rp: intentionally ignored, see docstring above.
+
+    all_names.update(NO_SYNAPSE_DATA_NEURONS)
+    names = sorted(all_names)
+    idx = {n: i for i, n in enumerate(names)}
+
+    c = Connectome(names=names)
+    for pre, post, w in chem_rows:
+        c.chem.append((idx[pre], idx[post], w))
+    for pre, post, w in gap_pairs.values():
+        c.gap.append((idx[pre], idx[post], w))
+    return c
