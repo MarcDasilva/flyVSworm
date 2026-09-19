@@ -3,6 +3,8 @@ indices. The dense index order is FROZEN once topology.bin ships — every
 account address derives from it, so reordering invalidates the whole chain.
 """
 import csv
+import hashlib
+import math
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -233,6 +235,36 @@ def assign_physiology(c: Connectome) -> Physiology:
 
 # Anterior-posterior anchor per ganglion, 0.0 = nose, 1.0 = tail tip.
 # Source: WormAtlas ganglion organization.
+# Circumferential placement of each ganglion's cell bodies, as
+# (centre_angle_radians, half_spread). Angle 0 is DORSAL (up), pi is VENTRAL
+# (down), +-pi/2 are the two lateral sides. Source: WormAtlas ganglion
+# organization — these are cell-body clusters ringing the neuropil, and this
+# geometry is the only reason the nerve ring reads as a ring.
+GANGLION_SECTOR = {
+    "pharynx":        (0.0, math.pi),       # wraps the pharyngeal tube
+    "anterior":       (0.0, math.pi),       # a full collar at the nose
+    "dorsal":         (0.0, 0.85),
+    "lateral":        (math.pi / 2, 1.05),  # sign flips by L/R
+    "ventral":        (math.pi, 1.15),
+    "retrovesicular": (math.pi, 1.00),
+    "ventral_cord":   (math.pi, 0.30),      # overridden to a line below
+    "preanal":        (math.pi, 1.00),
+    "dorsorectal":    (0.0, 0.75),
+    "lumbar":         (math.pi / 2, 0.95),  # sign flips by L/R
+}
+
+# Ganglia whose L/R members sit on OPPOSITE sides of the animal rather than
+# sharing one sector.
+SIDED_GANGLIA = {"lateral", "lumbar"}
+
+# Cross-section radius per ganglion. The pharynx sits INSIDE the nerve ring,
+# so it is tighter; the head collar is widest.
+RING_R = {
+    "pharynx": 0.34, "anterior": 0.72, "dorsal": 0.80, "lateral": 0.88,
+    "ventral": 0.80, "retrovesicular": 0.70, "ventral_cord": 0.78,
+    "preanal": 0.68, "dorsorectal": 0.62, "lumbar": 0.76,
+}
+
 GANGLION_X = {
     "pharynx": 0.03,
     "anterior": 0.06, "dorsal": 0.10, "lateral": 0.13, "ventral": 0.17,
@@ -286,7 +318,6 @@ def neuron_positions(c: Connectome) -> list[tuple[float, float, float]]:
     """Worm-shaped point cloud: nerve ring cluster at the head, ventral cord
     running the body, tail ganglion at the back. Deterministic — the same
     connectome always yields the same layout, so replays line up."""
-    import hashlib, math, re
     out = []
     # Each cord class (DA1..DA9, VD1..VD13, ...) spans the WHOLE cord, so a
     # cell's position comes from its number WITHIN ITS OWN CLASS. Ranking every
@@ -327,16 +358,30 @@ def neuron_positions(c: Connectome) -> list[tuple[float, float, float]]:
             x = 0.30 + 0.45 * cord_frac[name]
         else:
             x = GANGLION_X[g]
-        # Deterministic radial scatter keyed on the name, so left/right pairs
-        # separate without a random seed.
+        # Deterministic jitter keyed on the name, so the layout is stable
+        # across runs and replays line up without a random seed.
         h = int(hashlib.sha256(name.encode()).hexdigest()[:8], 16)
-        angle = (h % 3600) / 3600.0 * 2 * math.pi
-        radius = 0.35 + 0.55 * ((h >> 12) % 1000) / 1000.0
+        jitter = (h % 3600) / 3600.0 * 2 - 1.0          # -1..1
         side = -1.0 if name.endswith("L") else (1.0 if name.endswith("R") else 0.0)
-        y = radius * math.cos(angle) + 0.25 * side
+
+        # Head and tail cell bodies ring the neuropil CIRCUMFERENTIALLY — the
+        # nerve ring is a band of neurite around the pharynx and the ganglia
+        # are clusters sitting around it, dorsal above, ventral below, lateral
+        # to each side. Scattering them through a disc instead loses the one
+        # feature that makes the head instantly legible as a head.
+        centre, spread = GANGLION_SECTOR[g]
+        if g in SIDED_GANGLIA:
+            # An L/R pair belongs on ITS OWN side; an unsided cell picks one
+            # deterministically rather than sitting on the midline seam.
+            s = side if side else (1.0 if (h >> 20) & 1 else -1.0)
+            angle = s * centre + jitter * spread * 0.5
+        else:
+            angle = centre + jitter * spread
+        radius = RING_R[g] * (0.88 + 0.12 * ((h >> 12) % 1000) / 1000.0)
+        y = radius * math.cos(angle)
         z = radius * math.sin(angle)
-        # Ventral cord sits ventrally, not scattered around the axis.
+        # The ventral cord is a LINE along the ventral midline, not a ring.
         if g == "ventral_cord":
-            y, z = -0.75 + 0.1 * math.cos(angle), 0.15 * math.sin(angle)
+            y, z = -0.78 + 0.06 * jitter, 0.10 * jitter + 0.06 * side
         out.append((x, max(-1.0, min(1.0, y)), max(-1.0, min(1.0, z))))
     return out

@@ -9,9 +9,16 @@ const SPAN = 1.9;      // anterior-posterior extent, ~2 worms wide so it reads
 const HEIGHT = 1.05;   // hovers above the agar in body lengths
 const GIRTH = 0.24;    // dorsoventral and left-right scale
 const NODE_R = 0.016;
-const PARTICLE_R = 0.013;
-const PARTICLE_SPEED = 1.6;   // traversals per second
-const MAX_PARTICLES = 192;
+const PARTICLE_R = 0.010;
+const PARTICLE_SPEED = 5.0;   // traversals per second
+const MAX_PARTICLES = 1400;
+/** Samples per drawn neurite. 8 is where the curve stops looking polygonal. */
+const EDGE_SEGMENTS = 8;
+/** How far an edge's midpoint is pulled toward the AP axis. Neurites run
+ *  through the nerve ring and the cord tracts — they do NOT cut straight
+ *  across the body between two cell bodies, and straight chords are what make
+ *  a connectome render look like a wire hairball instead of an animal. */
+const NEURITE_BOW = 0.35;
 
 /**
  * 302 neurons at their real anatomical coordinates, with the strongest
@@ -38,6 +45,10 @@ export class BrainCloud {
   private readonly one = new THREE.Vector3(1, 1, 1);
   private readonly zero = new THREE.Vector3(0, 0, 0);
   private readonly scratch = new THREE.Color();
+  private readonly ctrl = new THREE.Vector3();
+  /** Round-robin so firing is O(1): a linear free-list scan at 1400 slots and
+   *  ~100 spikes a frame is 140k comparisons per frame, for nothing. */
+  private cursor = 0;
 
   constructor(scene: THREE.Scene,
               positions: [number, number, number][],
@@ -66,9 +77,16 @@ export class BrainCloud {
     this.group.add(this.nodes);
 
     const line: THREE.Vector3[] = [];
+    const prev = new THREE.Vector3(), cur = new THREE.Vector3();
     for (const [a, b] of edges) {
       if (!this.pos[a] || !this.pos[b]) continue;
-      line.push(this.pos[a], this.pos[b]);
+      this.controlPoint(this.pos[a], this.pos[b], this.ctrl);
+      prev.copy(this.pos[a]);
+      for (let s = 1; s <= EDGE_SEGMENTS; s++) {
+        this.bezier(this.pos[a], this.ctrl, this.pos[b], s / EDGE_SEGMENTS, cur);
+        line.push(prev.clone(), cur.clone());
+        prev.copy(cur);
+      }
     }
     this.group.add(new THREE.LineSegments(
       new THREE.BufferGeometry().setFromPoints(line),
@@ -112,12 +130,8 @@ export class BrainCloud {
    */
   fireEdge(pre: number, post: number, excitatory = true): void {
     if (!this.pos[pre] || !this.pos[post]) return;
-    let slot = -1, oldest = -1;
-    for (let i = 0; i < MAX_PARTICLES; i++) {
-      if (this.live[i].t >= 1) { slot = i; break; }
-      if (oldest < 0 || this.live[i].t > this.live[oldest].t) oldest = i;
-    }
-    if (slot < 0) slot = oldest;
+    const slot = this.cursor;
+    this.cursor = (this.cursor + 1) % MAX_PARTICLES;
     const p = this.live[slot];
     p.t = 0; p.a = pre; p.b = post;
     (excitatory ? EXCITATORY : INHIBITORY)
@@ -136,10 +150,29 @@ export class BrainCloud {
         this.particles.setMatrixAt(i, this.m.compose(this.zero, this.q, this.zero));
         continue;
       }
-      this.v.lerpVectors(this.pos[p.a], this.pos[p.b], p.t);
+      this.controlPoint(this.pos[p.a], this.pos[p.b], this.ctrl);
+      this.bezier(this.pos[p.a], this.ctrl, this.pos[p.b], p.t, this.v);
       this.particles.setMatrixAt(i, this.m.compose(this.v, this.q, this.one));
     }
     if (any) this.particles.instanceMatrix.needsUpdate = true;
+  }
+
+  /** Midpoint pulled toward the AP axis, so the edge bows through the
+   *  neuropil instead of cutting across open body cavity. */
+  private controlPoint(a: THREE.Vector3, b: THREE.Vector3, out: THREE.Vector3): void {
+    out.set((a.x + b.x) / 2,
+            HEIGHT + ((a.y + b.y) / 2 - HEIGHT) * NEURITE_BOW,
+            ((a.z + b.z) / 2) * NEURITE_BOW);
+  }
+
+  /** Quadratic Bezier. Particles MUST use the same curve the edge is drawn
+   *  with, or they float off the wires. */
+  private bezier(a: THREE.Vector3, c: THREE.Vector3, b: THREE.Vector3,
+                 t: number, out: THREE.Vector3): void {
+    const u = 1 - t;
+    out.set(u * u * a.x + 2 * u * t * c.x + t * t * b.x,
+            u * u * a.y + 2 * u * t * c.y + t * t * b.y,
+            u * u * a.z + 2 * u * t * c.z + t * t * b.z);
   }
 
   /** Name -> index, the only way the UI addresses a specific cell. */

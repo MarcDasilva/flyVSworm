@@ -73,7 +73,7 @@ let lastFrameAt = 0;
 // The particle pool holds 192 and a settlement moves ~340 junctions at once,
 // so the strongest few per frame are drawn and the HUD reports the true
 // count. Drawing all of them would evict each other within one frame anyway.
-const PARTICLES_PER_FRAME = 14;
+const PARTICLES_PER_FRAME = 110;
 
 feed.onBehavior(b => { chainBehavior = b; behavior = { state: b.state, gain: b.gain }; });
 feed.onStatus(s => { status = s; });
@@ -118,7 +118,7 @@ function drawLog(): void {
     if (e.error) rows.push(`${op} FAILED ${esc(e.error.replace(/\s+/g, " ")).slice(0, 60)}…`);
     else if (e.sig) rows.push(`${op} ${ms.padStart(5)}  <a href="${esc(cfg.explorer + e.sig)}" target="_blank" rel="noreferrer">${esc(e.sig.slice(0, 22))}…</a>`);
     else rows.push(`${op} ${ms.padStart(5)}`);
-    if (rows.length > 18) break;
+    if (rows.length > 30) break;
   }
   log.innerHTML = rows.join("<br>");
 }

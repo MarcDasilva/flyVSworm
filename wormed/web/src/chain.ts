@@ -123,6 +123,12 @@ export type RelayStatus = {
   log: { t: number; op: string; sig?: string; ms?: number; error?: string }[];
 };
 
+/** Floor on the gap between played frames. The chain delivers a burst every
+ *  few seconds and this spreads it; at 8 ms a backed-up queue drains at up to
+ *  125 frames/s, which is what makes the cloud look alive rather than
+ *  stepping. Raise it if the queue never empties. */
+const PLAY_FLOOR_MS = 8;
+
 export class ChainFeed {
   private thru;
   private program: string;
@@ -237,7 +243,7 @@ export class ChainFeed {
   tick(): Frame | undefined {
     if (!this.queue.length) return undefined;
     const now = performance.now();
-    const interval = Math.min(400, Math.max(40, this.burstMs / this.queue.length));
+    const interval = Math.min(400, Math.max(PLAY_FLOOR_MS, this.burstMs / this.queue.length));
     if (now - this.lastPlay < interval) return undefined;
     this.lastPlay = now;
     const f = this.queue.shift()!;

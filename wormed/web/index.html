@@ -3,7 +3,8 @@
 <style>
   body { margin: 0; overflow: hidden; background: #0b0f14;
          font: 14px ui-monospace, SFMono-Regular, monospace; color: #cbd5e1; }
-  #ui { position: fixed; top: 16px; left: 16px; display: flex; gap: 8px; }
+  #ui { position: fixed; top: 16px; left: 16px; display: flex; gap: 8px;
+        z-index: 2; }
   button { padding: 10px 16px; background: #1e293b; color: #e2e8f0;
            border: 1px solid #334155; border-radius: 6px; cursor: pointer;
            font: inherit; }
@@ -11,11 +12,19 @@
   #hud { position: fixed; right: 16px; top: 16px; width: 360px;
          font-size: 11px; line-height: 1.6; opacity: 0.85;
          white-space: pre; text-align: right; pointer-events: none; }
-  /* The signature rows are LINKS into the explorer, so this half of the
-     overlay must accept clicks where #hud must not. */
-  #feed { position: fixed; right: 16px; top: 220px; width: 360px; height: 60vh;
-          overflow: hidden; font-size: 11px; line-height: 1.7; opacity: 0.85;
-          text-align: right; }
+  /* The signature rows are LINKS into the explorer, so this panel must accept
+     clicks where #hud must not. */
+  #txpanel { position: fixed; left: 16px; top: 68px; width: 430px;
+             max-height: calc(100vh - 110px); display: flex;
+             flex-direction: column;
+             background: rgba(10,15,22,0.72); border: 1px solid #1e293b;
+             border-radius: 8px; backdrop-filter: blur(6px); }
+  #txtitle { padding: 9px 12px 7px; font-size: 10px; letter-spacing: 0.12em;
+             color: #94a3b8; border-bottom: 1px solid #1e293b;
+             display: flex; justify-content: space-between; }
+  #txtitle .dot { color: #4ade80; }
+  #feed { padding: 8px 12px 11px; overflow: hidden; font-size: 11px;
+          line-height: 1.75; white-space: pre; }
   #feed a { color: #7dd3fc; text-decoration: none; }
   #feed a:hover { text-decoration: underline; }
   #hint { position: fixed; left: 16px; bottom: 16px; font-size: 11px;
@@ -27,7 +36,10 @@
     <button id="touch-tail">Touch tail</button>
   </div>
   <div id="hud"></div>
-  <div id="feed"></div>
+  <div id="txpanel">
+    <div id="txtitle"><span>LIVE TRANSACTIONS &middot; THRU ALPHANET</span><span class="dot">&#9679;</span></div>
+    <div id="feed"></div>
+  </div>
   <div id="hint">drag to orbit &middot; scroll to zoom &middot; live on Thru alphanet</div>
   <script type="module" src="/src/main.ts"></script>
 </body></html>

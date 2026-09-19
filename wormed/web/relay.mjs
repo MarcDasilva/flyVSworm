@@ -17,13 +17,17 @@ const NAMES = new Set(JSON.parse(
 const PORT = 8787;
 
 // One burst of simulation, then one classification. 600 steps at dt=5ms is
-// 3.0 s of worm life for ~3.0 s of wall clock, and settling every 30 steps
-// emits 20 trace frames and 20 transfer events from the ONE transaction —
-// the front-end plays them back at the sim's own rate. Bigger bursts buy a
-// better real-time ratio and cost touch latency, because a click can only
-// be served after the transaction already in flight.
+// 3.0 s of worm life for ~3.0 s of wall clock. Bigger bursts buy a better
+// real-time ratio and cost touch latency, because a click can only be served
+// after the transaction already in flight.
+//
+// SETTLE_EVERY is the FRAME RATE KNOB, which is not obvious: a trace frame and
+// a transfer event are emitted per SETTLEMENT, not per step, so 600/10 = 60
+// frames from one transaction where 600/30 gave 20. Settlement is cheap
+// (Task 11 measured +0.99% CU at settle_every=20 over 100 steps), so paying 3x
+// for it is what buys a cloud that looks alive instead of one that ticks.
 const STEP_N = 600;
-const SETTLE_EVERY = 30;
+const SETTLE_EVERY = 10;
 const TOUCH_STEPS = 300;
 const STIM_MV = 40.0;
 
