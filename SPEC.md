@@ -417,7 +417,7 @@ the worm backs up. Slow motion is a feature — at biological speed it's a blur.
 Runs before the clock starts; output is committed so nothing depends on a website being up
 during the event.
 
-1. **Source.** Cook et al. 2019 matrices (WormWiring), or the connectome CSVs in OpenWorm's `c302` repo — permissively licensed, already cleaned. Prefer c302; cross-check totals against Cook (≈7,000 chemical, ≈1,400 gap, 302 neurons).
+1. **Source.** Cook et al. 2019 matrices (WormWiring), or the connectome CSVs in OpenWorm's `c302` repo — permissively licensed, already cleaned. Prefer c302; cross-check totals against Cook (6,394 chemical contacts / 2,573 edges, 890 gap contacts / 517 junctions, 302 neurons).
 2. **Name remap.** Canonical names → dense indices 0–301. Emit `names.json`. Keep left/right pairs (`AVAL`/`AVAR`) distinct — do not merge.
 3. **Sign assignment.** The connectome gives connectivity, not sign. Assign `E_syn` from neurotransmitter identity: ACh and glutamate → excitatory (`E = 0 mV`), GABA → inhibitory (`E = −70 mV`). Unknown defaults excitatory and is logged to `provenance.json`. **This is an assumption, not data — say so in the README.**
 4. **Conductances.** Uniform default scaled by synapse count (the connectome's edge weight is the number of synaptic contacts — a reasonable proxy). Hand-tune only the ~15 demo cells. Do not attempt to tune 7,000.
@@ -535,8 +535,8 @@ Stated here so nobody relitigates it at hour 30.
 
 ## 11. What to say on stage
 
-> This is the complete nervous system of *C. elegans* — 302 neurons, 7,000 chemical
-> synapses, 1,400 gap junctions — running on Thru. Every neuron is its own account. Its
+> This is the complete nervous system of *C. elegans* — 302 neurons, 6,394 chemical
+> synaptic contacts, 890 gap junctions — running on Thru. Every neuron is its own account. Its
 > membrane voltage is its balance. Synaptic transmission settles as real transfers you can
 > look up on the explorer.
 >
@@ -553,3 +553,24 @@ Stated here so nobody relitigates it at hour 30.
 > textbooks for forty years, and you can watch it one transaction at a time.
 
 Every sentence is checkable. That is the point.
+
+---
+
+## Correction (2026-09-19, during implementation)
+
+Two numbers in the original draft of this spec were wrong, and the implementation
+surfaced both. Recorded here rather than quietly overwritten.
+
+**Edge counts.** This spec said "~7,000 chemical synapses, ~1,400 gap junctions".
+The real published totals (Varshney et al. 2011, reproduced exactly by the committed
+data) are **6,394 chemical synaptic contacts across 2,573 distinct edges** and **890
+gap junction contacts across 517 junctions**. The 1,400 figure is the count of
+NEUROMUSCULAR junctions — a different structure. Every CU estimate in §2.6 was
+budgeted against 9,800 CSR rows; the real figure is 3,607, so the simulation is
+roughly **2.7x cheaper per timestep** than projected.
+
+**Neuron coverage.** 302 accounts is correct and unchanged, but 279 of them carry
+connectivity. The remaining 23 are the 20 pharyngeal neurons (out of scope per §10)
+plus CANL, CANR and VC6, which have no documented chemical or gap synapses in the
+source. They exist as cells and as accounts; they are not part of a circuit we
+model. The README must state this precisely.
