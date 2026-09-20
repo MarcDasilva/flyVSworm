@@ -47,7 +47,7 @@ export class SynapticHeuristic {
 const STATES = [
   { label: "Pause", meaning: "Low locomotor output. The model is holding its position." },
   { label: "Forward run", meaning: "Head-led movement, continuing a run through the environment." },
-  { label: "Reversal", meaning: "Backward movement. Reversals can reposition the worm before a new heading." },
+  { label: "Reversal", meaning: "" },
   { label: "Omega turn", meaning: "A deep bend that changes heading, often following a reversal." },
 ] as const;
 
