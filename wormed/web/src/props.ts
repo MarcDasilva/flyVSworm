@@ -14,16 +14,14 @@ export const ARENA: Arena = { halfX: 1.4, halfY: 0.95 };
 const WALL_H = 0.42;       // rim height in body lengths; the worm is 1.0 long
 const WALL_T = 0.11;       // rim thickness
 const SOIL_D = 0.35;       // soil depth below the floor
-/** Plinth top, a hair above the rim. Exported because it is the floor the fly stands on. */
-export const STAND_TOP = 0.45;
+const STAND_TOP = 0.45;    // plinth top, a hair above the rim
 const STAND_W = 1.7;       // plinth footprint; must stay wider than the laptop
-/** Deep enough for the machine AND the fly behind it. The laptop is placed off the plinth's tank
- *  edge rather than centred on it, so every unit added here becomes room the fly can stand in —
- *  shrink it and the animal ends up perched on thin air. */
-const STAND_D = 2.4;
-const LAPTOP_GAP = 0.18;   // tank rim to the laptop's back edge
+const STAND_D = 1.2;       //   or the machine overhangs its own table
 const LAPTOP_SCALE = 0.33; // the .obj ships ~3.46 units wide; this is ~1.14
 const SOIL_RELIEF = 0.012; // surface bumps; MUST stay under the worm radius
+/** The room's floor: the plane the terrarium's slab and the grid both sit on. Anything else
+ *  standing in the room stands HERE, not on the soil surface at y = 0. */
+export const FLOOR_Y = -SOIL_D - SOIL_RELIEF;
 
 /** Random grey lattice, upscaled by the canvas's own bilinear filter. */
 function octave(size: number): HTMLCanvasElement {
@@ -173,15 +171,6 @@ export function buildTerrarium(scene: THREE.Scene): THREE.Group {
   return group;
 }
 
-/** The laptop, plus the two numbers the fly needs to sit at it. See loadFly. */
-export type Laptop = {
-  group: THREE.Group;
-  /** World height of the keyboard deck — where a typing foot comes down. */
-  keyTop: number;
-  /** World z of the machine's near edge, the side a user sits on. */
-  front: number;
-};
-
 /**
  * The laptop: geometry and UVs from wormed/data/MacBookPro.obj, textures from
  * wormed/data/textures (unpacked out of the .blend by
@@ -192,7 +181,7 @@ export type Laptop = {
  * name on each material, and THAT is what the finish below is keyed on —
  * rename a group in the model and it falls back to bare aluminium.
  */
-export async function loadLaptop(scene: THREE.Scene): Promise<Laptop> {
+export async function loadLaptop(scene: THREE.Scene): Promise<THREE.Group> {
   const { OBJLoader } = await import("three/examples/jsm/loaders/OBJLoader.js");
   const model = await new OBJLoader().loadAsync("/MacBookPro.obj");
 
@@ -255,20 +244,12 @@ export async function loadLaptop(scene: THREE.Scene): Promise<Laptop> {
 
   // Sit it ON the table rather than trusting the model's origin: this one is
   // authored a long way off-centre, so the bounds decide where it goes. Drop
-  // the feet onto STAND_TOP and pull the machine up against the plinth's TANK
-  // edge — not its centre — so the rest of the plinth is free for the fly.
+  // the feet onto STAND_TOP and centre the footprint over the plinth.
   group.updateMatrixWorld(true);
   const bounds = new THREE.Box3().setFromObject(group);
   const mid = bounds.getCenter(new THREE.Vector3());
   group.position.set(-mid.x, STAND_TOP - bounds.min.y,
-                     ARENA.halfY + WALL_T + LAPTOP_GAP - bounds.min.z);
-
+                     ARENA.halfY + WALL_T + STAND_D / 2 - mid.z);
   scene.add(group);
-  group.updateMatrixWorld(true);
-  // The keyboard deck is the top of the BASE. Reading it off the whole model would return the top
-  // of the open lid instead, and the fly would type on the air above the screen.
-  const base = group.getObjectByName("macBook_BottomPart_Cube.005") ?? group;
-  const baseBox = new THREE.Box3().setFromObject(base);
-  const placed = new THREE.Box3().setFromObject(group);
-  return { group, keyTop: baseBox.max.y, front: placed.max.z };
+  return group;
 }

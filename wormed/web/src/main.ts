@@ -4,12 +4,14 @@ import { WormBody, ChainClock, BEHAVIOR, type BehaviorState } from "./body.js";
 import { WormMesh } from "./worm.js";
 import { BrainCloud, parseMorphology } from "./brain.js";
 import { ChainFeed, type Behavior, type ChainConfig, type RelayStatus } from "./chain.js";
-import { ARENA, STAND_TOP, buildTerrarium, loadLaptop } from "./props.js";
-import { loadFly, type Fly } from "./fly.js";
+import { ARENA, FLOOR_Y, buildTerrarium, loadLaptop } from "./props.js";
+import { loadFlyDesk, type FlyDesk } from "./fly.js";
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0b0f14);
-scene.fog = new THREE.Fog(0x0b0f14, 6, 16);
+// Far enough back to clear BOTH exhibits. At the old 6/16 the fly's desk and half the tank sat
+// past the far plane in the wide shot and faded into the background entirely.
+scene.fog = new THREE.Fog(0x0b0f14, 16, 48);
 scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 const key = new THREE.DirectionalLight(0xffffff, 1.1);
 key.position.set(2, 4, 2);
@@ -19,13 +21,15 @@ rim.position.set(-3, 2, -2);
 scene.add(rim);
 
 const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.01, 100);
-camera.position.set(0, 3.1, 5.1);
+// The wide shot has to hold TWO exhibits — the terrarium at the origin and the fly's desk out at
+// FLY_AT — so it sits back and off to the side of the tank rather than square in front of it.
+camera.position.set(14.8, 6.4, 12.6);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 document.body.appendChild(renderer.domElement);
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.set(0, 0.5, 0);
+controls.target.set(5.4, 1.2, 0.3);
 controls.enableDamping = true;
 controls.maxPolarAngle = Math.PI * 0.49;   // stay above the agar
 controls.update();
@@ -112,21 +116,21 @@ const worm = new WormMesh(scene);
 const brain = new BrainCloud(scene, positions, names, morphology);
 buildTerrarium(scene);
 // The desk prop is 1.5 MB and nothing waits on it — the worm runs while it loads.
-//
-// The fly is seated off the LAPTOP's measured bounds rather than off a constant, so moving the
-// machine moves the typist with it. It faces -z: the display faces the tank, so the seat is on the
-// far side and the animal looks down the keyboard at both the screen and the worm beyond it.
-let fly: Fly | undefined;
-const FLY_SETBACK = 0.05;   // laptop's near edge to the fly's perch
-void loadLaptop(scene)
-  .then(async laptop => {
-    const f = await loadFly(scene);
-    f.perch.rotation.y = Math.PI;
-    f.perch.position.set(0, STAND_TOP, laptop.front + FLY_SETBACK);
-    f.restFeetAt(laptop.keyTop);
-    fly = f;
+void loadLaptop(scene).catch(e => console.warn("laptop model failed to load", e));
+
+// The fly is a SEPARATE exhibit: its own computer, its own scale, its own patch of floor, placed
+// far enough out that nothing of it overlaps the terrarium. The only thing the two share is that
+// they face each other across the room — turned to -x, the fly looks down its keyboard at the
+// tank. Nothing here reads the tank's geometry and nothing in the tank reads this.
+let fly: FlyDesk | undefined;
+const FLY_AT = 11;
+void loadFlyDesk(scene)
+  .then(desk => {
+    desk.group.rotation.y = -Math.PI / 2;
+    desk.group.position.set(FLY_AT, FLOOR_Y, 0);
+    fly = desk;
   })
-  .catch(e => console.warn("desk model failed to load", e));
+  .catch(e => console.warn("fly model failed to load", e));
 brain.setResolution(innerWidth, innerHeight);
 
 // ---------------------------------------------------------------------------

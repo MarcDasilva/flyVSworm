@@ -1,5 +1,6 @@
-// The fly at the laptop (data/fly.glb: "Fly" by victorberdugo1, CC BY 4.0). Copied from the
-// launcher app's flyRig and re-scaled for this scene, where 1.0 is one worm.
+// The fly at its own desk (data/fly.glb: "Fly" by victorberdugo1, CC BY 4.0), copied from the
+// launcher app's flyRig together with the computer it types on. It is its OWN setup, at its own
+// scale: it does not use the worm's MacBook and nothing about it is derived from the terrarium.
 //
 // The model has no skeleton or animation clips, but it keeps its 3ds node hierarchy: every leg is
 // a chain of 8 segment nodes whose origins sit on the joints (front legs FLYPAT09 right, FLYPAT41
@@ -7,13 +8,13 @@
 // burst/pause keystroke rhythm.
 
 import * as THREE from "three";
+import { createStandInComputer, type Computer } from "./computer.js";
+import { TradingScreen } from "./tradingScreen.js";
 
-/**
- * Model units to scene units. NOT the animal's real size: a 3 mm fly next to a 1 mm worm would be
- * three body lengths of insect and would swallow the laptop it is meant to be using. This is the
- * size that sits at the machine — the joke only works if the fly fits the keyboard.
- */
-const SCALE = 0.00011;
+/** Model units to scene units, unchanged from the launcher. Scene units here are worm body
+ *  lengths, so this makes the insect several worms long — which is the point. The two animals are
+ *  separate exhibits facing each other, NOT one scene at one scale. */
+const SCALE = 0.001;
 const FRONT_LEGS = ["FLYPAT09", "FLYPAT41"] as const;
 const KNEE = 2;                       // chain index of the femur-tibia joint
 const UP = new THREE.Vector3(0, 1, 0);
@@ -91,23 +92,23 @@ class Leg {
   }
 }
 
-export interface Fly {
-  /** The perch the rig hangs off. Position and rotate THIS, never `root`, which carries the
-   *  model's own centring offset. */
-  readonly perch: THREE.Group;
-  /** Raise the front legs until the feet rest at world height `y`. */
-  restFeetAt(y: number): void;
+export interface FlyDesk {
+  /** Fly, keyboard and monitor together. Position and rotate THIS — the pieces inside are placed
+   *  relative to each other and must not be moved apart. */
+  readonly group: THREE.Group;
   update(dt: number): void;
 }
 
 /**
- * Loads the fly, stands it on y = 0 in its perch facing +Z, and starts typing. The perch is added
- * to `scene` at the origin; the caller seats it at the laptop.
+ * Loads the fly, builds its computer under its front feet, and starts it typing. The whole desk
+ * stands on y = 0 in its own group facing +Z; the caller turns it to face the terrarium.
  */
-export async function loadFly(scene: THREE.Scene): Promise<Fly> {
+export async function loadFlyDesk(scene: THREE.Scene): Promise<FlyDesk> {
   const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
   const gltf = await new GLTFLoader().loadAsync("/fly.glb");
 
+  const group = new THREE.Group();
+  const screen = new TradingScreen();
   const root = new THREE.Group();
   root.add(gltf.scene);
   root.scale.setScalar(SCALE);
@@ -117,11 +118,25 @@ export async function loadFly(scene: THREE.Scene): Promise<Fly> {
   const hips = legs.map(l => l.hip.node.getWorldPosition(new THREE.Vector3()));
   const box = new THREE.Box3().setFromObject(root, true);
   root.position.set(-(hips[0].x + hips[1].x) / 2, -box.min.y, 0);
+  group.add(root);
+  scene.add(group);
+  group.updateMatrixWorld(true);
 
-  const perch = new THREE.Group();
-  perch.add(root);
-  scene.add(perch);
-  perch.updateMatrixWorld(true);
+  // The keyboard goes where the feet ALREADY are, rather than the fly being moved onto a keyboard
+  // placed first — that is what keeps the hands on the keys at any scale.
+  const feet = legs.map(l => l.foot.getWorldPosition(new THREE.Vector3()));
+  const computer: Computer = createStandInComputer(
+    feet[0].clone().add(feet[1]).multiplyScalar(0.5), screen.texture);
+  group.add(computer.group);
+
+  // The exhibit brings its OWN light. The terrarium's key is aimed at the tank and falls off to
+  // nothing this far out, and raising it instead would blow out the soil to light the insect.
+  // Point lights, not directionals: a directional would spill back over the whole room.
+  const lamp = new THREE.PointLight(0xffe6c7, 90, 26, 2);
+  lamp.position.set(-2.6, 7.5, -1.5);
+  const fill = new THREE.PointLight(0x9fb6ff, 35, 24, 2);
+  fill.position.set(3.5, 3.5, 4.5);
+  group.add(lamp, fill);
 
   const head = new Joint(root.getObjectByName("FLYCAB")!);
   const headYaw = head.axis(UP);
@@ -133,6 +148,7 @@ export async function loadFly(scene: THREE.Scene): Promise<Fly> {
   let burstLeft = 0;
   let lastLeg = 0;
   let headDip = 0;
+  const footPos = new THREE.Vector3();
 
   const schedule = () => {
     if (t - nextStrokeAt > 0.5) nextStrokeAt = t; // resumed after a pause: don't replay missed strokes
@@ -160,25 +176,23 @@ export async function loadFly(scene: THREE.Scene): Promise<Fly> {
     }
   };
 
+  // Key tops are in the desk's own frame, and so is the bisection below — the desk has not been
+  // turned or moved yet, so local and world agree. Seat the legs BEFORE the caller places it.
+  for (const leg of legs) {
+    let lo = 0;
+    let hi = THREE.MathUtils.degToRad(30);
+    for (let i = 0; i < 24; i++) {
+      leg.rest = (lo + hi) / 2;
+      leg.pose(0, 0);
+      if (leg.footBottom(root) < computer.keyTopY) lo = leg.rest;
+      else hi = leg.rest;
+    }
+    leg.rest = hi;
+    leg.pose(0, 0);
+  }
+
   return {
-    perch,
-    restFeetAt(y) {
-      // World height, so the perch's own transform has to be current before the bisection reads
-      // any foot position back out of it.
-      perch.updateMatrixWorld(true);
-      for (const leg of legs) {
-        let lo = 0;
-        let hi = THREE.MathUtils.degToRad(30);
-        for (let i = 0; i < 24; i++) {
-          leg.rest = (lo + hi) / 2;
-          leg.pose(0, 0);
-          if (leg.footBottom(root) < y) lo = leg.rest;
-          else hi = leg.rest;
-        }
-        leg.rest = hi;
-        leg.pose(0, 0);
-      }
-    },
+    group,
     update(dt) {
       t += Math.min(dt, 0.1);
       for (const leg of legs) {
@@ -191,6 +205,9 @@ export async function loadFly(scene: THREE.Scene): Promise<Fly> {
         } else {
           leg.struck = true;
           leg.pose(0, leg.yawTo);
+          root.updateMatrixWorld(true);
+          computer.press(leg.foot.getWorldPosition(footPos));
+          screen.keystroke();
         }
       }
       schedule(); // after the loop above, so every leg whose tap has ended counts as free
@@ -200,6 +217,8 @@ export async function loadFly(scene: THREE.Scene): Promise<Fly> {
         [headYaw, 0.08 * Math.sin(t * 0.7) + 0.04 * Math.sin(t * 1.9)],
         [headPitch, 0.03 * Math.sin(t * 1.3) + headDip],
       );
+      computer.update(dt);
+      screen.update(dt);
     },
   };
 }
