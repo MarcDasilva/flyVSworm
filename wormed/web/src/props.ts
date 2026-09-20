@@ -462,6 +462,16 @@ function leaderboardFace(w: number, h: number): HTMLCanvasElement {
   return c;
 }
 
+/** Emission of the board's face. See addLeaderboard: this is a backlight
+ *  behind a sheet, so it is flat across the whole panel and dim enough that
+ *  the two machines' displays stay the brightest things in the room. */
+const BACKLIGHT = 0.26;
+/** How far the backlight's bleed stands proud of the panel, in scene units. */
+const HALO = 0.16;
+/** Lamps spread along the board's width, and what each one is worth. Spread
+ *  the total over more of them and the wash stays even as the board grows. */
+const SPILLS = 3;
+const SPILL_WATTS = 7;
 /** Board height, floor to top edge. Tall enough to clear both machines from
  *  the wide shot and still sit under the connectome hanging over the tank. */
 const BOARD_H = 2.4;
@@ -490,17 +500,51 @@ export function addLeaderboard(scene: THREE.Scene, zCentre: number, width: numbe
   tex.anisotropy = 8;
   const panel = new THREE.Mesh(
     new THREE.PlaneGeometry(width, BOARD_H),
-    // Barely lit by itself. Paper needs enough emission to stay legible at
-    // board distance in a dark room, and no more: at the display's own 0.9 it
-    // glows, and a glowing notice is not a mundane one.
+    // Backlit, not printed: the sheet is behind glass in a lit box, so the
+    // whole face carries an even emission rather than waiting for the room's
+    // lights to find it. Dim on purpose — a display this size at the wattage
+    // of the two machines' screens would be the brightest thing in the scene
+    // and the animals would be reading by it.
     new THREE.MeshStandardMaterial({
-      map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.18,
-      roughness: 0.85, metalness: 0 }));
+      // Roughness stays HIGH. Gloss on a panel this size hands the key light
+      // one broad specular sheen across the face, which reads as a wash over
+      // the type, not as glass.
+      map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: BACKLIGHT,
+      roughness: 0.8, metalness: 0 }));
   // Rotated to face +x, which puts the panel's own left-to-right along world
   // -z — the wide shot's screen-right, so the text reads the right way round.
   panel.rotation.y = Math.PI / 2;
   panel.position.set(-BOARD_BACK + 0.07, FLOOR_Y + BOARD_H / 2 + 0.09, zCentre);
   group.add(panel);
+
+  // The bleed around the bezel. A backlight that stops dead at the frame is a
+  // poster with a lamp on it; the halo sits BEHIND the panel and proud of it
+  // on every side, so the frame is rimmed by its own light. Additive and
+  // depth-write off, or it would punch a hole in the shell behind it.
+  const halo = new THREE.Mesh(
+    new THREE.PlaneGeometry(width + HALO, BOARD_H + HALO),
+    new THREE.MeshBasicMaterial({
+      color: 0xa8c8ff, transparent: true, opacity: 0.05, depthWrite: false,
+      blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+  halo.rotation.y = Math.PI / 2;
+  halo.position.set(-BOARD_BACK + 0.065, panel.position.y, zCentre);
+  group.add(halo);
+
+  // And the light it throws into the room. Cool where the desk lamps are warm,
+  // short-range, and NOT shadow casters: they exist so the tables have a rim
+  // from the screen behind them, not to relight the set.
+  //
+  // A ROW of them, not one. A single lamp at the middle of a board this wide
+  // pools in the centre and leaves both ends dark, which reads as something
+  // standing in front of the board rather than as the board itself giving
+  // light. Each is stood well off the panel: closer, and its own falloff
+  // paints a bright blob on the face it is supposed to be lighting away from.
+  for (let i = 0; i < SPILLS; i++) {
+    const across = ((i + 0.5) / SPILLS - 0.5) * width;
+    const spill = new THREE.PointLight(0xbcd6ff, SPILL_WATTS, 9, 2);
+    spill.position.set(-BOARD_BACK + 1.4, panel.position.y, zCentre + across);
+    group.add(spill);
+  }
 
   scene.add(group);
   return group;
