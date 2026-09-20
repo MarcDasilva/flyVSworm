@@ -1,0 +1,45 @@
+{
+ "spec": "spec/params_hemibrain_avg.json",
+ "source": "hemibrain_averaged",
+ "n_neurons": 134,
+ "n_wedges": 16,
+ "nonzero_weights": 11028,
+ "rate_window": 50,
+ "total_sz": 81432,
+ "layout": {
+  "class": [
+   71888,
+   134
+  ],
+  "landmark": [
+   72160,
+   8576
+  ],
+  "params": [
+   81400,
+   32
+  ],
+  "sincos": [
+   81272,
+   128
+  ],
+  "v0": [
+   80736,
+   536
+  ],
+  "w": [
+   64,
+   71824
+  ],
+  "wedge": [
+   72024,
+   134
+  ]
+ },
+ "populations": {
+  "EPG": 50,
+  "PEN_L": 21,
+  "PEN_R": 21,
+  "D7": 42
+ }
+}
