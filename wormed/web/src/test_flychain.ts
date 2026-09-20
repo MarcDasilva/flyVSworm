@@ -5,7 +5,7 @@
 // Either one puts a number on the panel that the ledger never moved, and
 // nothing else in the demo would notice.
 import assert from "node:assert/strict";
-import { decodeFlyReceipt, flyNames, outgoingEdges } from "./flychain.js";
+import { decodeFlyReceipt, flyNames } from "./flychain.js";
 
 // --- names are the model's index order, not a pretty list ---
 const names = flyNames();
@@ -52,15 +52,5 @@ for (const bad of [
   receipt(1, 0, 1, 0, 0),                        // a zero transfer is not an event
 ]) assert.equal(decodeFlyReceipt(bad), undefined, `accepted ${Buffer.from(bad).toString("hex")}`);
 
-// --- weights to whole ledger units ---
-const edges = outgoingEdges([
-  [0, 17, 0.1643],    // w_pe
-  [0, 18, 0.0001],    // rounds to zero units: can never be a transaction
-  [0, 0, 0.5],        // self-edge: program/fly.c reverts on pre == post
-  [48, 3, -0.1097],   // D7 -> EPG, negative by construction
-]);
-assert.deepEqual(edges.get(0), [{ post: 17, amount: 16 }]);
-assert.deepEqual(edges.get(48), [{ post: 3, amount: -11 }]);
-assert.equal(edges.has(18), false);
 
-console.log("OK: fly receipts decode at the program's offsets, and weights scale to whole units");
+console.log("OK: fly receipts decode at the program's offsets");

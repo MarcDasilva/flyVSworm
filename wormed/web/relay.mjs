@@ -10,7 +10,7 @@ import { createInterface } from "node:readline";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { settleSynapses } from "./synapses.mjs";
-import { settleFlySynapses } from "./flysynapses.mjs";
+import { settleFlySynapses, outgoingEdges, BATCH_MAX } from "./flysynapses.mjs";
 import { openStore } from "./store.mjs";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));   // repo root
@@ -51,8 +51,6 @@ let autoAt = 0;
 let drivenNeuron;
 const touches = [];
 let pendingSynapses = false;
-/** One fly submission at a time — see the /api/fly/synapses handler. */
-let flyInFlight = false;
 let needsReset = true;
 const log = [];
 
@@ -123,6 +121,87 @@ async function chain(op, cmd) {
   note({ op, sig: r.sig, ms: Date.now() - t0, error: r.ok ? undefined : r.error });
   if (!r.ok) console.error(`relay: ${op} failed: ${r.error}`);
   return r;
+}
+
+// --- the fly ------------------------------------------------------------
+// The fly's model runs beside the relay (wormed/serve.sh), so its spikes are read HERE and
+// settled HERE, the way the worm's outbox is — NOT derived in the browser. A page that cannot
+// reach the model's WebSocket still sees the fly trade, and two open pages cannot submit the
+// same spike twice. The page reads the receipts back off the chain (src/flychain.ts).
+const FLY_MODEL = "http://127.0.0.1:8000";
+/** Events per submission and how often. The model spikes at 1000 ticks/s and one transaction
+ *  confirms in ~2 s, so what settles is a uniform SAMPLE of the window — the page says so. */
+const FLY_SUBMIT_MS = 2000;
+const FLY_QUEUE_MAX = 4096;
+let flyEdges = new Map();
+let flyQueue = [];
+let flyInFlight = false;
+/** What the page's fly panel prints: the FLY's payer, not the worm's (flysynapses.mjs). */
+const flyStats = { model: "offline", frames: 0, submitted: 0, balance: undefined, error: "" };
+
+async function flyModelLoop() {
+  for (;;) {
+    try {
+      if (!flyEdges.size) {
+        const { synapses } = await (await fetch(`${FLY_MODEL}/api/network`)).json();
+        flyEdges = outgoingEdges(synapses);
+      }
+      await new Promise((resolve, reject) => {
+        const ws = new WebSocket(`${FLY_MODEL.replace("http", "ws")}/ws`);
+        ws.onopen = () => { flyStats.model = "live"; };
+        ws.onmessage = ({ data }) => {
+          let msg;
+          try { msg = JSON.parse(data); } catch { return; }
+          if (msg.type !== "frame" || !Array.isArray(msg.spikes)) return;
+          flyStats.frames++;
+          for (const [, pre] of msg.spikes)
+            for (const edge of flyEdges.get(pre) ?? [])
+              flyQueue.push({ tick: msg.t >>> 0, pre, post: edge.post, amount: edge.amount });
+          // Bounded, and the NEWEST kept: a backlog the chain can never catch up with would
+          // have the panel showing firing that is minutes old.
+          if (flyQueue.length > FLY_QUEUE_MAX) flyQueue.splice(0, flyQueue.length - FLY_QUEUE_MAX);
+        };
+        ws.onerror = () => reject(Error("fly model unreachable"));
+        ws.onclose = () => resolve();
+      });
+    } catch (e) {
+      flyStats.error = String(e?.message ?? e).slice(0, 120);
+    }
+    flyStats.model = "offline";
+    flyQueue = [];
+    await new Promise(r => setTimeout(r, 2000));
+  }
+}
+
+async function flySettleLoop() {
+  for (;;) {
+    await new Promise(r => setTimeout(r, FLY_SUBMIT_MS));
+    // Same rule as the worm: no viewer, no spend. The model keeps running; only settlement stops.
+    if (!awake() || flyInFlight || !flyQueue.length) continue;
+    const pool = flyQueue;
+    flyQueue = [];
+    const events = [];
+    for (let i = 0; i < BATCH_MAX && pool.length; i++)
+      events.push(...pool.splice(Math.floor(Math.random() * pool.length), 1));
+    flyInFlight = true;
+    try {
+      const out = await settleFlySynapses(events);
+      flyStats.submitted += out.submitted;
+      if (out.balance !== undefined) flyStats.balance = out.balance;
+      flyStats.error = "";
+      // Counted like the worm's synapses — one row per signature — so the board's total covers
+      // both animals. Only the first is logged; 24 rows a batch would drown the worm's log.
+      if (out.submitted) {
+        note({ op: "fly-synapse", sig: out.signatures[0], n: out.submitted });
+        store.countTransactions(out.submitted - 1);
+      }
+    } catch (error) {
+      flyStats.error = String(error?.message ?? error).replace(/\s+/g, " ").slice(0, 200);
+      note({ op: "fly-synapse", error: flyStats.error });
+    } finally {
+      flyInFlight = false;
+    }
+  }
 }
 
 // --- R19 preflight ---------------------------------------------------------
@@ -264,7 +343,7 @@ createServer((req, res) => {
     // change as slowly as the standings do would be a second thing to keep alive.
     json(res, 200, {
       balance, floor, faucet, stepping, awake: awake(), workerAlive, pendingSynapses,
-      stepN: STEP_N, settleEvery: SETTLE_EVERY, log, ...store.board(),
+      stepN: STEP_N, settleEvery: SETTLE_EVERY, log, fly: flyStats, ...store.board(),
     });
     return;
   }
@@ -307,37 +386,6 @@ createServer((req, res) => {
     });
     return;
   }
-  if (req.method === "POST" && url.pathname === "/api/fly/synapses") {
-    let body = "";
-    req.on("data", c => { body += c; if (body.length > 16384) req.destroy(); });
-    req.on("end", async () => {
-      let events;
-      try { events = JSON.parse(body).events; } catch { json(res, 400, { error: "bad json" }); return; }
-      if (!Array.isArray(events)) { json(res, 400, { error: "events must be an array" }); return; }
-      // TRUST BOUNDARY. Every field reaches a signed transaction, so each event
-      // is checked against the accounts data/fly.json actually has before it can
-      // cost a fee — flysynapses.validEvent, not a shape check here.
-      viewerSeen = Date.now();
-      // ONE submission in flight. A second would allocate nonces against the
-      // fly's fee payer concurrently and the chain would reject one of the two.
-      if (flyInFlight) { json(res, 202, { submitted: 0, busy: true }); return; }
-      flyInFlight = true;
-      try {
-        // The fly pays from its OWN account (flysynapses.mjs says why), so the
-        // worm's balance and its floor are NOT consulted here and NOT updated.
-        const out = await settleFlySynapses(events);
-        json(res, 202, { submitted: out.submitted, balance: out.balance });
-      } catch (error) {
-        const message = String(error?.message ?? error).replace(/\s+/g, " ").slice(0, 200);
-        log.unshift({ t: Date.now(), op: "fly-synapse", error: message });
-        log.length = Math.min(log.length, 30);
-        json(res, 502, { error: message });
-      } finally {
-        flyInFlight = false;
-      }
-    });
-    return;
-  }
   if (url.pathname.startsWith("/fly/")) { proxyFly(req, res); return; }
   json(res, 404, { error: "not found" });
 }).on("upgrade", (req, socket, head) => {
@@ -369,4 +417,6 @@ createServer((req, res) => {
     needsReset = !reset.ok;
   }
   stepperLoop();
+  void flyModelLoop();
+  void flySettleLoop();
 });

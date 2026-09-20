@@ -6,7 +6,7 @@
 // and the transaction still succeeds.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { synapseInstruction, validEvent, UNITS, BATCH_MAX } from "./flysynapses.mjs";
+import { synapseInstruction, validEvent, outgoingEdges, UNITS, BATCH_MAX } from "./flysynapses.mjs";
 
 const cfg = JSON.parse(readFileSync(new URL("../data/fly.json", import.meta.url)));
 assert.equal(cfg.accounts.length, 56, "fly.json must carry one account per model neuron");
@@ -48,3 +48,15 @@ assert.equal(UNITS, 100);
 assert.ok(BATCH_MAX <= 32, "a batch is submitted every 2 s from one fee payer");
 
 console.log("OK: fly instruction bytes match the program's offsets and bad events cost no fee");
+
+// --- weights to whole ledger units ---
+// A zero-unit edge or a self-edge that reached the chain would cost a fee and revert.
+const edges = outgoingEdges([
+  [0, 17, 0.1643],    // w_pe
+  [0, 18, 0.0001],    // rounds to zero units: can never be a transaction
+  [0, 0, 0.5],        // self-edge: program/fly.c reverts on pre == post
+  [48, 3, -0.1097],   // D7 -> EPG, negative by construction
+]);
+assert.deepEqual(edges.get(0), [{ post: 17, amount: 16 }]);
+assert.deepEqual(edges.get(48), [{ post: 3, amount: -11 }]);
+assert.equal(edges.has(18), false);

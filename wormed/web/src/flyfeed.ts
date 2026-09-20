@@ -12,7 +12,7 @@
  *  that server sends no CORS headers. */
 // Vercel rewrites HTTP but not WebSockets, so a hosted page names the fly server outright
 // (VITE_FLY_WS); the dev server proxies it same-origin.
-export const FLY_WS = import.meta.env.VITE_FLY_WS ??
+export const FLY_WS = import.meta.env?.VITE_FLY_WS ??
   `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/fly/ws`;
 const RETRY_MS = 2000;
 

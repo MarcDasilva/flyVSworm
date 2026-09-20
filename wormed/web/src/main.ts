@@ -401,10 +401,6 @@ const flyChain = new FlyChain();
  *  stutter rather than a stream. */
 const flyTransactions = new TransactionPlayback();
 flyChain.onSynapse(s => { flyTransactions.push(s, performance.now()); flyRateTx++; });
-/** The model's tick the page has already turned into events. The render loop
- *  runs faster than the model's 30 frames/s, and counting one frame twice
- *  would double every fly transaction. */
-let flyObservedTick = -1;
 // ONE market for the whole room: the fly's monitor, the worm's laptop lid and the left half of
 // the board all show it, so no two displays can disagree about the price. The desks get the
 // trader's view and the board gets the price feed — orders belong to the animal that typed them,
@@ -551,6 +547,7 @@ feed.onBehavior(b => {
 let ledgerSeeded = false;
 feed.onStatus(s => {
   status = s;
+  if (s.fly) Object.assign(flyChain.stats, { submitted: s.fly.submitted, balance: s.fly.balance, error: s.fly.error });
   // The ledger rides the heartbeat: the relay answers /api/status with its own board, so the
   // page needs no second poll. Both fall back when an older relay, or one whose database would
   // not open, leaves them out.
@@ -1017,15 +1014,9 @@ function frame(now: number): void {
       (reading.state === BEHAVIOR.FORWARD || reading.state === BEHAVIOR.REVERSE))
     : reading.signal;
   body.update(movement, behavior);
-  // The fly's half of the same loop. Its events are derived from the model's
-  // OWN spikes, one frame counted once, and the confirmed receipts come back
-  // off the chain — flychain.ts owns both halves.
+  // The fly's half of the same loop: the relay derives and signs its events
+  // (relay.mjs); this only plays the confirmed receipts back off the chain.
   const flyFrame = flyFeed.frame;
-  if (side === "fly" && flyFrame && flyFrame.tick !== flyObservedTick) {
-    flyObservedTick = flyFrame.tick;
-    flyChain.observe(flyFrame.tick, flyFrame.spiked);
-  }
-  if (side === "fly") flyChain.tick(now);
   for (const receipt of flyTransactions.tick(now)) flyList?.add(receipt);
   // The panel belongs to whichever exhibit is open. Mounting is the ONE thing
   // that must not run every frame — it re-parents the whole list.

@@ -43,6 +43,21 @@ export const UNITS = 100;
  *  see the note on sampling in web/src/flychain.ts. */
 export const BATCH_MAX = 24;
 
+/** The model's own weight matrix, as outgoing edges in whole ledger units. An edge that
+ *  rounds to zero units can never be a transaction and is dropped here rather than rejected
+ *  on chain. Self-edges too: program/fly.c reverts on pre == post. */
+export function outgoingEdges(synapses) {
+  const out = new Map();
+  for (const [pre, post, w] of synapses) {
+    const amount = Math.round(w * UNITS);
+    if (!amount || pre === post) continue;
+    const list = out.get(pre) ?? [];
+    list.push({ post, amount });
+    out.set(pre, list);
+  }
+  return out;
+}
+
 /** One event -> the 24 instruction bytes program/fly.c's do_synapse reads. */
 export function synapseInstruction(slot, event) {
   const data = Buffer.alloc(24);

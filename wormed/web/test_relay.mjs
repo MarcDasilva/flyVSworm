@@ -37,8 +37,11 @@ worker.stdin = {
 mock.method(childProcess, "spawn", () => worker);
 mock.method(http, "createServer", handler => {
   handleRequest = handler;
-  return { listen(_port, ready) { void ready(); } };
+  return { on() { return this; }, listen(_port, ready) { void ready(); } };
 });
+// No fly model here. A real one on :8000 would have the relay signing the model's spikes
+// with a real key from inside a unit test.
+mock.method(globalThis, "fetch", async () => { throw Error("no fly model under test"); });
 syncBuiltinESMExports();
 mock.timers.enable({ apis: ["Date", "setTimeout"], now: 1_800_000_000_000 });
 

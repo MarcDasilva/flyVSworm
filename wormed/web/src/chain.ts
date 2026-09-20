@@ -138,6 +138,8 @@ export type RelayStatus = {
    *  or one whose database would not open — the board falls back to what the page has counted. */
   transactions?: number;
   standings?: Standing[];
+  /** The relay's account of the fly it drives (relay.mjs) — absent from an older relay. */
+  fly?: { model: "live" | "offline"; frames: number; submitted: number; balance?: number; error: string };
 };
 
 /** Floor on the gap between played frames. The chain delivers a burst every
