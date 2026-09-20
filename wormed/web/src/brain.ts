@@ -111,11 +111,6 @@ export class BrainCloud {
   /** Every material with the opacity it was authored at. See setReveal. */
   private readonly baseOpacity = new Map<THREE.Material, number>();
   readonly segments: number;
-  /** Extent of the TRACED ARBORS, in world units. Box3.setFromObject on the
-   *  group is NOT the same thing and must not be used to frame a camera: the
-   *  firing pool's unused slots all sit at the origin, which drags the box
-   *  down to the agar and swamps the animal's real size. */
-  readonly bounds = new THREE.Box3();
   private readonly neurites: LineSegments2;
   private readonly material: LineMaterial;
   /** Interleaved rgb for both endpoints of every segment, 6 floats each. */
@@ -171,8 +166,6 @@ export class BrainCloud {
     // axis, and routing a connector along it would push the connector out
     // through the cuticle on the opposite side.
     this.buildAxis(world);
-    for (let i = 0; i < world.length; i += 3)
-      this.bounds.expandByPoint(this.a.set(world[i], world[i + 1], world[i + 2]));
     this.wireColor = new Float32Array(morphology.segments * 6);
     for (let i = 0; i < morphology.segments * 2; i++) COLD.toArray(this.wireColor, i * 3);
 

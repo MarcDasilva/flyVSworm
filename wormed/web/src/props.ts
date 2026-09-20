@@ -13,9 +13,7 @@ export const ARENA: Arena = { halfX: 1.4, halfY: 0.95 };
 
 const WALL_H = 0.42;       // rim height in body lengths; the worm is 1.0 long
 const WALL_T = 0.11;       // rim thickness
-/** Soil depth below the floor. Exported so a host scene can stand the tank
- *  ON its own desk instead of guessing how far the slab hangs down. */
-export const SOIL_D = 0.35;
+const SOIL_D = 0.35;       // soil depth below the floor
 const STAND_TOP = 0.45;    // plinth top, a hair above the rim
 const STAND_W = 1.7;       // plinth footprint; must stay wider than the laptop
 const STAND_D = 1.2;       //   or the machine overhangs its own table
@@ -114,18 +112,8 @@ function soilSurface(w: number, d: number, mat: THREE.Material): THREE.Mesh {
   return mesh;
 }
 
-/**
- * Soil slab, four rim walls, and the plinth. ONE texture for all of it.
- *
- * `plinth` and `grid` are the SET, not the tank: the launcher scene
- * (frontend/components/launcher/wormTank.ts) stands this on a desk that
- * already has a floor and a computer, and turns both off. Defaults keep the
- * standalone worm app unchanged.
- */
-export function buildTerrarium(
-  scene: THREE.Object3D,
-  { plinth: withPlinth = true, grid: withGrid = true } = {},
-): THREE.Group {
+/** Soil slab, four rim walls, and the plinth. ONE texture for all of it. */
+export function buildTerrarium(scene: THREE.Scene): THREE.Group {
   const group = new THREE.Group();
   const tex = dirt();
   tex.repeat.set(4, 4);
@@ -167,17 +155,14 @@ export function buildTerrarium(
   // pillar the body integrator knows nothing about. Its near face is placed
   // flush against the rim rather than at a fixed offset, so resizing it
   // cannot push it into the terrarium wall.
-  if (withPlinth)
-    box(STAND_W, STAND_TOP + SOIL_D, STAND_D,
-        0, (STAND_TOP - SOIL_D) / 2, d + STAND_D / 2, plinth);
+  box(STAND_W, STAND_TOP + SOIL_D, STAND_D,
+      0, (STAND_TOP - SOIL_D) / 2, d + STAND_D / 2, plinth);
 
   // The room: a grey grid the whole set stands on, level with the underside
   // of the terrarium so nothing floats.
-  if (withGrid) {
-    const grid = new THREE.GridHelper(24, 96, 0x5a5f66, 0x2b2f34);
-    grid.position.y = -SOIL_D - SOIL_RELIEF;
-    group.add(grid);
-  }
+  const grid = new THREE.GridHelper(24, 96, 0x5a5f66, 0x2b2f34);
+  grid.position.y = -SOIL_D - SOIL_RELIEF;
+  group.add(grid);
 
   scene.add(group);
   return group;

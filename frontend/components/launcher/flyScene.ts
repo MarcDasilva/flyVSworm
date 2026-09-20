@@ -1,25 +1,20 @@
-// The launcher scene: the fly at its desk typing trades into the computer, with the worm's
-// terrarium across the desk from it. Plain three.js, driven imperatively from the Launcher
-// component. Clicking either animal calls `onPick` with which one it was.
+// The launcher scene: the fly at its desk typing trades into the computer. Plain three.js, driven
+// imperatively from the Launcher component. Clicking the fly calls `onFlyClick`.
 
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { createFlyRig, type FlyRig } from "./flyRig";
 import { createStandInComputer, type Computer } from "./computer";
-import { createWormTank, type WormTank } from "./wormTank";
 import { TradingScreen } from "./tradingScreen";
 
 export const FLY_URL = "/models/fly.glb";
 
-/** Which animal the pointer is on. Each one opens its own brain. */
-export type Subject = "fly" | "worm";
-
 export interface FlySceneEvents {
   onReady(): void;
   onError(message: string): void;
-  onHover(subject: Subject | null): void;
-  onPick(subject: Subject): void;
+  onHover(over: boolean): void;
+  onFlyClick(): void;
 }
 
 export interface FlyScene {
@@ -29,16 +24,9 @@ export interface FlyScene {
 }
 
 const BACKGROUND = new THREE.Color("#07090d");
-// The fly is at z = 0 facing +Z and its monitor is at z ~ 4, so the tank goes on the far side of
-// both: the fly types, and what it is looking past its screen at is the worm. Kept on x = 0 so the
-// two animals are square to each other.
-const TANK_AT = new THREE.Vector3(0, 0, 10.5);
-const TARGET = new THREE.Vector3(0, 1.8, 5);
-// Swung well round toward +X from the old head-on shot. Nearly side-on is what clears the monitor
-// out of the tank's line of sight — head-on, the screen stands squarely in front of the worm. The
-// residual -Z keeps the trading chart facing the camera enough to read.
-const VIEW_DIR = new THREE.Vector3(0.82, 0.35, -0.46).normalize(); // from the target toward the camera
-const DISTANCE = 19;
+const TARGET = new THREE.Vector3(0, 1.7, 2.4);
+const VIEW_DIR = new THREE.Vector3(0.72, 0.4, -0.58).normalize(); // from the target toward the camera
+const DISTANCE = 13;
 const ZERO = new THREE.Vector2();
 
 export function createFlyScene(container: HTMLElement, events: FlySceneEvents): FlyScene {
@@ -59,9 +47,7 @@ export function createFlyScene(container: HTMLElement, events: FlySceneEvents): 
 
   const scene = new THREE.Scene();
   scene.background = BACKGROUND;
-  // Pushed back past the tank: the old 16 started fogging at the monitor, which put the worm
-  // behind a haze the moment it moved to the far side of the desk.
-  scene.fog = new THREE.Fog(BACKGROUND, 30, 60);
+  scene.fog = new THREE.Fog(BACKGROUND, 16, 34);
   const pmrem = new THREE.PMREMGenerator(renderer);
   const environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
   scene.environment = environment;
@@ -76,10 +62,9 @@ export function createFlyScene(container: HTMLElement, events: FlySceneEvents): 
   key.target.position.set(0, 0, 2);
   key.castShadow = true;
   key.shadow.mapSize.set(1024, 1024);
-  // Wide enough to reach the tank as well as the keyboard — sized to the set, not to the fly.
-  key.shadow.camera.left = key.shadow.camera.bottom = -16;
-  key.shadow.camera.right = key.shadow.camera.top = 16;
-  key.shadow.camera.far = 40;
+  key.shadow.camera.left = key.shadow.camera.bottom = -7;
+  key.shadow.camera.right = key.shadow.camera.top = 7;
+  key.shadow.camera.far = 30;
   key.shadow.bias = -0.0005;
   key.shadow.normalBias = 0.02;
   scene.add(key, key.target);
@@ -95,9 +80,6 @@ export function createFlyScene(container: HTMLElement, events: FlySceneEvents): 
   desk.position.set(0, -0.2, 2);
   desk.receiveShadow = true;
   scene.add(desk);
-
-  const tank: WormTank = createWormTank(TANK_AT);
-  scene.add(tank.group);
 
   const screen = new TradingScreen();
   screen.texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
@@ -131,22 +113,17 @@ export function createFlyScene(container: HTMLElement, events: FlySceneEvents): 
   const pointer = new THREE.Vector2();
   let pointerInside = false;
   let pointerMoved = false;
-  let hovering: Subject | null = null;
+  let hovering = false;
   const parallax = new THREE.Vector2();       // smoothed pointer, drives a slight camera sway
 
   const toPointer = (e: PointerEvent | MouseEvent) => {
     const r = renderer.domElement.getBoundingClientRect();
     pointer.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
   };
-  // Nearest hit wins across both animals, so the answer stays right if the tank ever ends up in
-  // front of the fly — comparing "did the fly hit" against "did the worm hit" would not.
-  const underPointer = (): Subject | null => {
+  const flyUnderPointer = () => {
+    if (!fly) return false;
     raycaster.setFromCamera(pointer, camera);
-    const flyHit = fly ? raycaster.intersectObjects(fly.meshes, false)[0] : undefined;
-    const wormHit = raycaster.intersectObjects(tank.meshes, false)[0];
-    if (!flyHit) return wormHit ? "worm" : null;
-    if (!wormHit) return "fly";
-    return wormHit.distance < flyHit.distance ? "worm" : "fly";
+    return raycaster.intersectObjects(fly.meshes, false).length > 0;
   };
   const onPointerMove = (e: PointerEvent) => {
     toPointer(e);
@@ -159,8 +136,7 @@ export function createFlyScene(container: HTMLElement, events: FlySceneEvents): 
   };
   const onClick = (e: MouseEvent) => {
     toPointer(e);
-    const hit = underPointer();
-    if (hit) events.onPick(hit);
+    if (flyUnderPointer()) events.onFlyClick();
   };
   const canvas = renderer.domElement;
   canvas.addEventListener("pointermove", onPointerMove);
@@ -173,7 +149,7 @@ export function createFlyScene(container: HTMLElement, events: FlySceneEvents): 
     if (!w || !h) return;
     renderer.setSize(w, h);
     camera.aspect = w / h;
-    // pull back on narrow screens so the fly, the screen and the tank all stay in frame
+    // pull back on narrow screens so the fly and the screen both stay in frame
     distance = DISTANCE * Math.max(1, 1.3 / camera.aspect);
     camera.updateProjectionMatrix();
   };
@@ -191,11 +167,10 @@ export function createFlyScene(container: HTMLElement, events: FlySceneEvents): 
 
     if (pointerMoved) {
       pointerMoved = false;
-      const over = pointerInside ? underPointer() : null;
+      const over = pointerInside && flyUnderPointer();
       if (over !== hovering) {
         hovering = over;
-        fly?.setHighlight(over === "fly");
-        tank.setHighlight(over === "worm");
+        fly?.setHighlight(over);
         canvas.style.cursor = over ? "pointer" : "";
         events.onHover(over);
       }
@@ -209,7 +184,6 @@ export function createFlyScene(container: HTMLElement, events: FlySceneEvents): 
     camera.lookAt(TARGET);
 
     fly?.update(dt);
-    tank.update(dt);
     computer?.update(dt);
     screen.update(dt);
     renderer.render(scene, camera);
@@ -230,7 +204,6 @@ export function createFlyScene(container: HTMLElement, events: FlySceneEvents): 
       canvas.removeEventListener("click", onClick);
       timer.dispose();
       fly?.dispose();
-      tank.dispose();
       computer?.dispose();
       screen.dispose();
       desk.geometry.dispose();
