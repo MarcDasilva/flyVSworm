@@ -697,15 +697,17 @@ function enterScene(): void {
   intro.classList.add("gone");
   freeCam = false;                 // hand-driving suspends the move that is about to run
   WIDE_FOCUS.copy(ENTER_FOCUS);
-  ambience("/sfx/fly.mp3", 0.25, sfxCaption(FLY_NOISES));
-  ambience("/sfx/dirt.mp3", 0.2, sfxCaption(WORM_NOISES));
+  ambience("/sfx/fly.mp3", 0.25, sfxCaption("fly", FLY_NOISES));
+  ambience("/sfx/dirt.mp3", 0.2, sfxCaption("worm", WORM_NOISES));
   translateBtn.disabled = false;
 }
 document.getElementById("enter")!.addEventListener("click", enterScene);
 
 // --- bed subtitles ------------------------------------------------------------
 // One caption per bed, shown for exactly the swell the bed is making, so a muted visitor still
-// knows which animal the room is hearing. The variants are picked fresh per swell.
+// knows which animal the room is hearing. The variants are picked fresh per swell. Same
+// transcript as the translation (speaker label, then the line): the beds ARE the animals
+// talking, before the translator is switched on.
 const FLY_NOISES = [
   "Bizz... bizzzz bizzz...",
   "Bzzzzzz... bzz. bzz.",
@@ -723,9 +725,13 @@ const WORM_NOISES = [
   "*grains of dirt trickling*",
 ];
 const sfxLine = document.getElementById("sfx") as HTMLParagraphElement;
-function sfxCaption(variants: string[]): (on: boolean) => void {
+function sfxCaption(who: "fly" | "worm", variants: string[]): (on: boolean) => void {
   const span = sfxLine.appendChild(document.createElement("span"));
-  return (on) => { span.textContent = on ? variants[Math.floor(Math.random() * variants.length)]! : ""; };
+  return (on) => {
+    span.innerHTML = on
+      ? `<span class="who ${who}">${who.toUpperCase()}</span>${esc(variants[Math.floor(Math.random() * variants.length)]!)}`
+      : "";
+  };
 }
 
 document.getElementById("touch-head")!.onclick = () => void touch("HEAD", "ALML");
@@ -761,11 +767,12 @@ function paintTranslate(): void {
   translateBtn.textContent = banter ? "STOP" : "TRANSLATE";
 }
 
-/** Stop talking and leave the last line up. The beds come back to full either way. */
+/** Stop talking and leave the last line up. The beds and their captions come back either way. */
 function stopBanter(): void {
   banter?.stop();
   banter = null;
   duckAmbience(false);
+  sfxLine.hidden = false;
   paintTranslate();
 }
 
@@ -773,11 +780,16 @@ translateBtn.onclick = () => {
   if (banter) { stopBanter(); return; }
   banterLine.hidden = false;
   showBanter("", "listening in…", "who");
+  // Translating REPLACES the beds, it does not talk over them: the buzz and the dirt are the
+  // animals' untranslated voices, so they and their captions go quiet for the whole session,
+  // not just for each spoken line.
+  duckAmbience(true);
+  sfxLine.hidden = true;
   banter = startBanter({
     onLine: (turn) => showBanter(turn.speaker, turn.text),
-    onSpeaking: duckAmbience,
+    onSpeaking: () => {},
     onError: (message) => showBanter("", message, "oops"),
-    onDone: () => { banter = null; duckAmbience(false); paintTranslate(); },
+    onDone: () => { banter = null; duckAmbience(false); sfxLine.hidden = false; paintTranslate(); },
   });
   paintTranslate();
 };

@@ -24,15 +24,17 @@
             font-size: 13px; line-height: 1.5; color: #e2e8f0; text-shadow: 0 1px 6px rgba(0,0,0,0.9);
             pointer-events: none; }
   #banter[hidden] { display: none; }
-  /* What the beds are doing, for anyone who cannot hear them. Stacks above the banter line. */
+  /* What the beds are doing, for anyone who cannot hear them: the SAME transcript the translator
+     writes, one line per bed, stacked above the banter line. Hidden while translating. */
   #sfx { position: fixed; left: 50%; transform: translateX(-50%); bottom: 72px; z-index: 2; margin: 0;
          display: flex; flex-direction: column; align-items: center; gap: 2px;
-         font-size: 12px; font-style: italic; color: #94a3b8; text-shadow: 0 1px 6px rgba(0,0,0,0.9);
+         font-size: 13px; line-height: 1.5; color: #e2e8f0; text-shadow: 0 1px 6px rgba(0,0,0,0.9);
          pointer-events: none; }
-  #sfx span:empty { display: none; }
-  #banter .who { letter-spacing: 0.14em; font-size: 10px; margin-right: 8px; }
-  #banter .fly { color: #7dd3fc; }
-  #banter .worm { color: #fbbf24; }
+  #sfx[hidden] { display: none; }
+  #sfx > span:empty { display: none; }
+  #banter .who, #sfx .who { letter-spacing: 0.14em; font-size: 10px; margin-right: 8px; }
+  #banter .fly, #sfx .fly { color: #7dd3fc; }
+  #banter .worm, #sfx .worm { color: #fbbf24; }
   #banter .oops { color: #fca5a5; }
   #mute { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; }
   #mute svg { grid-area: 1 / 1; }

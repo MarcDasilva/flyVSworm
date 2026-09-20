@@ -31,10 +31,11 @@ export function setMuted(on: boolean, storage: MuteStorage = localStorage): void
   try { storage.setItem(MUTED_KEY, on ? "1" : "0"); } catch { /* remembered next time, or not */ }
 }
 
-/** Drop the beds under a talking voice and bring them back, leaving the swells running
- *  underneath: a line that lands mid-swell returns to the swell, not to silence. */
+/** Silence the beds while the animals are being translated and bring them back after, leaving
+ *  the swells running underneath: the voice is what the room hears, and a line that ends
+ *  mid-swell returns to the swell, not to silence. */
 export function duckAmbience(under: boolean): void {
-  duck = under ? 0.18 : 1;
+  duck = under ? 0 : 1;
   for (const a of beds) a.volume = (want.get(a) ?? a.volume) * duck;
 }
 
