@@ -9,7 +9,7 @@
 
 import * as THREE from "three";
 import { createStandInComputer, MONITOR_BACK, MONITOR_SCREEN_Y, MONITOR_Z, type Computer } from "./computer.js";
-import { TradingScreen } from "./tradingScreen.js";
+import type { TradingScreen } from "./tradingScreen.js";
 
 /** Model units to scene units, unchanged from the launcher. Scene units here are worm body
  *  lengths, so this makes the insect several worms long — which is the point. The two animals are
@@ -113,13 +113,16 @@ export interface FlyDesk {
 /**
  * Loads the fly, builds its computer under its front feet, and starts it typing. The whole desk
  * stands on y = 0 in its own group facing +Z; the caller turns it to face the terrarium.
+ *
+ * `market` is the scene's ONE market: the laptop and the TV show the same texture, so the fly's
+ * fills land on every display in the room at once. The caller owns it and drives its clock — the
+ * desk only types into it. See main.ts.
  */
-export async function loadFlyDesk(scene: THREE.Scene): Promise<FlyDesk> {
+export async function loadFlyDesk(scene: THREE.Scene, market: TradingScreen): Promise<FlyDesk> {
   const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
   const gltf = await new GLTFLoader().loadAsync("/fly.glb");
 
   const group = new THREE.Group();
-  const screen = new TradingScreen();
   const root = new THREE.Group();
   root.add(gltf.scene);
   root.scale.setScalar(SCALE);
@@ -137,7 +140,7 @@ export async function loadFlyDesk(scene: THREE.Scene): Promise<FlyDesk> {
   // placed first — that is what keeps the hands on the keys at any scale.
   const feet = legs.map(l => l.foot.getWorldPosition(new THREE.Vector3()));
   const computer: Computer = createStandInComputer(
-    feet[0].clone().add(feet[1]).multiplyScalar(0.5), screen.texture);
+    feet[0].clone().add(feet[1]).multiplyScalar(0.5), market.texture);
   group.add(computer.group);
 
   // The exhibit brings its OWN light. The terrarium's key is aimed at the tank and falls off to
@@ -237,7 +240,7 @@ export async function loadFlyDesk(scene: THREE.Scene): Promise<FlyDesk> {
           leg.pose(0, leg.yawTo);
           root.updateMatrixWorld(true);
           computer.press(leg.foot.getWorldPosition(footPos));
-          screen.keystroke();
+          market.keystroke();
         }
       }
       schedule(); // after the loop above, so every leg whose tap has ended counts as free
@@ -248,7 +251,6 @@ export async function loadFlyDesk(scene: THREE.Scene): Promise<FlyDesk> {
         [headPitch, 0.03 * Math.sin(t * 1.3) + headDip],
       );
       computer.update(dt);
-      screen.update(dt);
     },
   };
 }

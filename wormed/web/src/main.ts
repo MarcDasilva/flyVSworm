@@ -3,9 +3,12 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { WormBody, ChainClock, BEHAVIOR, type BehaviorState } from "./body.js";
 import { WormMesh } from "./worm.js";
 import { BrainCloud, parseMorphology } from "./brain.js";
-import { ChainFeed, type ChainConfig, type RelayStatus } from "./chain.js";
+import { ChainFeed, type Behavior, type ChainConfig, type RelayStatus } from "./chain.js";
+import { classifyBehavior } from "./classifier.js";
+import { TransactionPlayback, TransactionList } from "./transactions.js";
 import { ARENA, STAND_TOP, LAPTOP_GAP, TANK_EDGE, addLeaderboard, addTable, buildTerrarium, loadLaptop, loadTable } from "./props.js";
 import { loadFlyDesk, type FlyDesk } from "./fly.js";
+import { TradingScreen } from "./tradingScreen.js";
 import { FlyFeed } from "./flyfeed.js";
 import { FlyBrain } from "./flybrain.js";
 import { MONITOR_WIDTH } from "./computer.js";
@@ -171,8 +174,12 @@ addEventListener("keydown", e => {
   // click: the trigger box is deliberately sized to cover every pixel at that
   // range, so the pointer has nowhere to land that means "let me out".
   // ENTER opens the scene, the same as clicking the card's button.
-  if (e.key === "Enter") { enterScene(); return; }
+  if (e.key === "Enter") {
+    if (!(e.target instanceof HTMLElement && e.target.closest("button, a, summary"))) enterScene();
+    return;
+  }
   if (e.key === "Escape") {
+    closeClassifier();
     if (side === "none") return;     // nothing is open; do not yank a hand-driven camera
     side = "none";
     freeCam = false;                 // same as a click: ask for the composed shot back
@@ -284,6 +291,28 @@ const sideAt = (e: MouseEvent): Side => {
 // camera in fires while the user is on their way somewhere else, and it
 // cannot be held open while they read. Hover only offers the pointer cursor.
 const canvas = renderer.domElement;
+const classifier = document.getElementById("worm-classifier")!;
+const readoutButton = document.getElementById("worm-readout")!;
+const readoutPart = (name: string) => document.getElementById(`classifier-${name}`)!;
+function showClassifier(open: boolean): void {
+  classifier.hidden = !open;
+  readoutButton.setAttribute("aria-expanded", String(open));
+}
+
+function closeClassifier(): void {
+  if (classifier.contains(document.activeElement)) readoutButton.focus();
+  showClassifier(false);
+}
+
+readoutButton.onclick = () => {
+  if (!classifier.hidden) closeClassifier();
+  else {
+    side = "worm";
+    freeCam = false;
+    showClassifier(true);
+  }
+};
+readoutPart("close").onclick = closeClassifier;
 canvas.addEventListener("pointermove", e => {
   canvas.style.cursor = e.pointerType === "touch" || sideAt(e) === "none" ? "" : "pointer";
 });
@@ -296,6 +325,7 @@ canvas.addEventListener("click", e => {
   // the camera and lets go off the tank closes the scene every time.
   if (!pressed || Math.hypot(e.clientX - pressed.x, e.clientY - pressed.y) > 5) return;
   side = sideAt(e);
+  showClassifier(side === "worm");
   freeCam = false;             // a click asks for the composed shot back
   // The fly's brain is 22 MB of bake and its model is a socket to a process
   // that may not be running. Both are only ever wanted here.
@@ -322,10 +352,10 @@ const [positions, names, morphology] = await Promise.all([
 ]);
 
 const body = new WormBody(24, ARENA);
-// The body advances on worm-time the chain delivered, never on wall clock.
-// See ChainClock: without it the animal keeps crawling off a stale behaviour
-// byte when the chain stops, which is a moving picture of nothing.
+// Legacy batch playback follows simulated time. Individual receipts sustain
+// a continuous gait from the latest confirmed motor state while activity is fresh.
 const clock = new ChainClock();
+const transactions = new TransactionPlayback();
 const worm = new WormMesh(scene);
 const brain = new BrainCloud(scene, positions, names, morphology);
 const terrarium = buildTerrarium(scene);
@@ -347,7 +377,12 @@ const DESK_GAP = 0.35;
 // socket is opened on the first click of the fly, along with the bake.
 const flyFeed = new FlyFeed();
 const flyBrain = new FlyBrain(scene, flyFeed);
-void Promise.all([loadLaptop(scene), loadFlyDesk(scene), loadTable()])
+// ONE market for the whole room: the fly's monitor, the worm's laptop lid and the left half of
+// the board all show it, so no two displays can disagree about the price. The desks get the
+// trader's view and the board gets the price feed — orders belong to the animal that typed them,
+// not to the wall. The fly types into it; the clock below is the only thing that advances it.
+const market = new TradingScreen();
+void Promise.all([loadLaptop(scene, market.texture), loadFlyDesk(scene, market), loadTable()])
   .then(([laptop, desk, table]) => {
     const scale = (laptop.lid.max.x - laptop.lid.min.x) / MONITOR_WIDTH;
     desk.setScale(scale);
@@ -372,7 +407,8 @@ void Promise.all([loadLaptop(scene), loadFlyDesk(scene), loadTable()])
     // Backs the WHOLE set, tank included, so it is measured from the far end of the fly's table
     // to the far wall of the terrarium and not from either table alone.
     const setNear = -TANK_EDGE, setFar = flyNear + depth;
-    setTVBrightness = addLeaderboard(scene, (setNear + setFar) / 2, setFar - setNear + 0.6);
+    setTVBrightness = addLeaderboard(scene, (setNear + setFar) / 2, setFar - setNear + 0.6,
+                                     market.marketTexture);
 
     // Slide the desk back onto its OWN table, seated by its measured near edge so it keeps the
     // same margin from the table lip that the laptop keeps from the tank.
@@ -450,6 +486,8 @@ addEventListener("beforeunload", () => stop.abort());
 
 const n = names.length;
 let behavior: BehaviorState = { state: BEHAVIOR.PAUSE, gain: 0 };
+let behaviorSample: Behavior | undefined;
+let behaviorAdvancedAt = 0;
 // A frame's mV is a VIEW over the received gRPC buffer (chain.ts), which
 // TypeScript types as ArrayBufferLike — annotate or the first assignment
 // from the chain will not fit a locally allocated Int16Array.
@@ -463,7 +501,11 @@ let lastFrameAt = 0;
 // recycle each other's pool slots within one frame anyway.
 const FIRING_PER_FRAME = 110;
 
-feed.onBehavior(b => { behavior = { state: b.state, gain: b.gain }; });
+feed.onBehavior(b => {
+  behavior = b;
+  if (!behaviorSample || b.step !== behaviorSample.step) behaviorAdvancedAt = performance.now();
+  behaviorSample = b;
+});
 feed.onStatus(s => { status = s; });
 /** Playback state per transaction signature. Written in the SAME callback
  *  that fires the particles, which is what keeps the panel and the animation
@@ -481,7 +523,7 @@ feed.onFrame(f => {
   voltages = f.mV;
   frameSig = f.signature;
   lastFrameAt = performance.now();
-  clock.deliver(f.step, cfg.dtMs);
+  if (!cfg.synapseTransactions) clock.deliver(f.step, cfg.dtMs);
   const strongest = f.transfers.length > FIRING_PER_FRAME
     ? [...f.transfers].sort((a, b) => b.amount - a.amount).slice(0, FIRING_PER_FRAME)
     : f.transfers;
@@ -502,6 +544,11 @@ feed.onFrame(f => {
   rateTransfers += f.transfers.length;
   if (!seenSigs.has(f.signature)) { seenSigs.add(f.signature); rateTx++; }
 });
+feed.onSynapse(s => {
+  if (!transactions.push(s, performance.now())) return;
+  rateTransfers++;
+  rateTx++;
+});
 feed.start(stop.signal);
 
 const txpanel = document.getElementById("txpanel")!;
@@ -510,6 +557,9 @@ txpanel.style.opacity = "0";
 txpanel.style.pointerEvents = "none";
 const log = document.getElementById("feed")!;
 const stats = document.getElementById("txstats")!;
+const transactionList = cfg.synapseTransactions
+  ? new TransactionList(log, document.getElementById("txlatest") as HTMLButtonElement, names, cfg.explorer)
+  : undefined;
 const clicks: string[] = [];
 
 /** The stimulus amplitude belongs to the relay, so the label does NOT quote
@@ -574,15 +624,22 @@ function drawStats(): void {
     tile("FRAMES / S", framesPerSec.toFixed(1)),
     tile("TRANSFERS / S", Math.round(transfersPerSec).toLocaleString()),
     tile("SIM CLOCK", `${(feed.stats.lastStep * cfg.dtMs / 1000).toFixed(1)}s`),
-    tile("QUEUE", String(feed.stats.lag), feed.stats.lag > 100),
+    tile(cfg.synapseTransactions ? "BUFFERED TX" : "QUEUE",
+      String(cfg.synapseTransactions ? transactions.pending : feed.stats.lag)),
     tile("FEE PAYER", status ? status.balance.toLocaleString() : "?", low),
   ].join("");
+  const error = status?.log[0]?.error;
+  const caption = document.getElementById("txcaption")!;
+  caption.textContent = error ? error.replace(/\s+/g, " ").slice(0, 120)
+    : transactions.active(performance.now()) ? "Confirmed receipts · paced playback · latest 500"
+    : "Waiting for confirmed transactions · latest 500";
 }
 
 /** The relay's transaction log, newest first, each linking to the explorer.
  *  A row carries its own playback state, so the highlighted row is literally
  *  the transaction whose transfers are on screen right now. */
 function drawLog(): void {
+  if (transactionList) { transactionList.render(panelPaused); return; }
   const rows: string[] = clicks.slice(0, 3).map(c => `<div class="row dim">${esc(c)}</div>`);
   for (const e of status?.log ?? []) {
     const ms = e.ms === undefined ? "" : `${(e.ms / 1000).toFixed(1)}s`;
@@ -623,28 +680,70 @@ let last = performance.now();
 /** The transaction panel redraws at 10 Hz, not once per frame. */
 let lastPanel = 0;
 
+function drawClassifier(now: number, playing: boolean): void {
+  if (classifier.hidden) return;
+  const age = now - behaviorAdvancedAt;
+  const activityAge = cfg.synapseTransactions ? Math.min(age, transactions.age(now)) : age;
+  const reading = classifyBehavior(behaviorSample, activityAge, playing);
+  classifier.dataset.status = reading.status;
+  const text = (name: string, value: string) => {
+    const node = readoutPart(name);
+    if (node.textContent !== value) node.textContent = value;
+  };
+  text("state", reading.label);
+  text("meaning", reading.meaning);
+  text("status", reading.status === "live" ? "Playing"
+    : reading.status === "buffering" ? "Waiting"
+    : reading.status === "stale" ? "Signal stale" : "Awaiting signal");
+  text("age", behaviorSample ? `${(age / 1000).toFixed(1)} s` : "—");
+  const nose = body.points[0], neck = body.points[3];
+  const heading = (Math.atan2(nose[1] - neck[1], nose[0] - neck[0]) * 180 / Math.PI + 360) % 360;
+  text("heading", `${Math.round(heading) % 360}°`);
+  readoutPart("heading-plot").setAttribute("transform", `rotate(${heading + 90} 100 100)`);
+  for (const [name, drive] of [["forward", reading.forward], ["reverse", reading.reverse]] as const) {
+    text(`${name}-value`, reading.state === null ? "—" : `${Math.round(drive * 100)}%`);
+    const r = drive * 72, y = 100 - r * Math.cos(Math.PI / 6);
+    readoutPart(name).setAttribute("d", r === 0 ? ""
+      : `M100 100 L${100 - r / 2} ${y} A${r} ${r} 0 0 1 ${100 + r / 2} ${y} Z`);
+  }
+  const tilt = Math.round(reading.signal * 100);
+  const label = tilt === 0 ? "Neutral" : `${Math.abs(tilt)}% ${tilt > 0 ? "Buy" : "Sell"} tilt`;
+  text("tilt", label);
+  readoutPart("needle").style.left = `${50 + reading.signal * 50}%`;
+  readoutPart("meter").setAttribute("aria-valuenow", String(tilt));
+  readoutPart("meter").setAttribute("aria-valuetext", label);
+}
+
 function frame(now: number): void {
   const real = (now - last) / 1000;
-  // dt drives the LOOK of things — the connector fade — so it runs on the
-  // wall clock and is clamped against one slow frame. The body does not use
-  // it; that comes off the ChainClock below.
+  // Clamp rendering time so returning to a hidden tab never jumps the animal.
   const dt = Math.min(0.05, real);
   last = now;
 
   feed.tick();                       // paces the chain's frames onto the scene
-  // dt is the RENDER frame; what the body actually animates is however much
-  // simulated time the chain has handed over. No frames, no movement.
-  body.update(clock.take(real), behavior);
+  for (const receipt of transactions.tick(now)) {
+    brain.fireEdge(receipt.pre, receipt.post, receipt.amount > 0);
+    transactionList?.add(receipt);
+  }
+  // Rendering the classified gait is continuous between settlements. This
+  // does not advance the neural simulation clock or create transactions.
+  // A real PAUSE still stops the body; a silent receipt feed stops it in 15 s.
+  const movement = cfg.synapseTransactions ? (transactions.active(now) ? dt : 0) : clock.take(real);
+  body.update(movement, behavior);
+  transactionList?.render(panelPaused);
   worm.update(body.points);
-  // The typist runs on the WALL clock: it is scenery, not simulation, and freezing it whenever the
-  // chain stalls would read as the page having crashed.
+  // The typist and the market run on the WALL clock: they are scenery, not simulation, and
+  // freezing them whenever the chain stalls would read as the page having crashed. The market
+  // ticks even before the desk loads — the board is showing it either way.
   fly?.update(dt);
+  market.update(dt);
   brain.setVoltages(voltages);
   brain.tick(dt);
 
   integrateRates(now);
   if (now - lastPanel > 100) {
     lastPanel = now;
+    drawClassifier(now, movement > 0);
     if (!panelPaused) {
       drawLog();
       drawStats();
@@ -685,8 +784,8 @@ function frame(now: number): void {
   const slack = THREE.MathUtils.lerp(TRIGGER_MARGIN, TRIGGER_TIGHT, wormAlpha);
   trigger.scale.set((ARENA.halfX + slack) / (ARENA.halfX + TRIGGER_MARGIN), 1,
                     (ARENA.halfY + slack) / (ARENA.halfY + TRIGGER_MARGIN));
-  txpanel.style.opacity = wormAlpha.toFixed(3);
-  txpanel.style.pointerEvents = wormAlpha > 0.6 ? "auto" : "none";
+  classifier.style.opacity = txpanel.style.opacity = wormAlpha.toFixed(3);
+  classifier.style.pointerEvents = txpanel.style.pointerEvents = wormAlpha > 0.6 ? "auto" : "none";
 
   // Recentre by moving target and camera TOGETHER: whatever angle the user
   // orbited to survives the flight, and the worm stays framed as it crawls.

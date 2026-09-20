@@ -9,6 +9,7 @@ import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { settleSynapses } from "./synapses.mjs";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));   // repo root
 const NAMES = new Set(JSON.parse(
@@ -16,50 +17,22 @@ const NAMES = new Set(JSON.parse(
 
 const PORT = 8787;
 
-// One burst of simulation, then one classification. 600 steps at dt=5ms is
-// 3.0 s of worm life for ~3.0 s of wall clock. Bigger bursts buy a better
-// real-time ratio and cost touch latency, because a click can only be served
-// after the transaction already in flight.
-//
-// SETTLE_EVERY is the FRAME RATE KNOB, which is not obvious: a trace frame and
-// a transfer event are emitted per SETTLEMENT, not per step, so 600/10 = 60
-// frames from one transaction where 600/30 gave 20. Settlement is cheap
-// (Task 11 measured +0.99% CU at settle_every=20 over 100 steps), so paying 3x
-// for it is what buys a cloud that looks alive instead of one that ticks.
-const STEP_N = 600;
+// Preserve the 10-step settlement cadence. Each batch fits every chemical
+// and electrical event in the on-chain outbox; no next batch until it drains.
+const STEP_N = 100;
 const SETTLE_EVERY = 10;
-const TOUCH_STEPS = 300;
+const TOUCH_STEPS = 100;
 const STIM_MV = 40.0;
 
 // A viewer that has not polled /api/status for this long is gone; stepping
 // for a closed tab spends real balance on nothing.
 const VIEWER_TTL_MS = 15_000;
-// R19 again, from the other side: an OPEN tab left overnight would drain the
-// wallet at ~4,500 units/minute. The brain sleeps this long after the last
-// touch and any touch wakes it.
-const IDLE_MS = 180_000;
 
-// --- idle motion -----------------------------------------------------------
-// An untouched worm classifies as PAUSE and a paused worm stands still, which
-// is the honest output and is also a frozen screen: a visitor who never
-// clicks sees a dead animal. So the relay touches it on a timer while
-// somebody is watching.
-//
-// This is a DEMO AFFORDANCE, and the log says so — the rows read `auto-stim`
-// and `auto-rel`, never a plain `stimulate` — because the motion it produces
-// is a response to a stimulus THIS PROCESS injected, not locomotion emerging
-// from the connectome. Downstream nothing can tell an automatic touch from a
-// clicked one, which is exactly why the label has to live here.
-//
-// A touch buys about 20 s of movement (reverse, omega, forward, then back to
-// PAUSE), so this interval keeps the animal nearly always moving. It is not
-// free: four extra transactions per touch, roughly 2,000 units/minute on top
-// of the stepper's 4,500. Set to 0 to switch it off and go back to
-// click-to-move.
+// Hold one on-chain sensory input between direction changes. Releasing it
+// immediately lets the network settle to PAUSE after a single step batch.
+// These are injected inputs, logged as auto-stim/auto-rel, not spontaneous
+// locomotion. Start forward; alternate head/tail every 22 seconds.
 const AUTO_TOUCH_MS = 22_000;
-// Head touch drives reverse, tail touch drives forward. Alternating gives
-// both, and an omega turn each time the stimulus is released.
-const AUTO_NEURONS = ["ALML", "PLML"];
 
 // Both are overwritten by the worker's first reply — deploy.py's
 // BALANCE_FLOOR and FAUCET_REFILL are the one definition (R19).
@@ -69,12 +42,14 @@ let faucet = "thru faucet withdraw worm 10000";
 let stepping = false;
 let workerAlive = true;
 let viewerSeen = 0;
-let wakeAt = 0;
 /** Slow poll so a halted relay notices a top-up without needing a click. */
 const BALANCE_RECHECK_MS = 15_000;
 let lastBalanceAt = 0;
 let autoAt = 0;
-let autoIdx = 0;
+let drivenNeuron;
+const touches = [];
+let pendingSynapses = false;
+let needsReset = true;
 const log = [];
 
 function note(entry) {
@@ -121,6 +96,7 @@ function send(cmd) {
 async function chain(op, cmd) {
   const t0 = Date.now();
   const r = await send(cmd);
+  if (r.pending) pendingSynapses = true;
   note({ op, sig: r.sig, ms: Date.now() - t0, error: r.ok ? undefined : r.error });
   if (!r.ok) console.error(`relay: ${op} failed: ${r.error}`);
   return r;
@@ -146,11 +122,9 @@ function brokeError() {
 
 // --- the stepper -----------------------------------------------------------
 // DECISION (Task 15): the brain steps continuously while someone is watching,
-// not only on click. A chain that only moves when clicked looks like a
-// database; and the escape response itself needs steps AFTER the touch to
-// play out — reversal, then the omega turn once the stimulus is released,
-// then forward. The cost is real and bounded above: 400 units per cycle,
-// ~4,500 units/minute, which the viewer gate and IDLE_MS cap.
+// not only on click. Held inputs keep driving the classifier between
+// direction changes. Each nonzero synapse event costs its own transaction;
+// throughput controls simulation speed. Viewer presence bounds the work.
 async function stepperCycle() {
   if (!await affordable()) {
     note({ op: "halt", error: brokeError().error });
@@ -162,16 +136,29 @@ async function stepperCycle() {
 }
 
 function awake() {
-  return workerAlive &&
-         Date.now() - viewerSeen < VIEWER_TTL_MS &&
-         Date.now() - wakeAt < IDLE_MS;
+  return workerAlive && Date.now() - viewerSeen < VIEWER_TTL_MS;
 }
 
 async function stepperLoop() {
   for (;;) {
-    if (awake() && balance >= floor) {
+    if (awake() && balance > floor) {
       stepping = true;
-      if (AUTO_TOUCH_MS > 0 && Date.now() - autoAt >= AUTO_TOUCH_MS) {
+      if (pendingSynapses) {
+        try {
+          const settled = await settleSynapses({ floor, onReceipt: note });
+          pendingSynapses = settled.remaining > 0;
+          balance = settled.balance;
+        } catch (e) {
+          note({ op: "synapse", error: String(e.message ?? e) });
+          await new Promise(r => setTimeout(r, 1000));
+        }
+      } else if (needsReset) {
+        const reset = await chain("reset", { op: "reset" });
+        needsReset = !reset.ok;
+      } else if (touches.length) {
+        autoAt = Date.now();
+        await touch(touches.shift());
+      } else if (AUTO_TOUCH_MS > 0 && Date.now() - autoAt >= AUTO_TOUCH_MS) {
         autoAt = Date.now();
         // Guarded because this runs INSIDE the forever-loop: a throw here
         // escapes it and stepping stops for good, with the HUD still
@@ -179,7 +166,7 @@ async function stepperLoop() {
         // on a failed transaction, so this should never fire — which is
         // precisely why it would be invisible if it did.
         try {
-          await touch(AUTO_NEURONS[autoIdx++ % AUTO_NEURONS.length], true);
+          await touch(drivenNeuron === "PLML" ? "ALML" : "PLML", true);
         } catch (e) {
           note({ op: "auto-stim", error: String(e && e.message || e) });
         }
@@ -195,25 +182,36 @@ async function stepperLoop() {
       // funded wallet reporting the stale figure that halted it, until
       // something hits /api/touch. Re-read on a slow cadence so it heals
       // itself; the cost is one balance RPC a few times a minute while idle.
-      if (balance < floor && Date.now() - lastBalanceAt >= BALANCE_RECHECK_MS) {
+      if (balance <= floor && Date.now() - lastBalanceAt >= BALANCE_RECHECK_MS) {
         lastBalanceAt = Date.now();
-        if (await affordable()) note({ op: "resume", ms: 0 });
+        if (await affordable() && balance > floor) note({ op: "resume", ms: 0 });
+        else if (awake()) {
+          const refill = await chain("faucet", { op: "refill" });
+          if (refill.ok) ({ balance, floor, faucet } = refill);
+        }
       }
     }
   }
 }
 
 // --- touches ---------------------------------------------------------------
-// The stimulus is applied, stepped, classified, and then RELEASED. Releasing
-// is not politeness: i_stim persists in account data until something clears
-// it, and the classifier only leaves REVERSE for the omega turn once the
-// reversal drive falls back under THRESH_OFF (worm.c do_classify). A touch
-// that is never released leaves the animal reversing forever.
+// Release the previous input BEFORE applying the next: competing head/tail
+// currents otherwise mask the requested direction. The stepper also serves
+// manual touches, so their multi-transaction sequences cannot interleave.
 async function touch(neuron, auto = false) {
-  await chain(auto ? "auto-stim" : "stimulate", { op: "stimulate", neuron, mV: STIM_MV });
+  if (!await affordable()) return;
+  if (drivenNeuron && drivenNeuron !== neuron) {
+    const released = await chain(auto ? "auto-rel" : "release",
+      { op: "stimulate", neuron: drivenNeuron, mV: 0 });
+    if (!released.ok) return;
+    drivenNeuron = undefined;
+  }
+  const applied = await chain(auto ? "auto-stim" : "stimulate",
+    { op: "stimulate", neuron, mV: STIM_MV });
+  if (!applied.ok) return;
+  drivenNeuron = neuron;
   await chain("step", { op: "step", n: TOUCH_STEPS, settleEvery: SETTLE_EVERY });
   await chain("classify", { op: "classify" });
-  await chain(auto ? "auto-rel" : "release", { op: "stimulate", neuron, mV: 0.0 });
 }
 
 function json(res, code, body) {
@@ -226,10 +224,9 @@ function json(res, code, body) {
 createServer((req, res) => {
   const url = new URL(req.url, "http://localhost");
   if (req.method === "GET" && url.pathname === "/api/status") {
-    if (Date.now() - viewerSeen >= VIEWER_TTL_MS) wakeAt = Date.now();  // fresh viewer
     viewerSeen = Date.now();
     json(res, 200, {
-      balance, floor, faucet, stepping, awake: awake(), workerAlive,
+      balance, floor, faucet, stepping, awake: awake(), workerAlive, pendingSynapses,
       stepN: STEP_N, settleEvery: SETTLE_EVERY, log,
     });
     return;
@@ -250,12 +247,8 @@ createServer((req, res) => {
       }
       if (!await affordable()) { json(res, 503, brokeError()); return; }
       viewerSeen = Date.now();
-      wakeAt = Date.now();
-      // A click restarts the idle timer: the worm is already about to move,
-      // so an automatic touch on top would only spend for nothing.
-      autoAt = Date.now();
+      touches.push(neuron);
       json(res, 202, { queued: neuron, balance });
-      touch(neuron).catch(e => console.error("relay: touch failed", e));
     });
     return;
   }
@@ -272,6 +265,10 @@ createServer((req, res) => {
   // before anyone touches it — reset_sim clears stimulus and voltage both.
   // It is two transactions, so it waits behind the same preflight as
   // everything else: spending below the floor is what R19 forbids.
-  if (balance >= floor) await chain("reset", { op: "reset" });
+  // Finish persisted events before resetting after a restart.
+  if (balance >= floor && !pendingSynapses) {
+    const reset = await chain("reset", { op: "reset" });
+    needsReset = !reset.ok;
+  }
   stepperLoop();
 });

@@ -355,3 +355,74 @@ assert.equal(desks.children.length, 2);
 assert.ok(Math.abs(deskBounds[1].min.z - deskBounds[0].max.z - 0.35) < 1e-6);
 assert.deepEqual(new THREE.Box3().setFromObject(deskModel), originalDeskBounds);
 console.log("OK: both metal desks face outward, seat their computers, meet the floor, and preserve the gap");
+
+// The board's two halves, and what each half is allowed to say. The camera stands at +x looking
+// -x, so its screen-LEFT is world +z — swap the halves and the standings end up where the market
+// goes, which no assertion about counts would catch.
+//
+// Canvas is stubbed down to a recorder of the text drawn: nothing here renders, and the one thing
+// worth pinning is WHICH numbers reach WHICH surface.
+type Recorder = { text: string[]; type: string[] };
+const drawn: Recorder[] = [];
+const fakeCanvas = () => {
+  const rec: Recorder = { text: [], type: [] };
+  drawn.push(rec);
+  const state: Record<string, unknown> = {
+    fillText: (t: string) => { rec.text.push(t); rec.type.push(String(state.font)); },
+    measureText: (t: string) => ({ width: t.length * 10 }),
+  };
+  const ctx = new Proxy(state, { get: (target, key) => target[key as string] ?? (() => undefined) });
+  return { width: 0, height: 0, getContext: () => ctx };
+};
+(globalThis as { document?: unknown }).document = { createElement: fakeCanvas };
+
+const { TradingScreen } = await import("./tradingScreen.js");
+const { addLeaderboard } = await import("./props.js");
+
+const tape = new TradingScreen();
+for (let i = 0; i < 40; i++) tape.keystroke();   // type and fill at least one order
+tape.update(1);
+const [desk, board] = drawn.slice(0, 2).map(r => r.text.join("\n"));
+// The order line, the fill receipt and the position strip are the DESK's. A wall behind the
+// exhibit showing them credits the animals' trades to whoever is standing in front of it.
+assert.match(desk, /^> /m, "the desk's screen lost its order line");
+assert.match(desk, /^POS$/m, "the desk's screen lost its position strip");
+assert.match(desk, /^(LONG|SHORT|FLAT) /m, "the desk's screen lost its position readout");
+for (const leak of [/^> /m, /^POS$/m, /^(LONG|SHORT|FLAT) /m, /^filled /m]) {
+  assert.doesNotMatch(board, leak, "the board is showing the desk's book");
+}
+// Same market, though: both surfaces price the same candles off the same axis.
+const axis = (view: string) => view.split("\n").filter(t => /^\d+\.\d\d$/.test(t));
+assert.ok(axis(board).length >= 5, "the board drew no price axis");
+assert.deepEqual(axis(desk), axis(board), "the two views disagree about the price");
+
+// The sheet's type is sized off the WIDTH it is printed at. Size it off the panel's height and
+// a board half as wide prints NUMBER through SPECIMEN — the type grows while the columns, which
+// are placed by width, stay where they are. Two boards of DIFFERENT heights, same canvas width:
+// the type must come out identical.
+const chart = new THREE.Texture();
+chart.image = { width: 1024, height: 640 };
+const room = new THREE.Scene();
+const WIDTH = 5.2;
+const setTV = addLeaderboard(room, 1.3, WIDTH, chart);
+addLeaderboard(new THREE.Scene(), 1.3, WIDTH * 0.7, chart);
+const [wider, tighter] = drawn.slice(-2);
+assert.deepEqual(wider.text, tighter.text, "the two boards did not print the same sheet");
+assert.deepEqual(wider.type, tighter.type, "the sheet's type scales with the panel's height");
+const panels = room.children[0].children.filter(
+  o => (o as THREE.Mesh).isMesh && (o as THREE.Mesh).geometry.type === "PlaneGeometry");
+const market = panels.find(p => ((p as THREE.Mesh).material as THREE.MeshBasicMaterial).map === chart);
+const standings = panels.find(p =>
+  ((p as THREE.Mesh).material as THREE.MeshStandardMaterial).emissiveMap instanceof THREE.CanvasTexture);
+assert.ok(market && standings, "board is missing the market half or the standings half");
+assert.ok(market.position.z > standings.position.z, "the market half is not on the board's left");
+const marketSize = new THREE.Box3().setFromObject(market).getSize(new THREE.Vector3());
+assert.ok(marketSize.z <= WIDTH / 2 + 1e-6, "the market half overruns its half of the board");
+assert.ok(Math.abs(marketSize.z / marketSize.y - 1024 / 640) < 1e-6, "the chart is stretched");
+setTV(0.5);
+for (const p of [market, standings]) {
+  const dim = ((p as THREE.Mesh).material as THREE.MeshBasicMaterial).color.r;
+  assert.ok(Math.abs(dim - 0.5) < 1e-6, "a board half ignores the TV flicker");
+}
+console.log("OK: the board splits into a left market and a right standings board, and only the " +
+  "desks see the book");

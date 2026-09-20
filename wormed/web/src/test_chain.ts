@@ -12,6 +12,22 @@ const N = 302;
 const TRACE_BYTES = 8 + N * 2 + 8;
 const END = 0xa5;
 
+// Each new receipt is one independently signed electrical/chemical event.
+for (const offset of [0, 1, 3]) {
+  const bytes = new Uint8Array(new ArrayBuffer(24 + offset), offset, 24);
+  const data = new DataView(bytes.buffer, offset, 24);
+  bytes.set(new TextEncoder().encode("WORMSYNX"));
+  data.setUint32(8, 123, true);
+  data.setUint16(12, 4, true);
+  data.setUint16(14, 7, true);
+  data.setInt32(16, -9, true);
+  bytes[20] = 1; bytes[23] = END;
+  assert.deepEqual(decodeEvent(bytes), { kind: "synapse", step: 123, pre: 4, post: 7, amount: -9, chemical: true });
+  assert.equal(decodeEvent(bytes.subarray(0, 23)), undefined);
+  bytes[20] = 2;
+  assert.equal(decodeEvent(bytes), undefined);
+}
+
 function tag(into: Uint8Array, at: number, text: string): void {
   for (let i = 0; i < 8; i++) into[at + i] = text.charCodeAt(i);
 }

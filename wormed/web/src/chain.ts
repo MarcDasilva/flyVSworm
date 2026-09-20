@@ -1,5 +1,5 @@
 import { createThruClient } from "@thru/sdk/client";
-import { Pubkey, Signature } from "@thru/sdk";
+import { Filter, FilterParamValue, PageRequest, Pubkey, Signature } from "@thru/sdk";
 import type { BehaviorState } from "./body.js";
 
 /**
@@ -16,10 +16,12 @@ export type ChainConfig = {
   behaviorAccount: string;
   dtMs: number;
   explorer: string;
+  synapseTransactions?: boolean;
 };
 
 /** One settled gap junction, as worm.h's worm_xfer_t lays it out. */
 export type Transfer = { pre: number; post: number; amount: number };
+export type Synapse = Transfer & { step: number; chemical: boolean; signature: string };
 
 /** One emitted simulation frame, plus whatever settled in the same chunk. */
 export type Frame = {
@@ -52,10 +54,19 @@ function tagOf(p: Uint8Array): string {
 /** What the program emitted, decoded. Unknown tags yield undefined. */
 export type DecodedEvent =
   | { kind: "trace"; step: number; state: number; mV: Int16Array }
-  | { kind: "xfer"; step: number; transfers: Transfer[] };
+  | { kind: "xfer"; step: number; transfers: Transfer[] }
+  | { kind: "synapse"; step: number; pre: number; post: number; amount: number; chemical: boolean };
 
 export function decodeEvent(p: Uint8Array): DecodedEvent | undefined {
   const tag = tagOf(p);
+  if (tag === "WORMSYNX") {
+    if (p.byteLength !== 24 || p[23] !== 0xa5 || p[20] > 1) return undefined;
+    const d = new DataView(p.buffer, p.byteOffset, p.byteLength);
+    const pre = d.getUint16(12, true), post = d.getUint16(14, true);
+    const amount = d.getInt32(16, true);
+    if (pre >= N_NEURONS || post >= N_NEURONS || amount === 0) return undefined;
+    return { kind: "synapse", step: d.getUint32(8, true), pre, post, amount, chemical: p[20] === 1 };
+  }
   if (tag === TAG_TRACE) {
     if (p.byteLength !== TRACE_BYTES) return undefined;
     const d = new DataView(p.buffer, p.byteOffset, p.byteLength);
@@ -142,21 +153,26 @@ export class ChainFeed {
   private program: string;
   private queue: Frame[] = [];
   private frameCbs: ((f: Frame) => void)[] = [];
+  private synapseCbs: ((s: Synapse) => void)[] = [];
   private behaviorCbs: ((b: Behavior) => void)[] = [];
   private statusCbs: ((s: RelayStatus) => void)[] = [];
   private partial = new Map<number, Partial<Frame>>();
   private lastPlay = 0;
   private lastArrival = 0;
   private burstMs = 5000;
+  private lastSynapseAt = -Infinity;
+  private lastRecoveryAt = -Infinity;
+  private recovering = false;
   /** Frames delivered to the scene, and events seen — the HUD's proof of life. */
   stats = { frames: 0, events: 0, transfers: 0, lastStep: 0, lag: 0, burstMs: 0, interval: 0 };
 
   constructor(private readonly cfg: ChainConfig) {
-    this.thru = createThruClient({ baseUrl: cfg.rpc });
+    this.thru = createThruClient({ baseUrl: cfg.rpc, callOptions: { timeoutMs: 10_000 } });
     this.program = Pubkey.from(cfg.programId).toHex();
   }
 
   onFrame(cb: (f: Frame) => void): void { this.frameCbs.push(cb); }
+  onSynapse(cb: (s: Synapse) => void): void { this.synapseCbs.push(cb); }
   onBehavior(cb: (b: Behavior) => void): void { this.behaviorCbs.push(cb); }
   onStatus(cb: (s: RelayStatus) => void): void { this.statusCbs.push(cb); }
 
@@ -198,7 +214,12 @@ export class ChainFeed {
     const ev = decodeEvent(payload);
     if (!ev) return;
     if (ev.kind === "trace") {
-      this.merge(ev.step, { mV: ev.mV, state: ev.state, signature });
+      if (this.cfg.synapseTransactions) this.push({ ...ev, transfers: [], signature });
+      else this.merge(ev.step, { mV: ev.mV, state: ev.state, signature });
+    } else if (ev.kind === "synapse") {
+      this.lastSynapseAt = performance.now();
+      this.stats.transfers++;
+      this.synapseCbs.forEach(cb => cb({ ...ev, signature }));
     } else {
       this.stats.transfers += ev.transfers.length;
       this.merge(ev.step, { transfers: ev.transfers, signature });
@@ -298,11 +319,42 @@ export class ChainFeed {
       } catch (err) {
         console.warn("chain: behavior read failed", err);
       }
+      // A stream may miss a burst during reconnect. Recover recent confirmed
+      // receipts independently so this read cannot hold up the viewer heartbeat.
+      const now = performance.now();
+      if (this.cfg.synapseTransactions && !this.recovering &&
+          now - this.lastSynapseAt > 2000 && now - this.lastRecoveryAt > 3000) {
+        this.recovering = true;
+        this.lastRecoveryAt = now;
+        void this.recoverSynapses(signal).catch(err => {
+          if (!signal.aborted) console.warn("chain: receipt recovery failed", err);
+        }).finally(() => { this.recovering = false; });
+      }
       try {
         const s = await (await fetch("/api/status")).json() as RelayStatus;
         this.statusCbs.forEach(cb => cb(s));
       } catch { /* the relay may not be up; the chain half still works */ }
       await new Promise(r => setTimeout(r, 500));
+    }
+  }
+
+  private async recoverSynapses(signal: AbortSignal): Promise<void> {
+    const height = await this.thru.blocks.getBlockHeight();
+    // Only recent blocks: reopening the exhibit must not replay old history
+    // as present activity. The playback queue deduplicates stream/recovery overlap.
+    const from = height.finalized > 80n ? height.finalized - 80n : 0n;
+    const result = await this.thru.events.list({
+      filter: new Filter({
+        expression: `event.slot >= uint(${from}) && event.program.value == params.address && bytesPrefix(event.payload, params.prefix)`,
+        params: { address: FilterParamValue.pubkey(this.cfg.programId),
+          prefix: FilterParamValue.bytes(new TextEncoder().encode("WORMSYNX")) },
+      }),
+      page: new PageRequest({ pageSize: 1000 }),
+    });
+    if (signal.aborted) return;
+    for (const event of result.events.reverse()) {
+      if (event.payload && event.transactionSignature)
+        this.ingest(event.payload, Signature.from(event.transactionSignature).toThruFmt());
     }
   }
 

@@ -285,6 +285,10 @@ export type Laptop = {
 };
 
 /**
+ * `screen` is the desks' view of the scene's one market (see TradingScreen): this lid and the
+ * fly's monitor bind the SAME canvas, so the two machines can never disagree about the price or
+ * about the book.
+ *
  * The laptop: geometry and UVs from wormed/data/MacBookPro.obj, textures from
  * wormed/data/textures (unpacked out of the .blend by
  * wormed/pipeline/unpack_blend_textures.py).
@@ -294,7 +298,7 @@ export type Laptop = {
  * name on each material, and THAT is what the finish below is keyed on —
  * rename a group in the model and it falls back to bare aluminium.
  */
-export async function loadLaptop(scene: THREE.Scene): Promise<Laptop> {
+export async function loadLaptop(scene: THREE.Scene, screen: THREE.Texture): Promise<Laptop> {
   const { OBJLoader } = await import("three/examples/jsm/loaders/OBJLoader.js");
   const model = await new OBJLoader().loadAsync("/MacBookPro.obj");
 
@@ -302,21 +306,20 @@ export async function loadLaptop(scene: THREE.Scene): Promise<Laptop> {
   const image = (file: string) => {
     const t = loader.load(`/textures/${file}`);
     // These are photographs, NOT data maps: skip the sRGB decode and the
-    // wallpaper comes out washed grey.
+    // keycaps come out washed grey.
     t.colorSpace = THREE.SRGBColorSpace;
     return t;
   };
-  const wallpaper = image("macScreen.jpg");
 
   const aluminium = new THREE.MeshStandardMaterial({
     color: 0x9aa3ad, roughness: 0.38, metalness: 0.72 });
   const plastic = new THREE.MeshStandardMaterial({
     color: 0x14171a, roughness: 0.65, metalness: 0.1 });
-  // The display is its own light source, so the wallpaper is bound twice:
+  // The display is its own light source, so the market canvas is bound twice:
   // once as colour and once as emission. Colour alone leaves it dead black in
   // this scene's lighting.
   const glass = new THREE.MeshStandardMaterial({
-    map: wallpaper, emissiveMap: wallpaper, emissive: 0xffffff,
+    map: screen, emissiveMap: screen, emissive: 0xffffff,
     emissiveIntensity: 0.85, roughness: 0.16, metalness: 0.1 });
   const keys = new THREE.MeshStandardMaterial({
     map: image("KeyB.jpg"), roughness: 0.6, metalness: 0.1 });
@@ -352,7 +355,7 @@ export async function loadLaptop(scene: THREE.Scene): Promise<Laptop> {
 
   group.scale.setScalar(LAPTOP_SCALE);
   // Square to the tank: the display faces the worm, so the camera gets the
-  // lid and the keyboard. Math.PI turns the wallpaper back towards the viewer.
+  // lid and the keyboard. Math.PI turns the display back towards the viewer.
   group.rotation.y = 0;
 
   // Sit it ON the table rather than trusting the model's origin: this one is
@@ -398,27 +401,36 @@ function leaderboardFace(w: number, h: number): HTMLCanvasElement {
   g.fillRect(0, 0, w, h);
   g.textBaseline = "middle";
 
+  // The rest of the sheet is laid out against BAND, not the panel's height. Columns are placed
+  // by width and the type is sized off the same figure, so a face squeezed onto a narrower board
+  // must shrink both together — size the type to the height instead and NUMBER prints straight
+  // through SPECIMEN, which is what the half-width board did. The printing keeps the proportions
+  // it was authored at and the leftover height is margin, which is what a posted sheet has.
+  const AUTHORED = 0.46;                         // height over width of the sheet as drawn below
+  const band = Math.min(h, w * AUTHORED);
+  g.translate(0, (h - band) / 2);
+
   // Letterhead: a line of type and a rule. No colour band — the point is that
   // someone in the building runs this and nobody is excited about it.
   g.fillStyle = INK;
-  g.font = `600 ${h * 0.07}px ${mono}`;
-  g.fillText("TRADING RESULTS", w * COL.rank, h * 0.08);
+  g.font = `600 ${band * 0.07}px ${mono}`;
+  g.fillText("TRADING RESULTS", w * COL.rank, band * 0.08);
   g.fillStyle = FAINT;
-  g.font = `500 ${h * 0.04}px ${mono}`;
+  g.font = `500 ${band * 0.04}px ${mono}`;
   g.textAlign = "right";
-  g.fillText("POSTED WEEKLY \u00b7 PERIOD 37", w * COL.profit, h * 0.082);
+  g.fillText("POSTED WEEKLY \u00b7 PERIOD 37", w * COL.profit, band * 0.082);
   g.textAlign = "left";
   g.strokeStyle = INK;
   g.lineWidth = 3;
   g.beginPath();
-  g.moveTo(w * 0.03, h * 0.155);
-  g.lineTo(w * 0.97, h * 0.155);
+  g.moveTo(w * 0.03, band * 0.155);
+  g.lineTo(w * 0.97, band * 0.155);
   g.stroke();
 
   // Column headers, then the rule under them.
-  const headY = h * 0.255;
+  const headY = band * 0.255;
   g.fillStyle = FAINT;
-  g.font = `600 ${h * 0.05}px ${mono}`;
+  g.font = `600 ${band * 0.05}px ${mono}`;
   g.fillText("RANK", w * COL.rank, headY);
   g.fillText("SPECIMEN", w * COL.specimen, headY);
   g.textAlign = "right";
@@ -428,8 +440,8 @@ function leaderboardFace(w: number, h: number): HTMLCanvasElement {
   g.strokeStyle = "#8d8a82";
   g.lineWidth = 2;
   g.beginPath();
-  g.moveTo(w * 0.03, h * 0.305);
-  g.lineTo(w * 0.97, h * 0.305);
+  g.moveTo(w * 0.03, band * 0.305);
+  g.lineTo(w * 0.97, band * 0.305);
   g.stroke();
 
   // NUMBER is the animal's accession in the facility's register — the number
@@ -442,7 +454,7 @@ function leaderboardFace(w: number, h: number): HTMLCanvasElement {
     { rank: "2", name: "WORM", species: "Caenorhabditis elegans",
       number: "004118", profit: "-212.40", gain: false },
   ];
-  const top = h * 0.33, rowH = h * 0.245;
+  const top = band * 0.33, rowH = band * 0.245;
   rows.forEach((r, i) => {
     const y = top + rowH * (i + 0.5);
     if (i % 2 === 0) {
@@ -450,22 +462,22 @@ function leaderboardFace(w: number, h: number): HTMLCanvasElement {
       g.fillRect(w * 0.03, top + rowH * i, w * 0.94, rowH);
     }
     g.fillStyle = INK;
-    g.font = `500 ${h * 0.115}px ${mono}`;
+    g.font = `500 ${band * 0.115}px ${mono}`;
     g.fillText(r.rank, w * COL.rank, y);
-    g.font = `600 ${h * 0.115}px ${mono}`;
-    g.fillText(r.name, w * COL.specimen, y - h * 0.028);
+    g.font = `600 ${band * 0.115}px ${mono}`;
+    g.fillText(r.name, w * COL.specimen, y - band * 0.028);
     g.fillStyle = FAINT;
-    g.font = `italic ${h * 0.046}px ${mono}`;
-    g.fillText(r.species, w * COL.specimen, y + h * 0.055);
+    g.font = `italic ${band * 0.046}px ${mono}`;
+    g.fillText(r.species, w * COL.specimen, y + band * 0.055);
     g.textAlign = "right";
     g.fillStyle = INK;
-    g.font = `500 ${h * 0.09}px ${mono}`;
+    g.font = `500 ${band * 0.09}px ${mono}`;
     g.fillText(r.number, w * COL.number, y);
     // The one column that carries colour, and it is print colour rather than
     // screen colour: a figure in red on a posted sheet is a loss, which is
     // the oldest and dullest use of the two inks there is.
     g.fillStyle = r.gain ? GAIN : LOSS;
-    g.font = `600 ${h * 0.085}px ${mono}`;
+    g.font = `600 ${band * 0.085}px ${mono}`;
     g.fillText(r.profit, w * COL.profit, y);
     g.textAlign = "left";
   });
@@ -474,14 +486,14 @@ function leaderboardFace(w: number, h: number): HTMLCanvasElement {
   g.strokeStyle = "#8d8a82";
   g.lineWidth = 2;
   g.beginPath();
-  g.moveTo(w * 0.03, h * 0.875);
-  g.lineTo(w * 0.97, h * 0.875);
+  g.moveTo(w * 0.03, band * 0.875);
+  g.lineTo(w * 0.97, band * 0.875);
   g.stroke();
   g.fillStyle = FAINT;
-  g.font = `500 ${h * 0.043}px ${mono}`;
-  g.fillText("NUMBER = SPECIMEN ACCESSION", w * COL.rank, h * 0.935);
+  g.font = `500 ${band * 0.043}px ${mono}`;
+  g.fillText("NUMBER = SPECIMEN ACCESSION", w * COL.rank, band * 0.935);
   g.textAlign = "right";
-  g.fillText("USD \u00b7 SETTLED ON THRU \u00b7 UNAUDITED", w * COL.profit, h * 0.935);
+  g.fillText("USD \u00b7 SETTLED ON THRU \u00b7 UNAUDITED", w * COL.profit, band * 0.935);
   g.textAlign = "left";
   return c;
 }
@@ -504,14 +516,21 @@ const BOARD_H = 2.4;
 const BOARD_BACK = STAND_W / 2 + 2.4;
 
 /**
- * The scoreboard behind the pair, facing the wide shot's camera.
+ * The board behind the pair, facing the wide shot's camera: the standings on
+ * the right half, the market the animals are trading on the left.
  *
  * `zCentre` and `width` come from the PLACED tables, not from constants here:
  * the fly's desk is sized by measurement at load time, so how long the set
  * turns out to be is not known until it has landed. See main.ts.
- * Returns a brightness setter that keeps the face, halo and room spill in sync.
+ *
+ * `chart` is the room's view of the market the two desks are trading — the same candles they
+ * see, with no position, fills or order line on it. A wall is a price feed; the book belongs to
+ * the animal that typed it. See TradingScreen.marketTexture.
+ * Returns a brightness setter that keeps both faces, the halo and the room
+ * spill in sync.
  */
-export function addLeaderboard(scene: THREE.Scene, zCentre: number, width: number): (brightness: number) => void {
+export function addLeaderboard(scene: THREE.Scene, zCentre: number, width: number,
+                               chart: THREE.Texture): (brightness: number) => void {
   const group = new THREE.Group();
   const shell = new THREE.Mesh(
     new THREE.BoxGeometry(0.12, BOARD_H + 0.18, width + 0.18),
@@ -519,12 +538,17 @@ export function addLeaderboard(scene: THREE.Scene, zCentre: number, width: numbe
   shell.position.set(-BOARD_BACK, FLOOR_Y + (BOARD_H + 0.18) / 2, zCentre);
   group.add(shell);
 
-  const face = leaderboardFace(1536, Math.round(1536 * BOARD_H / width));
+  // Rotated to face +x, which puts a panel's own left-to-right along world -z.
+  // So the board's screen-RIGHT half sits at lower z and its screen-LEFT half
+  // at higher z — get this backwards and the standings land on the chart side.
+  const half = width / 2;
+  const faceY = FLOOR_Y + BOARD_H / 2 + 0.09;
+  const face = leaderboardFace(1536, Math.round(1536 * BOARD_H / half));
   const tex = new THREE.CanvasTexture(face);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 8;
   const panel = new THREE.Mesh(
-    new THREE.PlaneGeometry(width, BOARD_H),
+    new THREE.PlaneGeometry(half, BOARD_H),
     // Backlit, not printed: the sheet is behind glass in a lit box, so the
     // whole face carries an even emission rather than waiting for the room's
     // lights to find it. Dim on purpose — a display this size at the wattage
@@ -536,11 +560,22 @@ export function addLeaderboard(scene: THREE.Scene, zCentre: number, width: numbe
       // the type, not as glass.
       map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: BACKLIGHT,
       roughness: 0.8, metalness: 0 }));
-  // Rotated to face +x, which puts the panel's own left-to-right along world
-  // -z — the wide shot's screen-right, so the text reads the right way round.
   panel.rotation.y = Math.PI / 2;
-  panel.position.set(-BOARD_BACK + 0.07, FLOOR_Y + BOARD_H / 2 + 0.09, zCentre);
+  panel.position.set(-BOARD_BACK + 0.07, faceY, zCentre - half / 2);
   group.add(panel);
+
+  // The market half. Unlit and untonemapped, same as the fly's monitor — a chart run through the
+  // room's lighting instead would read as a poster of a chart. LETTERBOXED to the canvas's own aspect: the
+  // half is nearly square and stretching 16:10 type to fill it makes every
+  // glyph a head taller than it is wide. The shell behind shows as bezel.
+  const src = chart.image as { width: number; height: number };
+  const chartW = Math.min(half - 0.08, (BOARD_H - 0.08) * src.width / src.height);
+  const chartPanel = new THREE.Mesh(
+    new THREE.PlaneGeometry(chartW, chartW * src.height / src.width),
+    new THREE.MeshBasicMaterial({ map: chart, toneMapped: false }));
+  chartPanel.rotation.y = Math.PI / 2;
+  chartPanel.position.set(-BOARD_BACK + 0.07, faceY, zCentre + half / 2);
+  group.add(chartPanel);
 
   // The bleed around the bezel. A backlight that stops dead at the frame is a
   // poster with a lamp on it; the halo sits BEHIND the panel and proud of it
@@ -577,6 +612,7 @@ export function addLeaderboard(scene: THREE.Scene, zCentre: number, width: numbe
   return brightness => {
     panel.material.color.setScalar(brightness);
     panel.material.emissiveIntensity = BACKLIGHT * brightness;
+    chartPanel.material.color.setScalar(brightness);
     halo.material.opacity = 0.05 * brightness;
     for (const spill of spills) spill.intensity = SPILL_WATTS * brightness;
   };

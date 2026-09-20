@@ -1,8 +1,9 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>C. elegans on Thru</title>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>C. elegans on Thru</title>
 <style>
   body { margin: 0; overflow: hidden; background: #0b0f14;
          font: 14px ui-monospace, SFMono-Regular, monospace; color: #cbd5e1; }
+  body > canvas { display: block; max-width: 100vw; }
   #ui { position: fixed; top: 16px; left: 16px; display: flex; gap: 8px;
         z-index: 2; }
   button { padding: 10px 16px; background: #1e293b; color: #e2e8f0;
@@ -12,7 +13,7 @@
   /* The signature rows are LINKS into the explorer, so this panel must accept
      clicks. */
   #txpanel { position: fixed; left: 16px; top: 68px; width: 430px;
-             max-height: calc(100vh - 110px); display: flex;
+             height: min(680px, calc(100dvh - 110px)); display: flex;
              flex-direction: column;
              background: rgba(10,15,22,0.72); border: 1px solid #1e293b;
              border-radius: 8px; backdrop-filter: blur(6px); }
@@ -20,16 +21,25 @@
              color: #94a3b8; border-bottom: 1px solid #1e293b;
              display: flex; justify-content: space-between; }
   #txtitle .dot { color: #4ade80; }
-  #txpause { padding: 0 7px; font-size: 10px; letter-spacing: 0.08em;
+  #txpause, #txlatest { padding: 0 7px; font-size: 10px; letter-spacing: 0.08em;
              border-radius: 4px; pointer-events: auto; }
+  #txtitle, #txstats, #txcaption { flex-shrink: 0; }
   #txstats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px;
              background: #1e293b; border-bottom: 1px solid #1e293b; }
   #txstats div { background: #0b111a; padding: 7px 10px 8px; }
   #txstats .k { font-size: 9px; letter-spacing: 0.1em; color: #64748b; }
   #txstats .v { font-size: 15px; color: #e2e8f0; margin-top: 2px; }
   #txstats .v.warn { color: #fbbf24; }
-  #feed { padding: 6px 0 8px; overflow: hidden; font-size: 11px;
-          line-height: 1.7; }
+  #feed { padding: 6px 0 8px; overflow-y: auto; overflow-x: hidden;
+          min-height: 0; flex: 1; font-size: 11px; line-height: 1.7;
+          overscroll-behavior: contain; overflow-anchor: none;
+          scrollbar-width: thin; scrollbar-color: #475569 #0b111a; }
+  #feed:focus-visible { outline: 1px solid #7dd3fc; outline-offset: -2px; }
+  #feed .transactions { list-style: none; margin: 0; padding: 0; }
+  #feed .transactions .row { display: grid; grid-template-columns: 68px 128px minmax(0,1fr); gap: 6px; }
+  #feed .transactions .tx-edge { overflow: hidden; text-overflow: ellipsis; }
+  #feed:not(.held) .transactions .row:first-child { background: #38bdf81a; border-left-color: #38bdf8; }
+  #txcaption { padding: 7px 12px; border-top: 1px solid #1e293b; color: #64748b; font-size: 9px; }
   /* The row whose transfers are CURRENTLY drawing as particles. Without this
      the panel is a log next to an animation; with it they are one thing. */
   #feed .row { padding: 1px 12px; white-space: pre; border-left: 2px solid transparent; }
@@ -70,16 +80,101 @@
   #credit { position: fixed; right: 16px; bottom: 16px; font-size: 10px;
             opacity: 0.4; }
   #credit a { color: inherit; }
+  #worm-classifier { position: fixed; right: 16px; top: 68px; z-index: 4;
+    box-sizing: border-box; width: min(480px, calc(100vw - 32px));
+    max-height: calc(100dvh - 110px); overflow-y: auto; opacity: 0; pointer-events: none;
+    color: #cbd5e1; background: rgba(10,15,22,.88); border: 1px solid #1e293b;
+    border-radius: 8px; backdrop-filter: blur(6px); box-shadow: 0 12px 35px #0004;
+    font: 11px/1.65 ui-monospace, "Cascadia Mono", Menlo, monospace; }
+  #worm-classifier[hidden] { display: none; }
+  .classifier-top, .signal-labels { display: flex; align-items: center; justify-content: space-between; }
+  .classifier-top { padding: 9px 12px; border-bottom: 1px solid #1e293b; }
+  #classifier-title { margin: 0; color: #94a3b8; font-size: 10px; font-weight: 400; letter-spacing: .12em; }
+  #classifier-close { padding: 0 5px; border: 0; background: transparent; color: #94a3b8; font-size: 18px; line-height: 1; }
+  .classifier-body { display: grid; grid-template-columns: 175px minmax(0,1fr); gap: 15px; align-items: center; padding: 18px 16px 8px; }
+  .classifier-radial { margin: 0; text-align: center; }
+  .classifier-radial svg { display: block; width: 100%; overflow: visible; }
+  .classifier-rings { fill: none; stroke: #334155; stroke-width: 1; }
+  .classifier-axes { fill: #94a3b8; font-size: 9px; text-anchor: middle; }
+  #classifier-forward { fill: #38bdf8; fill-opacity: .8; stroke: #7dd3fc; stroke-width: .5; }
+  #classifier-reverse { fill: #f59e0b; fill-opacity: .6; stroke: #fbbf24; stroke-width: .5; }
+  .classifier-radial figcaption { margin-top: 3px; color: #94a3b8; font-size: 9px; }
+  .classifier-readings { display: grid; grid-template-columns: 1fr auto; gap: 7px 10px; margin: 0; font-variant-numeric: tabular-nums; }
+  .classifier-readings dt { color: #94a3b8; }
+  .classifier-readings dd { margin: 0; text-align: right; color: #e2e8f0; }
+  #classifier-state { color: #7dd3fc; }
+  #classifier-forward-value { color: #7dd3fc; }
+  #classifier-reverse-value { color: #fbbf24; }
+  #classifier-status { color: #cbd5e1; }
+  #worm-classifier[data-status="live"] #classifier-status { color: #4ade80; }
+  #classifier-meaning { min-height: 32px; margin: 6px 16px 15px; color: #a5b4c7; font-size: 10px; }
+  .classifier-signal { margin: 0 16px; padding-top: 12px; border-top: 1px solid #1e293b; }
+  .signal-labels { margin-bottom: 9px; font-size: 11px; }
+  .signal-labels > :first-child { color: #fca5a5; }
+  .signal-labels > :last-child { color: #86efac; }
+  #classifier-tilt { font-variant-numeric: tabular-nums; color: #e2e8f0; }
+  #classifier-meter { position: relative; height: 9px; margin: 0 2px;
+    background: linear-gradient(90deg, #ef444426, #1e293b 48%, #1e293b 52%, #22c55e26);
+    border: 1px solid #334155; border-radius: 8px; }
+  #classifier-meter::after { content: ""; position: absolute; left: 50%; top: -1px; bottom: -1px; width: 1px; background: #64748b; }
+  #classifier-needle { position: absolute; z-index: 1; left: 50%; top: -4px; width: 3px; height: 17px;
+    transform: translateX(-50%); background: #e2e8f0; border-radius: 2px;
+    transition: left .45s cubic-bezier(.2,.7,.2,1); }
+  .classifier-note { margin: 10px 0 12px; color: #94a3b8; font-size: 9px; }
+  #worm-classifier :focus-visible, #worm-readout:focus-visible { outline: 2px solid #7dd3fc; outline-offset: 3px; }
+  @media (max-width: 700px) {
+    .classifier-body { grid-template-columns: 115px minmax(0,1fr); gap: 12px; padding: 16px 12px 8px; }
+    .classifier-readings { gap: 6px; font-size: 9px; }
+    .classifier-radial figcaption { font-size: 8px; }
+    #ui { gap: 5px; }
+    #ui button { padding: 9px 10px; font-size: 11px; }
+    #txpanel { width: min(430px, calc(100vw - 32px)); }
+  }
+  @media (prefers-reduced-motion: reduce) { #classifier-needle { transition: none; } }
 </style></head>
 <body>
   <div id="ui">
     <button id="touch-head">Touch head</button>
     <button id="touch-tail">Touch tail</button>
+    <button id="worm-readout" aria-controls="worm-classifier" aria-expanded="false">Worm readout</button>
   </div>
+  <aside id="worm-classifier" aria-labelledby="classifier-title" data-status="waiting" hidden>
+    <div class="classifier-top"><h2 id="classifier-title">WORM BEHAVIOR / C. ELEGANS</h2><button id="classifier-close" aria-label="Close worm readout">&times;</button></div>
+    <div class="classifier-body">
+      <figure class="classifier-radial">
+        <svg viewBox="0 0 200 200" role="img" aria-labelledby="classifier-plot-title">
+          <title id="classifier-plot-title">Forward and reverse neural drives aligned with the worm's head heading</title>
+          <g class="classifier-rings"><circle cx="100" cy="100" r="72"/><circle cx="100" cy="100" r="48"/><circle cx="100" cy="100" r="24"/></g>
+          <g class="classifier-axes"><text x="100" y="17">−Z</text><text x="187" y="103">+X</text><text x="100" y="190">+Z</text><text x="13" y="103">−X</text></g>
+          <g id="classifier-heading-plot" transform="rotate(90 100 100)">
+            <path id="classifier-forward" d=""/><path id="classifier-reverse" d="" transform="rotate(180 100 100)"/>
+            <path d="M100 100 V23 M96 30 L100 23 104 30" fill="none" stroke="#e2e8f0" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </g>
+          <circle cx="100" cy="100" r="2.5" fill="#e2e8f0"/>
+        </svg>
+        <figcaption>radius = neural drive</figcaption>
+      </figure>
+      <dl class="classifier-readings">
+        <dt>State</dt><dd id="classifier-state" aria-live="polite">Awaiting activity</dd>
+        <dt>Head heading</dt><dd id="classifier-heading">—</dd>
+        <dt>Forward drive</dt><dd id="classifier-forward-value">—</dd>
+        <dt>Reverse drive</dt><dd id="classifier-reverse-value">—</dd>
+        <dt>Playback</dt><dd id="classifier-status">Awaiting signal</dd>
+        <dt>Sample age</dt><dd id="classifier-age">—</dd>
+      </dl>
+    </div>
+    <p id="classifier-meaning">The readout starts when a motor-state sample arrives.</p>
+    <div class="classifier-signal">
+      <div class="signal-labels"><span>Sell</span><span id="classifier-tilt">Neutral</span><span>Buy</span></div>
+      <div id="classifier-meter" role="meter" aria-label="Behavior-derived Buy or Sell tilt" aria-valuemin="-100" aria-valuemax="100" aria-valuenow="0" aria-valuetext="Neutral"><i id="classifier-needle" aria-hidden="true"></i></div>
+      <p class="classifier-note">Behavior heuristic · not a market forecast</p>
+    </div>
+  </aside>
   <div id="txpanel">
-    <div id="txtitle"><span>LIVE TRANSACTIONS &middot; THRU ALPHANET</span><span><button id="txpause">PAUSE</button> <span class="dot">&#9679;</span></span></div>
+    <div id="txtitle"><span>LIVE TRANSACTIONS &middot; THRU ALPHANET</span><span><button id="txlatest" hidden aria-label="Return to latest transactions">LATEST ↑</button> <button id="txpause">PAUSE</button> <span class="dot">&#9679;</span></span></div>
     <div id="txstats"></div>
-    <div id="feed"></div>
+    <div id="feed" tabindex="0" role="region" aria-label="Confirmed worm transactions, scroll to browse history"></div>
+    <div id="txcaption">Confirmed receipts · paced playback · latest 500</div>
   </div>
   <div id="intro">
     <img id="vs" src="/fly-vs-worms.png" width="720" height="580" alt="Fly vs Worms">

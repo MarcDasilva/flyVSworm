@@ -26,8 +26,8 @@ const LIFT = 0.62;
 // from the background firing instead of washing the whole ring out.
 const RATE_LOW_HZ = 20;
 const RATE_HIGH_HZ = 200;
-/** Emission of a cell the model is not firing. */
-const IDLE_GLOW = 0.12;
+/** Keep the revealed circuit readable even when the live model is offline. */
+const IDLE_GLOW = 0.6;
 /** Seconds a single spike's extra brightness takes to decay. */
 const FLICKER_TAU = 0.11;
 const OUTLINE_COLOR = 0x8fa3b8;
@@ -140,6 +140,7 @@ export class FlyBrain {
     const shell = (color: number, opacity: number): THREE.MeshStandardMaterial => {
       const m = new THREE.MeshStandardMaterial({
         color, transparent: true, opacity, depthWrite: false, roughness: 1,
+        emissive: color, emissiveIntensity: 0.25,
         side: THREE.DoubleSide, forceSinglePass: true,
       });
       this.shells.set(m, opacity);
@@ -176,8 +177,7 @@ export class FlyBrain {
         // The cell's own colour is held DOWN and the firing is carried by
         // emission: lit at full strength by the room's lights, a silent cell
         // and a cell at 200 Hz look nearly the same and the bump disappears.
-        // Idle is dim rather than black so the circuit still reads when the
-        // model is not running.
+        // A steady base glow keeps the revealed circuit readable offline.
         color: color.clone().multiplyScalar(0.3), emissive: color,
         emissiveIntensity: IDLE_GLOW, roughness: 0.55,
         transparent: true, opacity: 1,

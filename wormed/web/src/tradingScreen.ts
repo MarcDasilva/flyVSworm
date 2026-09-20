@@ -1,6 +1,9 @@
-// The computer screen: a trading-style chart drawn on a canvas and used as a three.js texture.
+// The market both animals trade, drawn on canvases and used as three.js textures.
 // Stand-in data: a random-walk price in 1 s candles. The fly's keystrokes type order commands
 // on the bottom line; Enter fills the order, moves the position strip and marks the candle.
+//
+// TWO views of the one market: `texture` for the desks, `marketTexture` for the room's board.
+// Same candles, and the board's carries no book — see render().
 
 import * as THREE from "three";
 
@@ -30,9 +33,13 @@ interface Candle {
 }
 
 export class TradingScreen {
+  /** The desks' view: the market with the trader's own book over it — position, fills, orders. */
   readonly texture: THREE.CanvasTexture;
-  private readonly canvas: HTMLCanvasElement;
+  /** The room's view: the SAME market with the book stripped out. The board behind the exhibit
+   *  is a price feed; putting the desks' orders on a wall credits the trades to the wall. */
+  readonly marketTexture: THREE.CanvasTexture;
   private readonly ctx: CanvasRenderingContext2D;
+  private readonly marketCtx: CanvasRenderingContext2D;
   private readonly font = 'ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace';
 
   private candles: Candle[] = [];
@@ -49,12 +56,19 @@ export class TradingScreen {
   private dirty = true;
 
   constructor() {
-    this.canvas = document.createElement("canvas");
-    this.canvas.width = W;
-    this.canvas.height = H;
-    this.ctx = this.canvas.getContext("2d")!;
-    this.texture = new THREE.CanvasTexture(this.canvas);
-    this.texture.colorSpace = THREE.SRGBColorSpace;
+    const surface = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = W;
+      canvas.height = H;
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      return { ctx: canvas.getContext("2d")!, texture };
+    };
+    const desks = surface(), room = surface();
+    this.ctx = desks.ctx;
+    this.texture = desks.texture;
+    this.marketCtx = room.ctx;
+    this.marketTexture = room.texture;
 
     for (let i = 0; i < CANDLES; i++) this.candles.push(this.nextCandle());
     this.command = this.nextCommand();
@@ -94,6 +108,7 @@ export class TradingScreen {
 
   dispose() {
     this.texture.dispose();
+    this.marketTexture.dispose();
   }
 
   private nextCandle(): Candle {
@@ -129,7 +144,16 @@ export class TradingScreen {
 
   private draw() {
     this.dirty = false;
-    const g = this.ctx;
+    this.render(this.ctx, true);
+    this.render(this.marketCtx, false);
+    this.texture.needsUpdate = true;
+    this.marketTexture.needsUpdate = true;
+  }
+
+  /** One frame of the market. `trading` adds the desk's own book on top: the position readout,
+   *  the fill markers, the position strip and the order line. With it false the chart takes the
+   *  whole panel — see marketTexture for why the room's board never gets the book. */
+  private render(g: CanvasRenderingContext2D, trading: boolean) {
     g.fillStyle = C.bg;
     g.fillRect(0, 0, W, H);
 
@@ -138,16 +162,26 @@ export class TradingScreen {
     g.textBaseline = "middle";
     g.fillStyle = C.text;
     g.textAlign = "left";
-    g.fillText("MARKET · 1s", 32, 36);
+    g.fillText("MARKET \u00b7 1s", 32, 36);
     g.textAlign = "right";
-    const pos = this.position;
-    g.fillStyle = pos > 0.001 ? C.up : pos < -0.001 ? C.down : C.text;
-    const label = pos > 0.001 ? "LONG" : pos < -0.001 ? "SHORT" : "FLAT";
-    g.fillText(`${label} ${Math.abs(pos).toFixed(2)}`, W - 32, 36);
+    if (trading) {
+      const pos = this.position;
+      g.fillStyle = pos > 0.001 ? C.up : pos < -0.001 ? C.down : C.text;
+      const label = pos > 0.001 ? "LONG" : pos < -0.001 ? "SHORT" : "FLAT";
+      g.fillText(`${label} ${Math.abs(pos).toFixed(2)}`, W - 32, 36);
+    } else {
+      // The move over the visible window. Market data, not anybody's book — the one number a
+      // price feed is allowed to put where the position readout sits.
+      const open = this.candles[0].open;
+      const change = ((this.price - open) / open) * 100;
+      g.fillStyle = change >= 0 ? C.up : C.down;
+      g.fillText(`${change >= 0 ? "+" : ""}${change.toFixed(2)}%`, W - 32, 36);
+    }
 
-    // price chart
+    // price chart. Without the book below it the chart takes the space the strip and the order
+    // line would have had, or the board is a graph sitting on 200 px of black.
     const top = 72;
-    const bottom = 420;
+    const bottom = trading ? 420 : 584;
     const left = 32;
     const right = W - 120;
     let lo = Infinity;
@@ -191,7 +225,7 @@ export class TradingScreen {
       const y0 = y(Math.max(c.open, c.close));
       const h = Math.max(2, y(Math.min(c.open, c.close)) - y0);
       g.fillRect(x - body / 2, y0, body, h);
-      if (c.fill) {
+      if (trading && c.fill) {
         const buy = c.fill === "buy";
         const ty = buy ? y(c.low) + 16 : y(c.high) - 16;
         g.fillStyle = C.accent;
@@ -210,6 +244,7 @@ export class TradingScreen {
     g.fillRect(right + 4, lastY - 14, W - right - 12, 28);
     g.fillStyle = C.bg;
     g.fillText(this.price.toFixed(2), right + 12, lastY);
+    if (!trading) return;
 
     // position strip: one bar per candle, up = long, down = short
     const mid = 486;
@@ -242,7 +277,5 @@ export class TradingScreen {
       g.fillStyle = C.accent;
       g.fillRect(cx, 594, 15, 28);
     }
-
-    this.texture.needsUpdate = true;
   }
 }
