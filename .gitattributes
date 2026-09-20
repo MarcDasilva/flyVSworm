@@ -1,0 +1,10 @@
+# The app's data files are parsed byte for byte - dex.lua and egg.lua anchor
+# their field patterns with $ - and LittleFS receives exactly what git checked
+# out. A CRLF working tree therefore ships a dex.txt the badge cannot read, and
+# the failure looks like "expected 36 species, found 0" rather than anything to
+# do with line endings. Everything text here is LF, on every platform.
+* text=auto eol=lf
+*.png binary
+*.gif binary
+*.bin binary
+*.pal binary
