@@ -1,0 +1,49 @@
+{
+  "source": {
+    "file": "data/cx_model.npz",
+    "content_sha256": "f5bcdcf9dec98d97fec163eff7b13ca80554f3656ee9bfd0204193f119363e5d"
+  },
+  "content_sha256": "f9a731441f4edca17d0d3020aa2b55fa78622268721a64bd2834b63df39c88ef",
+  "neurons": {
+    "EPG": 50,
+    "PEN_L": 21,
+    "PEN_R": 21,
+    "D7": 42
+  },
+  "n_wedges": 16,
+  "smooth_wedges": 0.75,
+  "units": "counts in 1/1000 synapse; pathway_mean = measured mean count per connection, same units",
+  "epg_per_wedge": [
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    4,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    4,
+    3
+  ],
+  "displacement_deg": {
+    "median": 4.95,
+    "max": 33.33
+  },
+  "pathway_synapses": {
+    "EPG->EPG": 7678.6,
+    "EPG->PEN": 10641.4,
+    "PEN->EPG": 22079.9,
+    "EPG->D7": 17709.7,
+    "D7->EPG": 7707.6,
+    "D7->D7": 24499.9,
+    "D7->PEN": 12403.9,
+    "PEN->PEN": 11248.3
+  },
+  "choices": "Averaged ring (cx_averaged.npz; the user's decision: the measured wiring pins the bump in a few resting\nspots, so first a ring wired the same at every heading, then blend the measured wiring back in*):\n  neurons   the same neurons, classes and counts; measured_index maps each row to its cx_model row.\n  angles    EPG and PEN as above; D7: the synapse-weighted circular mean of the EPG that drive it.\n  spacing   each class evenly spaced round the ring, in its measured angular order, rotated to the\n            least displacement from the measured angles. Wedges from these angles (D7: -1).\n  profiles  per (pre class, post class): the measured synapse count per pair (zeros included, no\n            self-pairs) as a function of angle difference, smoothed by a circular Gaussian of\n            SMOOTH_WEDGES wedges, evaluated at the even-spaced angle differences. Pairs under\n            PRUNE_BELOW synapse are dropped* (the fixed-point port's cost scales with connections:\n            -30% connections for 0.7% of the synapse mass).\n  units     counts stored as integer thousandths of a synapse; pathway_mean holds the MEASURED mean\n            count per connection in the same units, so a gain means the same in both files."
+}

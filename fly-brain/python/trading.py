@@ -6,21 +6,38 @@ Input side (DriveMapper): price momentum becomes PUSH-PULL turning drive,
 used: above the PEN threshold current it turns the bump the wrong way (see
 tests.t3_phases).
 
-The drive magnitude respects the measured turning curve of the tuned fly
-(speed vs push-pull drive, both directions, seeds 0-4):
-    below ~0.4x threshold current  bump barely moves (dead zone)
-    0.5x -> ~2.4 wedges/s, 0.9x -> ~5.5, 1.3x -> ~13.5, 1.6x -> ~19
-so the drive jumps straight to min_drive once the signal leaves its dead band
-and is capped at max_drive. Two safety limits, both measured: after 3 s of
-drive an ABRUPT stop kills the bump from 1.6x (4/5 seeds) but never from 1.3x
-or below, and a ramp-down over 300 ticks is safe from every level up to 1.6x.
-So the cap is 1.3x and the drive level changes by at most max_step per bar.
+The trading fly is the rotation-averaged hemibrain ring (spec/params_hemibrain_avg.json,
+user decision 2026-09-19); the procedural 56-neuron fly (spec/params.json) is legacy.
+Measured turning curve of the trading fly (speed vs push-pull drive, seeds 0-4,
+CCW / CW):
+    0.2x -> +1.0 / -0.35 wedges/s, 0.5x -> +2.2 / -1.8, 0.9x -> +3.6 / -3.4,
+    1.3x -> +4.5 / -4.2, 2.0x -> +5.8 / -5.6
+There is no dead zone, but clockwise is slower at low drive: a ~0.3 wedges/s
+counterclockwise bias from the measured left/right asymmetry of the wiring.
+The drive TARGET jumps straight to min_drive once the signal leaves its dead
+band and is capped at max_drive. The APPLIED level still moves by at most
+max_step per bar, so the first bar out of the band applies 0.3x.
+Safety, measured after 3 s of drive: on the trading fly, abrupt stops and the
+stepped ramp-down both keep the bump from every level up to 2.0x. The cap of
+1.3x was set on the legacy fly, where abrupt stops lose the bump from 1.2x
+(2/20 runs) but the stepped ramp (at most max_step per bar) is safe up to 1.3x
+(user decision: the cap rests on the stepped ramp). test_trading checks the
+ramp from the cap, an abrupt stop from 1.1x as margin, and min_drive's speed,
+on whichever spec the tests run. The legacy fly turns much faster (1.3x ->
+~15 wedges/s, dead zone below ~0.3x), so on it the position saturates early.
 No drive during the first warmup_bars bars, while the averages fill (on the
 first bar the signal is +/-1 whatever the market does).
 
 Output side (Readout): the bump's turning speed is the trade. CCW turning =
 long, CW = short, size proportional to speed, scaled by bump strength
 (confidence). No single bump -> flat. The landmark input is not used.
+Calibrated on the trading fly (user decision: a 500-tick window). Resting
+wander over 500 ticks (240 runs x 8 s): 99% under 0.85 wedges/s, max 1.88; at
+min_drive (0.6x) every window turns faster than ~1.2 (1st percentile 1.45 CW).
+So min_speed 0.8 zeroes almost all resting wander, and full_speed 7.0 keeps the
+worst resting blip at a 0.27 position (the tests allow 0.3) while the cap
+(~4.4 wedges/s) reaches ~0.63. The 250-tick window made resting blips reach
+2.8 wedges/s, too close to the driven speeds.
 """
 from dataclasses import dataclass
 
@@ -32,8 +49,8 @@ class DriveParams:
     span_bars: int = 40       # EMA span (bars) of the return and absolute-return averages
     dead_band: float = 0.35   # |signal| below this -> no drive (pure noise exceeds it ~7% of bars)
     full_scale: float = 0.8   # |signal| at which the drive reaches max_drive
-    min_drive: float = 0.5    # drive at the dead-band edge, x threshold current (dead zone ends ~0.4-0.5)
-    max_drive: float = 1.3    # drive cap, x threshold current (abrupt stops from here are safe)
+    min_drive: float = 0.6    # drive at the dead-band edge, x threshold current (trading fly ~2.3-2.7 wedges/s)
+    max_drive: float = 1.3    # drive cap, x threshold current (the max_step-per-bar stop from here is safe)
     max_step: float = 0.3     # largest change of drive level per bar, x threshold current
     warmup_bars: int = 20     # no drive until this many bars have been seen
 
@@ -81,9 +98,9 @@ class DriveMapper:
 
 @dataclass
 class ReadoutParams:
-    window_ticks: int = 250      # turning speed is measured over this many ticks
-    min_speed: float = 0.5       # wedges/s; slower counts as not turning (bump wander at rest is ~0.1)
-    full_speed: float = 10.0     # wedges/s that maps to a full position
+    window_ticks: int = 500      # turning speed is measured over this many ticks (5 bars)
+    min_speed: float = 0.8       # wedges/s; slower counts as not turning (resting wander: ~99% below)
+    full_speed: float = 7.0      # wedges/s that maps to a full position (resting max 1.88 -> 0.27; cap ~4.4 -> ~0.63)
     strength_floor: float = 0.3  # bump strength at or below which confidence is 0 (T1's threshold)
     strength_full: float = 0.8   # bump strength at which confidence is 1
 

@@ -1,3 +1,6 @@
 .venv/
 __pycache__/
 .pytest_cache/
+chain/build/
+sender/node_modules/
+data/chain_sender.lock

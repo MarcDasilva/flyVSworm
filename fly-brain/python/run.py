@@ -1,7 +1,7 @@
 """CLI for the float reference model.
 
   python run.py --demo     out/weights.png and out/reference.png (T1 -> T2 -> T3)
-  python run.py --test     T1-T8 on every seed in spec/params.json
+  python run.py --test     T1-T8 on every seed in the spec (default: the hemibrain ring; --spec spec/params.json = legacy)
   python run.py --golden   record the golden hashes (brain demo run + trading layer) after changing params
   python run.py --replay FILE   re-run a live session saved from the web page ("Save run") exactly
 """
@@ -16,7 +16,7 @@ import tests
 from model_float import load_spec
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-SPEC = os.path.join(ROOT, "spec", "params.json")
+SPEC = tests.SPEC_PATH  # FLY_SPEC or --spec select another spec
 OUT = os.path.join(ROOT, "out")
 
 
@@ -24,7 +24,7 @@ def demo(seed=None):
     p, spec = load_spec(SPEC)
     pr = spec["protocol"]
     seed = spec["seeds"][0] if seed is None else seed
-    cx = connectome.build_procedural(p)
+    cx = connectome.build(p, spec.get("connectome"))
     os.makedirs(OUT, exist_ok=True)
     plot.plot_weights(cx, os.path.join(OUT, "weights.png"))
 
@@ -35,10 +35,11 @@ def demo(seed=None):
 
 
 def golden(seed=None):
-    """Record the golden trajectory hash for the current spec in spec/golden.json."""
+    """Record the golden hashes for the current spec in its golden file (tests.GOLDEN_PATH)."""
     p, spec = load_spec(SPEC)
     seed = spec["seeds"][0] if seed is None else seed
-    g = {"protocol": "demo", "seed": seed, "sha256": tests.golden_digest(p, spec["protocol"], seed),
+    g = {"protocol": "demo", "seed": seed,
+         "sha256": tests.golden_digest(p, spec["protocol"], seed, spec.get("connectome")),
          "made_with": tests.golden_key(spec),
          "trading": {"seed": 0, "returns": "live.golden_returns()", "sha256": live.trading_digest(0),
                      "made_with": {"spec": tests.golden_key(spec), **live.trading_key()}}}
@@ -61,7 +62,7 @@ def replay(path):
 
 def test():
     p, spec = load_spec(SPEC)
-    results = tests.run_suite(p, spec["protocol"], spec["seeds"])
+    results = tests.run_suite(p, spec["protocol"], spec["seeds"], spec.get("connectome"))
     for r in results.values():
         print(r.report())
     print("\n" + tests.format_results(results))
@@ -72,10 +73,14 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--demo", action="store_true", help="write out/weights.png and out/reference.png")
     ap.add_argument("--test", action="store_true", help="run T1-T8 on all seeds")
-    ap.add_argument("--golden", action="store_true", help="record the golden hashes in spec/golden.json")
+    ap.add_argument("--golden", action="store_true", help="record the golden hashes in the spec's golden file")
     ap.add_argument("--replay", metavar="FILE", help="re-run a live session saved with the page's Save run button")
     ap.add_argument("--seed", type=int, default=None, help="seed for --demo/--golden (default: first spec seed)")
+    ap.add_argument("--spec", default=None, help="spec file (default spec/params_hemibrain_avg.json, or FLY_SPEC)")
     args = ap.parse_args()
+    if args.spec:  # everything below reads SPEC / tests.SPEC_PATH / tests.GOLDEN_PATH / live.SPEC_PATH
+        SPEC = tests.SPEC_PATH = live.SPEC_PATH = os.path.abspath(args.spec)
+        tests.GOLDEN_PATH = tests.golden_path(SPEC)
     if not (args.demo or args.test or args.golden or args.replay):
         ap.print_help()
     if args.replay:

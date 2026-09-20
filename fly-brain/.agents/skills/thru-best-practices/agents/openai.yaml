@@ -1,0 +1,15 @@
+interface:
+  display_name: "Thru Best Practices"
+  short_description: "Build Thru programs, apps, and ABIs"
+  default_prompt: "Use $thru-best-practices to build, validate, deploy, and wire a Thru counter program into a Next.js app."
+
+policy:
+  allow_implicit_invocation: true
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "thruExplorer"
+      description: "Thru Explorer MCP server for live chain inspection"
+      transport: "streamable_http"
+      url: "https://scan.thru.org/api/mcp"

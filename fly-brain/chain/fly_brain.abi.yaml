@@ -1,0 +1,427 @@
+abi:
+  package: "org.flybrain.chain"
+  name: "Fly Brain"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: >
+    The fruit fly heading circuit on Thru: a program-derived account per neuron (its wallet) and one
+    transaction per measured synapse. The accounts hold current totals; the events hold every synapse
+    ever recorded. Mirrors chain/examples/tn_fly_brain.h field for field; the off-chain source of
+    truth is data/chain_manifest.npz (python/chain_manifest.py).
+  imports: []
+  options:
+    program-metadata:
+      root-types:
+        instruction-root: "FlyBrainInstruction"
+        account-root: "FlyBrainAccount"
+        events: "FlyBrainEvent"
+        errors: "FlyBrainError"
+
+types:
+  # ------------------------------------------------------------------ accounts --
+  # Every account starts with version, then kind; the payload follows from kind.
+  - name: BrainAccountBody
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: pad
+            field-type:
+              array:
+                size:
+                  literal:
+                    u64: 2
+                element-type:
+                  primitive: u8
+          - name: neuron_count           # neurons recorded so far
+            field-type:
+              primitive: u32
+          - name: synapse_count          # synapses recorded so far; the resume point
+            field-type:
+              primitive: u32
+          - name: neuron_total
+            field-type:
+              primitive: u32
+          - name: synapse_total
+            field-type:
+              primitive: u32
+          - name: manifest_sha256        # data/chain_manifest.json content_sha256
+            field-type:
+              array:
+                size:
+                  literal:
+                    u64: 32
+                element-type:
+                  primitive: u8
+          - name: authority              # only this key may add neurons and synapses
+            field-type:
+              array:
+                size:
+                  literal:
+                    u64: 32
+                element-type:
+                  primitive: u8
+
+  - name: NeuronAccountBody
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: cls                    # 0 EPG, 1 PEN_L, 2 PEN_R, 3 D7
+            field-type:
+              primitive: u8
+          - name: wedge                  # 0..15, -1 for D7
+            field-type:
+              primitive: i8
+          - name: sign                   # +1 excitatory, -1 inhibitory
+            field-type:
+              primitive: i8
+          - name: pad
+            field-type:
+              array:
+                size:
+                  literal:
+                    u64: 3
+                element-type:
+                  primitive: u8
+          - name: out_count
+            field-type:
+              primitive: u32
+          - name: in_count
+            field-type:
+              primitive: u32
+          - name: body_id                # hemibrain body ID
+            field-type:
+              primitive: u64
+
+  - name: FlyBrainAccount
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: version
+            field-type:
+              primitive: u8
+          - name: kind
+            field-type:
+              primitive: u8
+          - name: body
+            field-type:
+              enum:
+                tag-ref:
+                  field-ref:
+                    path: [kind]
+                variants:
+                  - name: Brain
+                    tag-value: 0
+                    variant-type:
+                      type-ref:
+                        name: BrainAccountBody
+                  - name: Neuron
+                    tag-value: 1
+                    variant-type:
+                      type-ref:
+                        name: NeuronAccountBody
+
+  # -------------------------------------------------------------- instructions --
+  - name: CreateBrainArgs
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: account_index
+            field-type:
+              primitive: u16
+          - name: seed
+            field-type:
+              array:
+                size:
+                  literal:
+                    u64: 32
+                element-type:
+                  primitive: u8
+          - name: manifest_sha256
+            field-type:
+              array:
+                size:
+                  literal:
+                    u64: 32
+                element-type:
+                  primitive: u8
+          - name: authority
+            field-type:
+              array:
+                size:
+                  literal:
+                    u64: 32
+                element-type:
+                  primitive: u8
+          - name: neuron_total
+            field-type:
+              primitive: u32
+          - name: synapse_total
+            field-type:
+              primitive: u32
+          - name: proof_size
+            field-type:
+              primitive: u32
+          - name: proof
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: [proof_size]
+                element-type:
+                  primitive: u8
+
+  - name: CreateNeuronArgs
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: brain_index
+            field-type:
+              primitive: u16
+          - name: account_index
+            field-type:
+              primitive: u16
+          - name: index                  # manifest row; must equal the brain's neuron_count
+            field-type:
+              primitive: u32
+          - name: seed
+            field-type:
+              array:
+                size:
+                  literal:
+                    u64: 32
+                element-type:
+                  primitive: u8
+          - name: body_id
+            field-type:
+              primitive: u64
+          - name: cls
+            field-type:
+              primitive: u8
+          - name: wedge
+            field-type:
+              primitive: i8
+          - name: sign
+            field-type:
+              primitive: i8
+          - name: pad
+            field-type:
+              primitive: u8
+          - name: proof_size
+            field-type:
+              primitive: u32
+          - name: proof
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: [proof_size]
+                element-type:
+                  primitive: u8
+
+  - name: AddSynapseArgs
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: brain_index
+            field-type:
+              primitive: u16
+          - name: pre_index
+            field-type:
+              primitive: u16
+          - name: post_index
+            field-type:
+              primitive: u16
+          - name: pad
+            field-type:
+              primitive: u16
+          - name: index                  # manifest row; must equal the brain's synapse_count
+            field-type:
+              primitive: u32
+          - name: pre_body_id
+            field-type:
+              primitive: u64
+          - name: post_body_id
+            field-type:
+              primitive: u64
+          - name: pre_xyz                # T-bar location, hemibrain voxels (8 nm)
+            field-type:
+              array:
+                size:
+                  literal:
+                    u64: 3
+                element-type:
+                  primitive: i32
+          - name: post_xyz               # PSD location
+            field-type:
+              array:
+                size:
+                  literal:
+                    u64: 3
+                element-type:
+                  primitive: i32
+
+  - name: FlyBrainInstruction
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: instruction_type
+            field-type:
+              primitive: u32
+          - name: args
+            field-type:
+              enum:
+                tag-ref:
+                  field-ref:
+                    path: [instruction_type]
+                variants:
+                  - name: CreateBrain
+                    tag-value: 0
+                    variant-type:
+                      type-ref:
+                        name: CreateBrainArgs
+                  - name: CreateNeuron
+                    tag-value: 1
+                    variant-type:
+                      type-ref:
+                        name: CreateNeuronArgs
+                  - name: AddSynapse
+                    tag-value: 2
+                    variant-type:
+                      type-ref:
+                        name: AddSynapseArgs
+
+  # -------------------------------------------------------------------- events --
+  # Events start with version and kind too; kind 1 is chain_event.py's spike block, which this
+  # program does not emit (it records anatomy, not activity).
+  - name: BrainCreatedBody
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: neuron_total
+            field-type:
+              primitive: u32
+          - name: synapse_total
+            field-type:
+              primitive: u32
+          - name: manifest_sha256
+            field-type:
+              array:
+                size:
+                  literal:
+                    u64: 32
+                element-type:
+                  primitive: u8
+
+  - name: NeuronCreatedBody
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: cls
+            field-type:
+              primitive: u8
+          - name: wedge
+            field-type:
+              primitive: i8
+          - name: sign
+            field-type:
+              primitive: i8
+          - name: pad
+            field-type:
+              array:
+                size:
+                  literal:
+                    u64: 3
+                element-type:
+                  primitive: u8
+          - name: body_id
+            field-type:
+              primitive: u64
+
+  - name: SynapseAddedBody
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: pad
+            field-type:
+              array:
+                size:
+                  literal:
+                    u64: 6
+                element-type:
+                  primitive: u8
+          - name: pre_body_id
+            field-type:
+              primitive: u64
+          - name: post_body_id
+            field-type:
+              primitive: u64
+          - name: pre_xyz
+            field-type:
+              array:
+                size:
+                  literal:
+                    u64: 3
+                element-type:
+                  primitive: i32
+          - name: post_xyz
+            field-type:
+              array:
+                size:
+                  literal:
+                    u64: 3
+                element-type:
+                  primitive: i32
+
+  - name: FlyBrainEvent
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: version
+            field-type:
+              primitive: u8
+          - name: kind
+            field-type:
+              primitive: u8
+          - name: body
+            field-type:
+              enum:
+                tag-ref:
+                  field-ref:
+                    path: [kind]
+                variants:
+                  - name: BrainCreated
+                    tag-value: 2
+                    variant-type:
+                      type-ref:
+                        name: BrainCreatedBody
+                  - name: NeuronCreated
+                    tag-value: 3
+                    variant-type:
+                      type-ref:
+                        name: NeuronCreatedBody
+                  - name: SynapseAdded
+                    tag-value: 4
+                    variant-type:
+                      type-ref:
+                        name: SynapseAddedBody
+
+  # -------------------------------------------------------------------- errors --
+  - name: FlyBrainError
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: code                   # 0x1000 InstructionDataSize ... 0x100D BadNeuron
+            field-type:
+              primitive: u64

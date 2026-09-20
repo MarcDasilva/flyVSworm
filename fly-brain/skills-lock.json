@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "skills": {
+    "thru-best-practices": {
+      "source": "thru.org",
+      "sourceUrl": "https://thru.org",
+      "sourceType": "well-known",
+      "computedHash": "e596ed40662c718203ea6669adb82f8f0ebe1308587d5dfd54e4f6a4cb284052",
+      "wellKnownDigest": "sha256:f91f04c4dabf744884d52dfaa0e79448b54be48e4307b337b9448b187a945abd"
+    }
+  }
+}

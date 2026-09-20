@@ -85,7 +85,9 @@ def plot_reference(run, path, title):
     # 1: EPG spike raster
     tt, ii = np.nonzero(run.spikes[:, cx.idx["EPG"]])
     ax1.scatter(tt + 1, ii, s=3, marker="|", color=INK, linewidths=0.6)
-    ax1.set_ylim(-0.5, n - 0.5); ax1.set_ylabel("EPG wedge\n(spike raster)")
+    n_epg = cx.idx["EPG"].stop - cx.idx["EPG"].start
+    ax1.set_ylim(-0.5, n_epg - 0.5)
+    ax1.set_ylabel("EPG wedge\n(spike raster)" if n_epg == n else "EPG, by wedge\n(spike raster)")
 
     # 2: heading, each sample coloured by bump strength (one axis; no second scale)
     alive = run.rates[:, cx.idx["EPG"]].sum(axis=1) > 0  # heading is undefined on a silent ring
@@ -116,8 +118,8 @@ def plot_reference(run, path, title):
     for ax in (strip, ax1, ax2):
         plt.setp(ax.get_xticklabels(), visible=False)
 
-    # 4: final-state polar plot of the wedges (last rate window)
-    r = run.rates[-1, cx.idx["EPG"]]
+    # 4: final-state polar plot of the wedges (last rate window, mean over the EPG in each wedge)
+    r = metrics.wedge_rates(run.rates[-1, cx.idx["EPG"]], cx.wedge_of[cx.idx["EPG"]], n)
     theta = 2 * np.pi * np.arange(n) / n
     ax4.bar(theta, r, width=2 * np.pi / n * 0.85, color=SERIES[0], edgecolor=SURFACE, linewidth=2)
     h, s = metrics.heading(r, n)

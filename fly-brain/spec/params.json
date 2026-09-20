@@ -2,39 +2,46 @@
   "_provenance": [
     "Float reference parameters for the procedural 16-wedge connectome (connectome.build_procedural).",
     "Tuned 2026-09-19 in a Claude Code session. The brief's starting point saturated every population: with syn_decay 0.8 one spike delivers ~5*w of charge against a threshold of 1.",
-    "Path: random search, then evolutionary refinement (scratch tooling, not in the repo), found a slow-synapse regime with one persistent bump. T3 uses push-pull drive (+d PEN_L, -d PEN_R), per the user's decision: PEN_L-only drive above the PEN threshold current turns the bump clockwise (see tests.t3_phases). The final step was a search scored on robustness: nominal plus 10 one-at-a-time +/-10% weight perturbations, 5 seeds, T1-T8. The result was rounded to 4 significant figures and re-verified with tune.py --robustness.",
-    "Robustness: the one-at-a-time +/-10% gate (user decision) passes 10/10 on 5 seeds, and 5/10 fail at +/-15%. All-at-once corners at +/-10% pass 12/32 (recorded, not gated); every corner with w_ep and w_pe both -10% loses the bump. The result uses the smoothed metrics.bump_count the user adopted: with the unsmoothed metric and earlier T3 levels, one config (w_pe -10%) failed T5 on a single tick of rotation jitter. T3 levels were then raised to [0.5, 0.9, 1.3] x threshold current, because 0.3x sat on the dead-zone edge (history-dependent, ~0 rotation after a long hold). Pass/fail near the edge is chaotic: rounding the weights to 4 significant figures alone flipped one config.",
+    "Path: random search, then evolutionary refinement (scratch tooling, not in the repo), found a slow-synapse regime with one persistent bump. T3 uses push-pull drive (+d PEN_L, -d PEN_R), per the user's decision: PEN_L-only drive above the PEN threshold current turns the bump clockwise (see tests.t3_phases).",
+    "Retuned 2026-09-19 when the suite began checking T2 (with the bump set within 1 wedge of the landmark) and T3 from every start wedge (user decision): the previous values still passed at nominal but failed the +/-10% gate (5/10 one-at-a-time configs failed from 1-6 of the 16 headings). The user chose to retune rather than relax the gate. Search scored on robustness (scratch tooling): nominal, then one-at-a-time +/-10%, then +/-15%, 5 seeds, every start wedge, graded by the fraction of cases passing. Rounded to 4 significant figures, then verified with the real suite (T1-T8, including T7) and tune.py --robustness.",
+    "Robustness: one-at-a-time +/-10% passes 10/10 on 5 seeds (the gate); +/-15% passes 3/10. All-at-once corners at +/-10% pass 11/32 (recorded, not gated). At nominal, a review session ran the suite on held-out seeds 5-24: all pass. The demo sequence (T3 after the 2000-tick hold) turns CCW and faster with drive on seeds 0-9.",
     "Units: 1 tick = dt ms; currents in the model's units, where the threshold current is v_thresh/tau."
   ],
+  "connectome": {
+    "source": "procedural"
+  },
   "model": {
-    "tau": 12.97,
+    "tau": 12.18,
     "dt": 1.0,
-    "syn_decay": 0.9451,
+    "syn_decay": 0.9537,
     "v_thresh": 1.0,
     "v_reset": 0.0,
     "refrac_ticks": 2,
-    "w_ee": 0.01967,
-    "w_ed": 0.007004,
-    "w_de": 0.1097,
-    "w_ep": 0.08366,
-    "w_pe": 0.1643,
+    "w_ee": 0.01442,
+    "w_ed": 0.00623,
+    "w_de": 0.1085,
+    "w_ep": 0.0694,
+    "w_pe": 0.1583,
     "noise_amp": 0.0,
-    "neuromod_gain": 1.0
+    "neuromod_gain": 1.0,
+    "w_dd": 0.0,
+    "w_dp": 0.0,
+    "w_pp": 0.0
   },
   "protocol": {
-    "landmark_current": 0.5,
+    "landmark_current": 0.5309,
     "t3_drive_levels": [
-      0.03855,
-      0.06939,
-      0.1002
+      0.04516,
+      0.07389,
+      0.1158
     ],
-    "t8_drive": 0.03855,
-    "t7_noise_amp": 0.03927
+    "t8_drive": 0.04105,
+    "t7_noise_amp": 0.04052
   },
   "_protocol_notes": {
     "source": "None of these values are given in the brief; the user asked for them to be tuned and recorded here.",
-    "landmark_current": "inside its passing window (T4 needs enough to pull the bump 180 deg; T6 caps it at the refractory ceiling)",
-    "t3_drive_levels": "push-pull levels = [0.5, 0.9, 1.3] x v_thresh/tau. Push-pull still turns CCW above the threshold current (the clockwise reversal applies only to PEN_L-only drive). The lowest level stays well clear of the dead zone: 0.3x gave ~0 rotation after a long hold. Chosen with the +/-10% robustness gate, and checked CCW + increasing in both the T3 protocol and the demo sequence (after the 2000-tick hold) on seeds 0-9.",
+    "landmark_current": "chosen by the robustness search (T4 needs enough to pull the bump 180 deg; T6 caps it at the refractory ceiling)",
+    "t3_drive_levels": "push-pull levels = [0.55, 0.9, 1.41] x v_thresh/tau, chosen by the robustness search. Push-pull still turns CCW above the threshold current (the clockwise reversal applies only to PEN_L-only drive). Checked CCW + increasing from every start wedge (T3) and in the demo sequence after the 2000-tick hold on seeds 0-9. Below ~0.3x the bump barely moves.",
     "t8_drive": "0.5 x v_thresh/tau on both PEN_L and PEN_R",
     "t7_noise_amp": "0.1 x v_thresh / sqrt(tau/2): stationary membrane-noise std = 10% of threshold"
   },
@@ -50,29 +57,32 @@
     "margin_with_corners": null,
     "measured_on": {
       "model": {
-        "tau": 12.97,
+        "tau": 12.18,
         "dt": 1.0,
-        "syn_decay": 0.9451,
+        "syn_decay": 0.9537,
         "v_thresh": 1.0,
         "v_reset": 0.0,
         "refrac_ticks": 2,
-        "w_ee": 0.01967,
-        "w_ed": 0.007004,
-        "w_de": 0.1097,
-        "w_ep": 0.08366,
-        "w_pe": 0.1643,
+        "w_ee": 0.01442,
+        "w_ed": 0.00623,
+        "w_de": 0.1085,
+        "w_ep": 0.0694,
+        "w_pe": 0.1583,
         "noise_amp": 0.0,
-        "neuromod_gain": 1.0
+        "neuromod_gain": 1.0,
+        "w_dd": 0.0,
+        "w_dp": 0.0,
+        "w_pp": 0.0
       },
       "protocol": {
-        "landmark_current": 0.5,
+        "landmark_current": 0.5309,
         "t3_drive_levels": [
-          0.03855,
-          0.06939,
-          0.1002
+          0.04516,
+          0.07389,
+          0.1158
         ],
-        "t8_drive": 0.03855,
-        "t7_noise_amp": 0.03927
+        "t8_drive": 0.04105,
+        "t7_noise_amp": 0.04052
       },
       "seeds": [
         0,
@@ -80,25 +90,23 @@
         2,
         3,
         4
-      ]
+      ],
+      "connectome": {
+        "source": "procedural"
+      },
+      "suite": "T1-T8; T2 (with set-at <= 1 wedge) and T3 from every start wedge"
     },
     "gate": "margin_one_at_a_time >= 0.1 (user decision); corners are recorded but not gated. null = fails already at the smallest delta.",
-    "method": "w_ee, w_ed, w_de, w_ep, w_pe scaled by 1+/-delta one at a time (10 configs), and additionally at all 2^5 sign corners at once (32 configs); T1-T8 on every seed; margin = largest delta on the grid [0.1, 0.15, 0.2, 0.25, 0.3] at which every config passes",
+    "method": "w_ee, w_ed, w_de, w_ep, w_pe scaled by 1+/-delta one at a time (10 configs), and additionally at all 2^5 sign corners at once (32 configs); T1-T8; T2 (with set-at <= 1 wedge) and T3 from every start wedge, on every seed; margin = largest delta on the grid [0.1, 0.15, 0.2, 0.25, 0.3] at which every config passes",
     "failures": {
       "0.10": [
-        [
-          "corner ++++-",
-          [
-            "T2",
-            "T4"
-          ]
-        ],
         [
           "corner +++-+",
           [
             "T2",
-            "T4",
-            "T6"
+            "T3",
+            "T6",
+            "T7"
           ]
         ],
         [
@@ -108,6 +116,7 @@
             "T2",
             "T3",
             "T4",
+            "T5",
             "T6",
             "T7",
             "T8"
@@ -123,13 +132,11 @@
         [
           "corner ++---",
           [
-            "T1",
             "T2",
             "T3",
             "T4",
             "T6",
-            "T7",
-            "T8"
+            "T7"
           ]
         ],
         [
@@ -141,14 +148,18 @@
           ]
         ],
         [
+          "corner +-++-",
+          [
+            "T6"
+          ]
+        ],
+        [
           "corner +-+--",
           [
             "T2",
             "T3",
-            "T4",
             "T5",
-            "T6",
-            "T7"
+            "T6"
           ]
         ],
         [
@@ -169,28 +180,19 @@
         [
           "corner +---+",
           [
+            "T4",
             "T6"
           ]
         ],
         [
           "corner -+++-",
           [
-            "T2",
+            "T5",
             "T7"
           ]
         ],
         [
           "corner -++-+",
-          [
-            "T2",
-            "T4",
-            "T5",
-            "T6",
-            "T7"
-          ]
-        ],
-        [
-          "corner -++--",
           [
             "T1",
             "T2",
@@ -202,10 +204,23 @@
           ]
         ],
         [
+          "corner -++--",
+          [
+            "T1",
+            "T2",
+            "T3",
+            "T4",
+            "T5",
+            "T6",
+            "T7",
+            "T8"
+          ]
+        ],
+        [
           "corner -+-++",
           [
-            "T3",
-            "T4"
+            "T4",
+            "T6"
           ]
         ],
         [
@@ -215,6 +230,7 @@
             "T2",
             "T3",
             "T4",
+            "T5",
             "T6",
             "T7",
             "T8"
@@ -225,21 +241,23 @@
           [
             "T3",
             "T4",
-            "T5",
+            "T6"
+          ]
+        ],
+        [
+          "corner --++-",
+          [
             "T6"
           ]
         ],
         [
           "corner --+--",
           [
-            "T1",
             "T2",
             "T3",
             "T4",
             "T5",
-            "T6",
-            "T7",
-            "T8"
+            "T6"
           ]
         ],
         [
@@ -266,54 +284,74 @@
       ],
       "0.15": [
         [
-          "w_ed+",
+          "w_ed-",
+          [
+            "T6"
+          ]
+        ],
+        [
+          "w_de+",
           [
             "T2",
-            "T4"
-          ]
-        ],
-        [
-          "w_ep+",
-          [
             "T3",
-            "T4"
+            "T6"
           ]
         ],
         [
-          "w_ep-",
-          [
-            "T4",
-            "T6",
-            "T7"
-          ]
-        ],
-        [
-          "w_pe+",
+          "w_de-",
           [
             "T3",
             "T6"
           ]
         ],
         [
+          "w_ep+",
+          [
+            "T3"
+          ]
+        ],
+        [
+          "w_ep-",
+          [
+            "T2",
+            "T3",
+            "T6"
+          ]
+        ],
+        [
+          "w_pe+",
+          [
+            "T4",
+            "T5"
+          ]
+        ],
+        [
           "w_pe-",
           [
-            "T5"
+            "T1",
+            "T2",
+            "T3",
+            "T4",
+            "T5",
+            "T6",
+            "T7",
+            "T8"
           ]
         ],
         [
           "corner +++++",
           [
-            "T4"
+            "T4",
+            "T5"
           ]
         ],
         [
           "corner ++++-",
           [
             "T2",
-            "T4",
+            "T3",
             "T5",
-            "T6",
-            "T7"
+            "T6"
           ]
         ],
         [
@@ -323,6 +361,7 @@
             "T2",
             "T3",
             "T4",
+            "T5",
             "T6",
             "T7",
             "T8"
@@ -346,6 +385,12 @@
             "T3",
             "T4",
             "T6"
+          ]
+        ],
+        [
+          "corner ++--+",
+          [
+            "T2"
           ]
         ],
         [
@@ -377,14 +422,12 @@
         [
           "corner +-+--",
           [
-            "T1",
             "T2",
             "T3",
             "T4",
             "T5",
             "T6",
-            "T7",
-            "T8"
+            "T7"
           ]
         ],
         [
@@ -405,7 +448,6 @@
         [
           "corner +---+",
           [
-            "T3",
             "T4",
             "T6"
           ]
@@ -430,6 +472,7 @@
             "T2",
             "T3",
             "T4",
+            "T5",
             "T6",
             "T7",
             "T8"
@@ -442,6 +485,7 @@
             "T2",
             "T3",
             "T4",
+            "T5",
             "T6",
             "T7",
             "T8"
@@ -456,12 +500,21 @@
           ]
         ],
         [
+          "corner -+--+",
+          [
+            "T2",
+            "T3",
+            "T6"
+          ]
+        ],
+        [
           "corner -+---",
           [
             "T1",
             "T2",
             "T3",
             "T4",
+            "T5",
             "T6",
             "T7",
             "T8"
@@ -478,7 +531,8 @@
         [
           "corner --++-",
           [
-            "T3"
+            "T5",
+            "T6"
           ]
         ],
         [

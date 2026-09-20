@@ -1,0 +1,3431 @@
+{
+ "meta": {
+  "server": "neuprint.janelia.org",
+  "dataset": "hemibrain:v1.2.1",
+  "neuprint_python": "0.6.3",
+  "fetched_utc": "2026-09-19T19:14:45+00:00",
+  "circuit_neurons": 134,
+  "synapses": 114854,
+  "units": "hemibrain voxels (8 nm)",
+  "partner_min_synapses": 200,
+  "context_types": [
+   "ExR1"
+  ],
+  "rois": [
+   "EB",
+   "PB",
+   "FB",
+   "NO"
+  ]
+ },
+ "neurons": [
+  {
+   "body_id": 417998204,
+   "type": "PFNv",
+   "instance": "PFNv(PB05)_R4_C7",
+   "synapses_onto_circuit": 19,
+   "synapses_from_circuit": 209,
+   "why": "partner"
+  },
+  {
+   "body_id": 419060083,
+   "type": "PFGs",
+   "instance": "PFGs(PB10)_L2_C2",
+   "synapses_onto_circuit": 35,
+   "synapses_from_circuit": 178,
+   "why": "partner"
+  },
+  {
+   "body_id": 446714544,
+   "type": "PFNd",
+   "instance": "PFNd(PB04)_L5_C4",
+   "synapses_onto_circuit": 1,
+   "synapses_from_circuit": 345,
+   "why": "partner"
+  },
+  {
+   "body_id": 478077561,
+   "type": "PFNa",
+   "instance": "PFNa(PB03)_L4_C3",
+   "synapses_onto_circuit": 2,
+   "synapses_from_circuit": 260,
+   "why": "partner"
+  },
+  {
+   "body_id": 478427368,
+   "type": "PFNv",
+   "instance": "PFNv(PB05)_L5_C4",
+   "synapses_onto_circuit": 48,
+   "synapses_from_circuit": 263,
+   "why": "partner"
+  },
+  {
+   "body_id": 481112669,
+   "type": "PFL2",
+   "instance": "PFL2(PB12b)_R1_C4",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 337,
+   "why": "partner"
+  },
+  {
+   "body_id": 481121605,
+   "type": "PFL1",
+   "instance": "PFL1(PB12a)_L2_C3",
+   "synapses_onto_circuit": 7,
+   "synapses_from_circuit": 699,
+   "why": "partner"
+  },
+  {
+   "body_id": 539810773,
+   "type": "PFNa",
+   "instance": "PFNa(PB03)_L4_C3",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 220,
+   "why": "partner"
+  },
+  {
+   "body_id": 541119189,
+   "type": "PFNa",
+   "instance": "PFNa(PB03)_R4_C7",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 202,
+   "why": "partner"
+  },
+  {
+   "body_id": 541127846,
+   "type": "ExR5",
+   "instance": "ExR5(ring)_L",
+   "synapses_onto_circuit": 1127,
+   "synapses_from_circuit": 270,
+   "why": "partner"
+  },
+  {
+   "body_id": 569481415,
+   "type": "PFNa",
+   "instance": "PFNa(PB03)_L5_C4",
+   "synapses_onto_circuit": 2,
+   "synapses_from_circuit": 297,
+   "why": "partner"
+  },
+  {
+   "body_id": 572494993,
+   "type": "PFNv",
+   "instance": "PFNv(PB05)_R4_C7",
+   "synapses_onto_circuit": 29,
+   "synapses_from_circuit": 218,
+   "why": "partner"
+  },
+  {
+   "body_id": 601120917,
+   "type": "PFNv",
+   "instance": "PFNv(PB05)_R6_C5",
+   "synapses_onto_circuit": 30,
+   "synapses_from_circuit": 256,
+   "why": "partner"
+  },
+  {
+   "body_id": 604242162,
+   "type": "PFNv",
+   "instance": "PFNv(PB05)_L2_C1",
+   "synapses_onto_circuit": 65,
+   "synapses_from_circuit": 325,
+   "why": "partner"
+  },
+  {
+   "body_id": 632155800,
+   "type": "PFNv",
+   "instance": "PFNv(PB05)_R6_C5",
+   "synapses_onto_circuit": 38,
+   "synapses_from_circuit": 251,
+   "why": "partner"
+  },
+  {
+   "body_id": 632229278,
+   "type": "PFNd",
+   "instance": "PFNd(PB04)_L5_C4",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 411,
+   "why": "partner"
+  },
+  {
+   "body_id": 633943192,
+   "type": "PFNd",
+   "instance": "PFNd(PB04)_L4_C3",
+   "synapses_onto_circuit": 3,
+   "synapses_from_circuit": 358,
+   "why": "partner"
+  },
+  {
+   "body_id": 635234035,
+   "type": "PFL2",
+   "instance": "PFL2(PB12b)_R3_C3",
+   "synapses_onto_circuit": 10,
+   "synapses_from_circuit": 527,
+   "why": "partner"
+  },
+  {
+   "body_id": 663558074,
+   "type": "PFNa",
+   "instance": "PFNa(PB03)_R5_C6",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 242,
+   "why": "partner"
+  },
+  {
+   "body_id": 664235541,
+   "type": "PFNd",
+   "instance": "PFNd(PB04)_R4_C6",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 229,
+   "why": "partner"
+  },
+  {
+   "body_id": 664943511,
+   "type": "PFGs",
+   "instance": "PFGs(PB10)_R1_C1_irreg",
+   "synapses_onto_circuit": 35,
+   "synapses_from_circuit": 176,
+   "why": "partner"
+  },
+  {
+   "body_id": 666308023,
+   "type": "PFL3",
+   "instance": "PFL3(PB12c)_R1_C2_irreg",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 293,
+   "why": "partner"
+  },
+  {
+   "body_id": 666312288,
+   "type": "PFR_b",
+   "instance": "PFR_b(PB11b)_L1_C2",
+   "synapses_onto_circuit": 25,
+   "synapses_from_circuit": 186,
+   "why": "partner"
+  },
+  {
+   "body_id": 666994301,
+   "type": "PFL3",
+   "instance": "PFL3(PB12c)_R2_C1_irreg",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 298,
+   "why": "partner"
+  },
+  {
+   "body_id": 695671851,
+   "type": "PFNd",
+   "instance": "PFNd(PB04)_L4_C3",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 291,
+   "why": "partner"
+  },
+  {
+   "body_id": 696336849,
+   "type": "PFNa",
+   "instance": "PFNa(PB03)_L3_C2",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 298,
+   "why": "partner"
+  },
+  {
+   "body_id": 696682163,
+   "type": "EL",
+   "instance": "EL(EQ5)_L",
+   "synapses_onto_circuit": 468,
+   "synapses_from_circuit": 1218,
+   "why": "partner"
+  },
+  {
+   "body_id": 697355847,
+   "type": "PFNd",
+   "instance": "PFNd(PB04)_L3_C2",
+   "synapses_onto_circuit": 3,
+   "synapses_from_circuit": 388,
+   "why": "partner"
+  },
+  {
+   "body_id": 723602649,
+   "type": "PFNv",
+   "instance": "PFNv(PB05)_R2_C9",
+   "synapses_onto_circuit": 49,
+   "synapses_from_circuit": 175,
+   "why": "partner"
+  },
+  {
+   "body_id": 724267537,
+   "type": "PFNv",
+   "instance": "PFNv(PB05)_R5_C6",
+   "synapses_onto_circuit": 51,
+   "synapses_from_circuit": 396,
+   "why": "partner"
+  },
+  {
+   "body_id": 725942718,
+   "type": "EL",
+   "instance": "EL(EQ5)_R",
+   "synapses_onto_circuit": 428,
+   "synapses_from_circuit": 1307,
+   "why": "partner"
+  },
+  {
+   "body_id": 725951660,
+   "type": "EL",
+   "instance": "EL(EQ5)_R",
+   "synapses_onto_circuit": 445,
+   "synapses_from_circuit": 1133,
+   "why": "partner"
+  },
+  {
+   "body_id": 727350004,
+   "type": "EL",
+   "instance": "EL(EQ5)_L",
+   "synapses_onto_circuit": 396,
+   "synapses_from_circuit": 1081,
+   "why": "partner"
+  },
+  {
+   "body_id": 757694775,
+   "type": "PFL3",
+   "instance": "PFL3(PB12c)_L2_C9_irreg",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 521,
+   "why": "partner"
+  },
+  {
+   "body_id": 758065781,
+   "type": "PFNd",
+   "instance": "PFNd(PB04)_L2_C1",
+   "synapses_onto_circuit": 2,
+   "synapses_from_circuit": 288,
+   "why": "partner"
+  },
+  {
+   "body_id": 759084486,
+   "type": "PFNa",
+   "instance": "PFNa(PB03)_L2_C1",
+   "synapses_onto_circuit": 5,
+   "synapses_from_circuit": 273,
+   "why": "partner"
+  },
+  {
+   "body_id": 760094565,
+   "type": "PFL2",
+   "instance": "PFL2(PB12b)_L1_C5",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 319,
+   "why": "partner"
+  },
+  {
+   "body_id": 786013801,
+   "type": "PFNd",
+   "instance": "PFNd(PB04)_R3_C7",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 452,
+   "why": "partner"
+  },
+  {
+   "body_id": 786013856,
+   "type": "PFNd",
+   "instance": "PFNd(PB04)_R3_C7",
+   "synapses_onto_circuit": 2,
+   "synapses_from_circuit": 442,
+   "why": "partner"
+  },
+  {
+   "body_id": 786674282,
+   "type": "PFNd",
+   "instance": "PFNd(PB04)_R5_C5",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 365,
+   "why": "partner"
+  },
+  {
+   "body_id": 786989348,
+   "type": "PFNd",
+   "instance": "PFNd(PB04)_R6_C4",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 287,
+   "why": "partner"
+  },
+  {
+   "body_id": 786989395,
+   "type": "PFNd",
+   "instance": "PFNd(PB04)_R6_C4",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 267,
+   "why": "partner"
+  },
+  {
+   "body_id": 787374226,
+   "type": "PFL3",
+   "instance": "PFL3(PB12c)_R1_C7",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 325,
+   "why": "partner"
+  },
+  {
+   "body_id": 787762461,
+   "type": "ExR2",
+   "instance": "ExR2(PPM3-EB-DAN/ring)_L",
+   "synapses_onto_circuit": 666,
+   "synapses_from_circuit": 784,
+   "why": "partner"
+  },
+  {
+   "body_id": 789130596,
+   "type": "PFL3",
+   "instance": "PFL3(PB12c)_L4_C6",
+   "synapses_onto_circuit": 1,
+   "synapses_from_circuit": 542,
+   "why": "partner"
+  },
+  {
+   "body_id": 817346903,
+   "type": "PFNd",
+   "instance": "PFNd(PB04)_R7_C3",
+   "synapses_onto_circuit": 3,
+   "synapses_from_circuit": 324,
+   "why": "partner"
+  },
+  {
+   "body_id": 819073675,
+   "type": "PFNd",
+   "instance": "PFNd(PB04)_R4_C6",
+   "synapses_onto_circuit": 3,
+   "synapses_from_circuit": 203,
+   "why": "partner"
+  },
+  {
+   "body_id": 819138239,
+   "type": "PFNd",
+   "instance": "PFNd(PB04)_L4_C3",
+   "synapses_onto_circuit": 1,
+   "synapses_from_circuit": 287,
+   "why": "partner"
+  },
+  {
+   "body_id": 820144012,
+   "type": "EL",
+   "instance": "EL(EQ5)_L",
+   "synapses_onto_circuit": 339,
+   "synapses_from_circuit": 1193,
+   "why": "partner"
+  },
+  {
+   "body_id": 848761388,
+   "type": "PEG",
+   "instance": "PEG(PB07)_R1",
+   "synapses_onto_circuit": 47,
+   "synapses_from_circuit": 621,
+   "why": "partner"
+  },
+  {
+   "body_id": 850104005,
+   "type": "PFNd",
+   "instance": "PFNd(PB04)_R4_C6",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 237,
+   "why": "partner"
+  },
+  {
+   "body_id": 850194651,
+   "type": "PFL2",
+   "instance": "PFL2(PB12b)_L4_C8",
+   "synapses_onto_circuit": 9,
+   "synapses_from_circuit": 900,
+   "why": "partner"
+  },
+  {
+   "body_id": 850855138,
+   "type": "PFL3",
+   "instance": "PFL3(PB12c)_L3_C5",
+   "synapses_onto_circuit": 2,
+   "synapses_from_circuit": 593,
+   "why": "partner"
+  },
+  {
+   "body_id": 851493896,
+   "type": "PFL3",
+   "instance": "PFL3(PB12c)_L1_C3",
+   "synapses_onto_circuit": 4,
+   "synapses_from_circuit": 256,
+   "why": "partner"
+  },
+  {
+   "body_id": 858587718,
+   "type": "ExR6",
+   "instance": "ExR6(ring)_R",
+   "synapses_onto_circuit": 5116,
+   "synapses_from_circuit": 4724,
+   "why": "partner"
+  },
+  {
+   "body_id": 879442155,
+   "type": "PFNa",
+   "instance": "PFNa(PB03)_R5_C6",
+   "synapses_onto_circuit": 1,
+   "synapses_from_circuit": 283,
+   "why": "partner"
+  },
+  {
+   "body_id": 880185131,
+   "type": "PFNa",
+   "instance": "PFNa(PB03)_L5_C4",
+   "synapses_onto_circuit": 2,
+   "synapses_from_circuit": 246,
+   "why": "partner"
+  },
+  {
+   "body_id": 880526477,
+   "type": "PFNa",
+   "instance": "PFNa(PB03)_L4_C3",
+   "synapses_onto_circuit": 3,
+   "synapses_from_circuit": 215,
+   "why": "partner"
+  },
+  {
+   "body_id": 880875742,
+   "type": "IbSpsP",
+   "instance": "IbSpsP(PB17)_L5/6",
+   "synapses_onto_circuit": 266,
+   "synapses_from_circuit": 332,
+   "why": "partner"
+  },
+  {
+   "body_id": 880875840,
+   "type": "PFL2",
+   "instance": "PFL2(PB12b)_L5_C9",
+   "synapses_onto_circuit": 2,
+   "synapses_from_circuit": 712,
+   "why": "partner"
+  },
+  {
+   "body_id": 880875861,
+   "type": "PEG",
+   "instance": "PEG(PB07)_L5",
+   "synapses_onto_circuit": 127,
+   "synapses_from_circuit": 807,
+   "why": "partner"
+  },
+  {
+   "body_id": 880875927,
+   "type": "PFL3",
+   "instance": "PFL3(PB12c)_L5_C7",
+   "synapses_onto_circuit": 2,
+   "synapses_from_circuit": 380,
+   "why": "partner"
+  },
+  {
+   "body_id": 881217171,
+   "type": "LPsP",
+   "instance": "LPsP(PB13)_R",
+   "synapses_onto_circuit": 3643,
+   "synapses_from_circuit": 3877,
+   "why": "partner"
+  },
+  {
+   "body_id": 881458145,
+   "type": "PFL1",
+   "instance": "PFL1(PB12a)_R4_C5",
+   "synapses_onto_circuit": 1,
+   "synapses_from_circuit": 620,
+   "why": "partner"
+  },
+  {
+   "body_id": 881458181,
+   "type": "PFL1",
+   "instance": "PFL1(PB12a)_R3_C6",
+   "synapses_onto_circuit": 3,
+   "synapses_from_circuit": 694,
+   "why": "partner"
+  },
+  {
+   "body_id": 881527223,
+   "type": "PFNd",
+   "instance": "PFNd(PB04)_L3_C2",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 355,
+   "why": "partner"
+  },
+  {
+   "body_id": 881898734,
+   "type": "PEG",
+   "instance": "PEG(PB07)_L6",
+   "synapses_onto_circuit": 133,
+   "synapses_from_circuit": 624,
+   "why": "partner"
+  },
+  {
+   "body_id": 882239837,
+   "type": "PFL2",
+   "instance": "PFL2(PB12b)_L3_C7",
+   "synapses_onto_circuit": 11,
+   "synapses_from_circuit": 565,
+   "why": "partner"
+  },
+  {
+   "body_id": 882533209,
+   "type": "PFL1",
+   "instance": "PFL1(PB12a)_R1_C2_irreg",
+   "synapses_onto_circuit": 2,
+   "synapses_from_circuit": 484,
+   "why": "partner"
+  },
+  {
+   "body_id": 909777910,
+   "type": "PFNa",
+   "instance": "PFNa(PB03)_R7_C4",
+   "synapses_onto_circuit": 6,
+   "synapses_from_circuit": 265,
+   "why": "partner"
+  },
+  {
+   "body_id": 910447181,
+   "type": "PFL3",
+   "instance": "PFL3(PB12c)_R5_C3",
+   "synapses_onto_circuit": 1,
+   "synapses_from_circuit": 379,
+   "why": "partner"
+  },
+  {
+   "body_id": 910447220,
+   "type": "PFNd",
+   "instance": "PFNd(PB04)_R5_C5",
+   "synapses_onto_circuit": 1,
+   "synapses_from_circuit": 356,
+   "why": "partner"
+  },
+  {
+   "body_id": 910783805,
+   "type": "IbSpsP",
+   "instance": "IbSpsP(PB17)_R5/6",
+   "synapses_onto_circuit": 312,
+   "synapses_from_circuit": 315,
+   "why": "partner"
+  },
+  {
+   "body_id": 910787908,
+   "type": "IbSpsP",
+   "instance": "IbSpsP(PB17)_R3/4/5",
+   "synapses_onto_circuit": 136,
+   "synapses_from_circuit": 199,
+   "why": "partner"
+  },
+  {
+   "body_id": 910787992,
+   "type": "PFL1",
+   "instance": "PFL1(PB12a)_R5_C4",
+   "synapses_onto_circuit": 5,
+   "synapses_from_circuit": 500,
+   "why": "partner"
+  },
+  {
+   "body_id": 911134017,
+   "type": "PFL3",
+   "instance": "PFL3(PB12c)_R5_C3",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 287,
+   "why": "partner"
+  },
+  {
+   "body_id": 911504643,
+   "type": "PFNd",
+   "instance": "PFNd(PB04)_R2_C8",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 215,
+   "why": "partner"
+  },
+  {
+   "body_id": 911504689,
+   "type": "PFNv",
+   "instance": "PFNv(PB05)_R3_C8",
+   "synapses_onto_circuit": 52,
+   "synapses_from_circuit": 469,
+   "why": "partner"
+  },
+  {
+   "body_id": 911560974,
+   "type": "PFNd",
+   "instance": "PFNd(PB04)_L4_C3",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 326,
+   "why": "partner"
+  },
+  {
+   "body_id": 911565319,
+   "type": "PFL1",
+   "instance": "PFL1(PB12a)_L5_C6",
+   "synapses_onto_circuit": 1,
+   "synapses_from_circuit": 572,
+   "why": "partner"
+  },
+  {
+   "body_id": 911565408,
+   "type": "P1-9",
+   "instance": "P1-9(PB19)_L",
+   "synapses_onto_circuit": 652,
+   "synapses_from_circuit": 153,
+   "why": "partner"
+  },
+  {
+   "body_id": 911569552,
+   "type": "PFL3",
+   "instance": "PFL3(PB12c)_L5_C7",
+   "synapses_onto_circuit": 1,
+   "synapses_from_circuit": 281,
+   "why": "partner"
+  },
+  {
+   "body_id": 911578483,
+   "type": "PFL1",
+   "instance": "PFL1(PB12a)_L6_C7",
+   "synapses_onto_circuit": 8,
+   "synapses_from_circuit": 381,
+   "why": "partner"
+  },
+  {
+   "body_id": 911897818,
+   "type": "PFNv",
+   "instance": "PFNv(PB05)_L4_C3",
+   "synapses_onto_circuit": 45,
+   "synapses_from_circuit": 350,
+   "why": "partner"
+  },
+  {
+   "body_id": 911897964,
+   "type": "PFNv",
+   "instance": "PFNv(PB05)_L4_C3",
+   "synapses_onto_circuit": 44,
+   "synapses_from_circuit": 262,
+   "why": "partner"
+  },
+  {
+   "body_id": 911915224,
+   "type": "PFR_b",
+   "instance": "PFR_b(PB11b)_L5_C6",
+   "synapses_onto_circuit": 44,
+   "synapses_from_circuit": 203,
+   "why": "partner"
+  },
+  {
+   "body_id": 911919815,
+   "type": "P6-8P9",
+   "instance": "P6-8P9(PB14)_L",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 335,
+   "why": "partner"
+  },
+  {
+   "body_id": 912147912,
+   "type": "PEG",
+   "instance": "PEG(PB07)_R6",
+   "synapses_onto_circuit": 93,
+   "synapses_from_circuit": 718,
+   "why": "partner"
+  },
+  {
+   "body_id": 912488890,
+   "type": "PFL3",
+   "instance": "PFL3(PB12c)_R3_C5",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 617,
+   "why": "partner"
+  },
+  {
+   "body_id": 912596952,
+   "type": "EL",
+   "instance": "EL(EQ5)_L",
+   "synapses_onto_circuit": 359,
+   "synapses_from_circuit": 976,
+   "why": "partner"
+  },
+  {
+   "body_id": 912894991,
+   "type": "PFNv",
+   "instance": "PFNv(PB05)_L3_C2",
+   "synapses_onto_circuit": 58,
+   "synapses_from_circuit": 545,
+   "why": "partner"
+  },
+  {
+   "body_id": 912925080,
+   "type": "PFL3",
+   "instance": "PFL3(PB12c)_L3_C5",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 561,
+   "why": "partner"
+  },
+  {
+   "body_id": 916284630,
+   "type": "PFL2",
+   "instance": "PFL2(PB12b)_R2_C4",
+   "synapses_onto_circuit": 2,
+   "synapses_from_circuit": 492,
+   "why": "partner"
+  },
+  {
+   "body_id": 917647959,
+   "type": "ExR1",
+   "instance": "ExR1(ring)_L",
+   "synapses_onto_circuit": 1173,
+   "synapses_from_circuit": 135,
+   "why": "type"
+  },
+  {
+   "body_id": 918334668,
+   "type": "ExR1",
+   "instance": "ExR1(ring)_L",
+   "synapses_onto_circuit": 1016,
+   "synapses_from_circuit": 467,
+   "why": "type"
+  },
+  {
+   "body_id": 919763043,
+   "type": "ExR3",
+   "instance": "ExR3(ring)_L",
+   "synapses_onto_circuit": 485,
+   "synapses_from_circuit": 26,
+   "why": "partner"
+  },
+  {
+   "body_id": 940787029,
+   "type": "IbSpsP",
+   "instance": "IbSpsP(PB17)_R6",
+   "synapses_onto_circuit": 268,
+   "synapses_from_circuit": 283,
+   "why": "partner"
+  },
+  {
+   "body_id": 940791383,
+   "type": "PFNd",
+   "instance": "PFNd(PB04)_R6_C4",
+   "synapses_onto_circuit": 7,
+   "synapses_from_circuit": 245,
+   "why": "partner"
+  },
+  {
+   "body_id": 941123943,
+   "type": "PFL1",
+   "instance": "PFL1(PB12a)_R6_C3",
+   "synapses_onto_circuit": 4,
+   "synapses_from_circuit": 548,
+   "why": "partner"
+  },
+  {
+   "body_id": 941132430,
+   "type": "PFL3",
+   "instance": "PFL3(PB12c)_R6_C2",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 631,
+   "why": "partner"
+  },
+  {
+   "body_id": 941469301,
+   "type": "P1-9",
+   "instance": "P1-9(PB19)_R",
+   "synapses_onto_circuit": 459,
+   "synapses_from_circuit": 110,
+   "why": "partner"
+  },
+  {
+   "body_id": 941814244,
+   "type": "IbSpsP",
+   "instance": "IbSpsP(PB17)_R6",
+   "synapses_onto_circuit": 393,
+   "synapses_from_circuit": 233,
+   "why": "partner"
+  },
+  {
+   "body_id": 941831818,
+   "type": "IbSpsP",
+   "instance": "IbSpsP(PB17)_R3/4/5",
+   "synapses_onto_circuit": 249,
+   "synapses_from_circuit": 255,
+   "why": "partner"
+  },
+  {
+   "body_id": 941939879,
+   "type": "PFL3",
+   "instance": "PFL3(PB12c)_L6_C8",
+   "synapses_onto_circuit": 3,
+   "synapses_from_circuit": 322,
+   "why": "partner"
+  },
+  {
+   "body_id": 942172835,
+   "type": "PFL3",
+   "instance": "PFL3(PB12c)_R4_C4",
+   "synapses_onto_circuit": 2,
+   "synapses_from_circuit": 362,
+   "why": "partner"
+  },
+  {
+   "body_id": 942173776,
+   "type": "PEG",
+   "instance": "PEG(PB07)_R4",
+   "synapses_onto_circuit": 150,
+   "synapses_from_circuit": 734,
+   "why": "partner"
+  },
+  {
+   "body_id": 942587380,
+   "type": "PEG",
+   "instance": "PEG(PB07)_L4",
+   "synapses_onto_circuit": 127,
+   "synapses_from_circuit": 980,
+   "why": "partner"
+  },
+  {
+   "body_id": 942959557,
+   "type": "IbSpsP",
+   "instance": "IbSpsP(PB17)_L6/7",
+   "synapses_onto_circuit": 157,
+   "synapses_from_circuit": 322,
+   "why": "partner"
+  },
+  {
+   "body_id": 943269573,
+   "type": "IbSpsP",
+   "instance": "IbSpsP(PB17)_L2/4",
+   "synapses_onto_circuit": 236,
+   "synapses_from_circuit": 208,
+   "why": "partner"
+  },
+  {
+   "body_id": 943955813,
+   "type": "PFR_b",
+   "instance": "PFR_b(PB11b)_L3_C3",
+   "synapses_onto_circuit": 155,
+   "synapses_from_circuit": 253,
+   "why": "partner"
+  },
+  {
+   "body_id": 944262351,
+   "type": "PFL3",
+   "instance": "PFL3(PB12c)_L1_C3",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 217,
+   "why": "partner"
+  },
+  {
+   "body_id": 948333783,
+   "type": "PFL2",
+   "instance": "PFL2(PB12b)_R3_C3",
+   "synapses_onto_circuit": 7,
+   "synapses_from_circuit": 468,
+   "why": "partner"
+  },
+  {
+   "body_id": 948709216,
+   "type": "ExR1",
+   "instance": "ExR1(ring)_R",
+   "synapses_onto_circuit": 1126,
+   "synapses_from_circuit": 264,
+   "why": "type"
+  },
+  {
+   "body_id": 949710555,
+   "type": "ExR1",
+   "instance": "ExR1(ring)_R",
+   "synapses_onto_circuit": 1018,
+   "synapses_from_circuit": 198,
+   "why": "type"
+  },
+  {
+   "body_id": 971506655,
+   "type": "PFNa",
+   "instance": "PFNa(PB03)_R7_C4",
+   "synapses_onto_circuit": 2,
+   "synapses_from_circuit": 289,
+   "why": "partner"
+  },
+  {
+   "body_id": 971817711,
+   "type": "PFNv",
+   "instance": "PFNv(PB05)_R7_C3",
+   "synapses_onto_circuit": 25,
+   "synapses_from_circuit": 351,
+   "why": "partner"
+  },
+  {
+   "body_id": 972513129,
+   "type": "P6-8P9",
+   "instance": "P6-8P9(PB14)_R",
+   "synapses_onto_circuit": 124,
+   "synapses_from_circuit": 514,
+   "why": "partner"
+  },
+  {
+   "body_id": 972555509,
+   "type": "PEG",
+   "instance": "PEG(PB07)_R2",
+   "synapses_onto_circuit": 157,
+   "synapses_from_circuit": 614,
+   "why": "partner"
+  },
+  {
+   "body_id": 973894912,
+   "type": "IbSpsP",
+   "instance": "IbSpsP(PB17)_R4",
+   "synapses_onto_circuit": 197,
+   "synapses_from_circuit": 204,
+   "why": "partner"
+  },
+  {
+   "body_id": 973963898,
+   "type": "IbSpsP",
+   "instance": "IbSpsP(PB17)_L3/4",
+   "synapses_onto_circuit": 211,
+   "synapses_from_circuit": 216,
+   "why": "partner"
+  },
+  {
+   "body_id": 974239375,
+   "type": "PEG",
+   "instance": "PEG(PB07)_R3",
+   "synapses_onto_circuit": 106,
+   "synapses_from_circuit": 961,
+   "why": "partner"
+  },
+  {
+   "body_id": 974300015,
+   "type": "PEG",
+   "instance": "PEG(PB07)_L3",
+   "synapses_onto_circuit": 124,
+   "synapses_from_circuit": 847,
+   "why": "partner"
+  },
+  {
+   "body_id": 974627674,
+   "type": "PFNd",
+   "instance": "PFNd(PB04)_L2_C1",
+   "synapses_onto_circuit": 2,
+   "synapses_from_circuit": 290,
+   "why": "partner"
+  },
+  {
+   "body_id": 978733459,
+   "type": "ExR5",
+   "instance": "ExR5(ring)_L",
+   "synapses_onto_circuit": 1059,
+   "synapses_from_circuit": 287,
+   "why": "partner"
+  },
+  {
+   "body_id": 979752365,
+   "type": "PFL2",
+   "instance": "PFL2(PB12b)_L3_C7",
+   "synapses_onto_circuit": 1,
+   "synapses_from_circuit": 499,
+   "why": "partner"
+  },
+  {
+   "body_id": 1002507170,
+   "type": "PFL1",
+   "instance": "PFL1(PB12a)_R7_C1",
+   "synapses_onto_circuit": 10,
+   "synapses_from_circuit": 464,
+   "why": "partner"
+  },
+  {
+   "body_id": 1002848124,
+   "type": "PFNd",
+   "instance": "PFNd(PB04)_R7_C3",
+   "synapses_onto_circuit": 5,
+   "synapses_from_circuit": 328,
+   "why": "partner"
+  },
+  {
+   "body_id": 1002848661,
+   "type": "PEG",
+   "instance": "PEG(PB07)_R7",
+   "synapses_onto_circuit": 94,
+   "synapses_from_circuit": 626,
+   "why": "partner"
+  },
+  {
+   "body_id": 1003318634,
+   "type": "PFNd",
+   "instance": "PFNd(PB04)_L7_C6",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 221,
+   "why": "partner"
+  },
+  {
+   "body_id": 1003672766,
+   "type": "PFL1",
+   "instance": "PFL1(PB12a)_L7_C9",
+   "synapses_onto_circuit": 2,
+   "synapses_from_circuit": 281,
+   "why": "partner"
+  },
+  {
+   "body_id": 1003672833,
+   "type": "IbSpsP",
+   "instance": "IbSpsP(PB17)_L6/7",
+   "synapses_onto_circuit": 143,
+   "synapses_from_circuit": 147,
+   "why": "partner"
+  },
+  {
+   "body_id": 1004014587,
+   "type": "PEG",
+   "instance": "PEG(PB07)_L7",
+   "synapses_onto_circuit": 109,
+   "synapses_from_circuit": 503,
+   "why": "partner"
+  },
+  {
+   "body_id": 1004018344,
+   "type": "P6-8P9",
+   "instance": "P6-8P9(PB14)_L",
+   "synapses_onto_circuit": 95,
+   "synapses_from_circuit": 337,
+   "why": "partner"
+  },
+  {
+   "body_id": 1004700437,
+   "type": "PFL3",
+   "instance": "PFL3(PB12c)_L7_C9",
+   "synapses_onto_circuit": 4,
+   "synapses_from_circuit": 267,
+   "why": "partner"
+  },
+  {
+   "body_id": 1005308608,
+   "type": "EL",
+   "instance": "EL(EQ5)_L",
+   "synapses_onto_circuit": 295,
+   "synapses_from_circuit": 996,
+   "why": "partner"
+  },
+  {
+   "body_id": 1005710800,
+   "type": "ExR7",
+   "instance": "ExR7(ring)_L",
+   "synapses_onto_circuit": 371,
+   "synapses_from_circuit": 891,
+   "why": "partner"
+  },
+  {
+   "body_id": 1008028537,
+   "type": "PFL3",
+   "instance": "PFL3(PB12c)_R3_C5",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 625,
+   "why": "partner"
+  },
+  {
+   "body_id": 1008378448,
+   "type": "FB4Y",
+   "instance": "FB4Y(EB/NO1)_R",
+   "synapses_onto_circuit": 602,
+   "synapses_from_circuit": 759,
+   "why": "partner"
+  },
+  {
+   "body_id": 1033887446,
+   "type": "PFGs",
+   "instance": "PFGs(PB10)_R7_C3",
+   "synapses_onto_circuit": 16,
+   "synapses_from_circuit": 202,
+   "why": "partner"
+  },
+  {
+   "body_id": 1034220115,
+   "type": "EL",
+   "instance": "EL(EQ5)_R",
+   "synapses_onto_circuit": 380,
+   "synapses_from_circuit": 988,
+   "why": "partner"
+  },
+  {
+   "body_id": 1035640810,
+   "type": "IbSpsP",
+   "instance": "IbSpsP(PB17)_R2/3",
+   "synapses_onto_circuit": 274,
+   "synapses_from_circuit": 256,
+   "why": "partner"
+  },
+  {
+   "body_id": 1036637638,
+   "type": "ExR3",
+   "instance": "ExR3(ring)_R",
+   "synapses_onto_circuit": 475,
+   "synapses_from_circuit": 30,
+   "why": "partner"
+  },
+  {
+   "body_id": 1036753721,
+   "type": "EL",
+   "instance": "EL(EQ5)_L",
+   "synapses_onto_circuit": 370,
+   "synapses_from_circuit": 1085,
+   "why": "partner"
+  },
+  {
+   "body_id": 1043825714,
+   "type": "ExR5",
+   "instance": "ExR5(ring)_R",
+   "synapses_onto_circuit": 1183,
+   "synapses_from_circuit": 254,
+   "why": "partner"
+  },
+  {
+   "body_id": 1065409934,
+   "type": "PEG",
+   "instance": "PEG(PB07)_L8",
+   "synapses_onto_circuit": 126,
+   "synapses_from_circuit": 523,
+   "why": "partner"
+  },
+  {
+   "body_id": 1066088381,
+   "type": "EL",
+   "instance": "EL(EQ5)_L",
+   "synapses_onto_circuit": 366,
+   "synapses_from_circuit": 949,
+   "why": "partner"
+  },
+  {
+   "body_id": 1066748608,
+   "type": "IbSpsP",
+   "instance": "IbSpsP(PB17)_L8",
+   "synapses_onto_circuit": 155,
+   "synapses_from_circuit": 223,
+   "why": "partner"
+  },
+  {
+   "body_id": 1073504644,
+   "type": "PFR_b",
+   "instance": "PFR_b(PB11b)_R5_C4",
+   "synapses_onto_circuit": 36,
+   "synapses_from_circuit": 168,
+   "why": "partner"
+  },
+  {
+   "body_id": 1094934199,
+   "type": "PFNd",
+   "instance": "PFNd(PB04)_R8_C2",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 343,
+   "why": "partner"
+  },
+  {
+   "body_id": 1095271087,
+   "type": "IbSpsP",
+   "instance": "IbSpsP(PB17)_R7/8",
+   "synapses_onto_circuit": 111,
+   "synapses_from_circuit": 166,
+   "why": "partner"
+  },
+  {
+   "body_id": 1095275456,
+   "type": "LPsP",
+   "instance": "LPsP(PB13)_L",
+   "synapses_onto_circuit": 4056,
+   "synapses_from_circuit": 3714,
+   "why": "partner"
+  },
+  {
+   "body_id": 1095279301,
+   "type": "IbSpsP",
+   "instance": "IbSpsP(PB17)_R7/9",
+   "synapses_onto_circuit": 314,
+   "synapses_from_circuit": 254,
+   "why": "partner"
+  },
+  {
+   "body_id": 1097407853,
+   "type": "IbSpsP",
+   "instance": "IbSpsP(PB17)_L2",
+   "synapses_onto_circuit": 151,
+   "synapses_from_circuit": 207,
+   "why": "partner"
+  },
+  {
+   "body_id": 1097718659,
+   "type": "PFL3",
+   "instance": "PFL3(PB12c)_R2_C6",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 430,
+   "why": "partner"
+  },
+  {
+   "body_id": 1097718901,
+   "type": "PFL1",
+   "instance": "PFL1(PB12a)_R2_C7",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 427,
+   "why": "partner"
+  },
+  {
+   "body_id": 1100792636,
+   "type": "FB4Y",
+   "instance": "FB4Y(EB/NO1)_L",
+   "synapses_onto_circuit": 745,
+   "synapses_from_circuit": 895,
+   "why": "partner"
+  },
+  {
+   "body_id": 1105834722,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_R",
+   "synapses_onto_circuit": 668,
+   "synapses_from_circuit": 124,
+   "why": "partner"
+  },
+  {
+   "body_id": 1105882358,
+   "type": "ExR7",
+   "instance": "ExR7(ring)_R",
+   "synapses_onto_circuit": 378,
+   "synapses_from_circuit": 1219,
+   "why": "partner"
+  },
+  {
+   "body_id": 1106180107,
+   "type": "ER2_a",
+   "instance": "ER2_a(ring)_R",
+   "synapses_onto_circuit": 586,
+   "synapses_from_circuit": 134,
+   "why": "partner"
+  },
+  {
+   "body_id": 1125964651,
+   "type": "PFNv",
+   "instance": "PFNv(PB05)_R8_C3",
+   "synapses_onto_circuit": 46,
+   "synapses_from_circuit": 268,
+   "why": "partner"
+  },
+  {
+   "body_id": 1125969082,
+   "type": "PEG",
+   "instance": "PEG(PB07)_R9",
+   "synapses_onto_circuit": 61,
+   "synapses_from_circuit": 581,
+   "why": "partner"
+  },
+  {
+   "body_id": 1125969140,
+   "type": "IbSpsP",
+   "instance": "IbSpsP(PB17)_R8",
+   "synapses_onto_circuit": 147,
+   "synapses_from_circuit": 188,
+   "why": "partner"
+  },
+  {
+   "body_id": 1126301255,
+   "type": "PFNa",
+   "instance": "PFNa(PB03)_R8_C3",
+   "synapses_onto_circuit": 4,
+   "synapses_from_circuit": 226,
+   "why": "partner"
+  },
+  {
+   "body_id": 1126306451,
+   "type": "PFNd",
+   "instance": "PFNd(PB04)_R8_C2",
+   "synapses_onto_circuit": 3,
+   "synapses_from_circuit": 315,
+   "why": "partner"
+  },
+  {
+   "body_id": 1128088594,
+   "type": "PEG",
+   "instance": "PEG(PB07)_L1",
+   "synapses_onto_circuit": 73,
+   "synapses_from_circuit": 656,
+   "why": "partner"
+  },
+  {
+   "body_id": 1128092885,
+   "type": "PFL1",
+   "instance": "PFL1(PB12a)_L1_C8_irreg",
+   "synapses_onto_circuit": 6,
+   "synapses_from_circuit": 484,
+   "why": "partner"
+  },
+  {
+   "body_id": 1128097470,
+   "type": "IbSpsP",
+   "instance": "IbSpsP(PB17)_L2/R2/4",
+   "synapses_onto_circuit": 250,
+   "synapses_from_circuit": 145,
+   "why": "partner"
+  },
+  {
+   "body_id": 1128757926,
+   "type": "IbSpsP",
+   "instance": "IbSpsP(PB17)_R2",
+   "synapses_onto_circuit": 157,
+   "synapses_from_circuit": 208,
+   "why": "partner"
+  },
+  {
+   "body_id": 1134253374,
+   "type": "PFL3",
+   "instance": "PFL3(PB12c)_R1_C7",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 230,
+   "why": "partner"
+  },
+  {
+   "body_id": 1135907207,
+   "type": "PFR_b",
+   "instance": "PFR_b(PB11b)_R6_C3",
+   "synapses_onto_circuit": 33,
+   "synapses_from_circuit": 196,
+   "why": "partner"
+  },
+  {
+   "body_id": 1136861363,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_R",
+   "synapses_onto_circuit": 565,
+   "synapses_from_circuit": 142,
+   "why": "partner"
+  },
+  {
+   "body_id": 1136865339,
+   "type": "ExR2",
+   "instance": "ExR2(PPM3-EB-DAN/ring)_L",
+   "synapses_onto_circuit": 679,
+   "synapses_from_circuit": 787,
+   "why": "partner"
+  },
+  {
+   "body_id": 1137210821,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_R",
+   "synapses_onto_circuit": 561,
+   "synapses_from_circuit": 149,
+   "why": "partner"
+  },
+  {
+   "body_id": 1137219365,
+   "type": "ER2_a",
+   "instance": "ER2_a(ring)_R",
+   "synapses_onto_circuit": 520,
+   "synapses_from_circuit": 87,
+   "why": "partner"
+  },
+  {
+   "body_id": 1137288015,
+   "type": "EL",
+   "instance": "EL(EQ5)_L",
+   "synapses_onto_circuit": 327,
+   "synapses_from_circuit": 1162,
+   "why": "partner"
+  },
+  {
+   "body_id": 1159123802,
+   "type": "PFR_b",
+   "instance": "PFR_b(PB11b)_L1_C9_irreg",
+   "synapses_onto_circuit": 31,
+   "synapses_from_circuit": 196,
+   "why": "partner"
+  },
+  {
+   "body_id": 1167282562,
+   "type": "PFL2",
+   "instance": "PFL2(PB12b)_R4_C2",
+   "synapses_onto_circuit": 8,
+   "synapses_from_circuit": 752,
+   "why": "partner"
+  },
+  {
+   "body_id": 1167295853,
+   "type": "ER4d",
+   "instance": "ER4d(ring)_L",
+   "synapses_onto_circuit": 438,
+   "synapses_from_circuit": 63,
+   "why": "partner"
+  },
+  {
+   "body_id": 1167295856,
+   "type": "ER4d",
+   "instance": "ER4d(ring)_L",
+   "synapses_onto_circuit": 459,
+   "synapses_from_circuit": 88,
+   "why": "partner"
+  },
+  {
+   "body_id": 1167295872,
+   "type": "ER4d",
+   "instance": "ER4d(ring)_L",
+   "synapses_onto_circuit": 457,
+   "synapses_from_circuit": 66,
+   "why": "partner"
+  },
+  {
+   "body_id": 1167295916,
+   "type": "ER4d",
+   "instance": "ER4d(ring)_R",
+   "synapses_onto_circuit": 411,
+   "synapses_from_circuit": 59,
+   "why": "partner"
+  },
+  {
+   "body_id": 1167300055,
+   "type": "ER4d",
+   "instance": "ER4d(ring)_L",
+   "synapses_onto_circuit": 440,
+   "synapses_from_circuit": 82,
+   "why": "partner"
+  },
+  {
+   "body_id": 1167300154,
+   "type": "ER4d",
+   "instance": "ER4d(ring)_R",
+   "synapses_onto_circuit": 417,
+   "synapses_from_circuit": 124,
+   "why": "partner"
+  },
+  {
+   "body_id": 1167300194,
+   "type": "ER4d",
+   "instance": "ER4d(ring)_R",
+   "synapses_onto_circuit": 440,
+   "synapses_from_circuit": 57,
+   "why": "partner"
+  },
+  {
+   "body_id": 1167304403,
+   "type": "ER4d",
+   "instance": "ER4d(ring)_R",
+   "synapses_onto_circuit": 413,
+   "synapses_from_circuit": 105,
+   "why": "partner"
+  },
+  {
+   "body_id": 1167563121,
+   "type": "ER2_a",
+   "instance": "ER2_a(ring)_R",
+   "synapses_onto_circuit": 561,
+   "synapses_from_circuit": 91,
+   "why": "partner"
+  },
+  {
+   "body_id": 1167567702,
+   "type": "ER2_d",
+   "instance": "ER2_d(ring)_R",
+   "synapses_onto_circuit": 517,
+   "synapses_from_circuit": 67,
+   "why": "partner"
+  },
+  {
+   "body_id": 1167632513,
+   "type": "ER4d",
+   "instance": "ER4d(ring)_R",
+   "synapses_onto_circuit": 433,
+   "synapses_from_circuit": 44,
+   "why": "partner"
+  },
+  {
+   "body_id": 1167641412,
+   "type": "ER4m",
+   "instance": "ER4m(ring)_L",
+   "synapses_onto_circuit": 1478,
+   "synapses_from_circuit": 274,
+   "why": "partner"
+  },
+  {
+   "body_id": 1167645442,
+   "type": "ER4m",
+   "instance": "ER4m(ring)_R",
+   "synapses_onto_circuit": 1486,
+   "synapses_from_circuit": 311,
+   "why": "partner"
+  },
+  {
+   "body_id": 1167645523,
+   "type": "ER4d",
+   "instance": "ER4d(ring)_L",
+   "synapses_onto_circuit": 382,
+   "synapses_from_circuit": 87,
+   "why": "partner"
+  },
+  {
+   "body_id": 1167645658,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_R",
+   "synapses_onto_circuit": 680,
+   "synapses_from_circuit": 148,
+   "why": "partner"
+  },
+  {
+   "body_id": 1167891559,
+   "type": "ER4d",
+   "instance": "ER4d(ring)_R",
+   "synapses_onto_circuit": 485,
+   "synapses_from_circuit": 83,
+   "why": "partner"
+  },
+  {
+   "body_id": 1167895489,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_R",
+   "synapses_onto_circuit": 638,
+   "synapses_from_circuit": 158,
+   "why": "partner"
+  },
+  {
+   "body_id": 1167896065,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_R",
+   "synapses_onto_circuit": 604,
+   "synapses_from_circuit": 116,
+   "why": "partner"
+  },
+  {
+   "body_id": 1167904437,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_R",
+   "synapses_onto_circuit": 579,
+   "synapses_from_circuit": 139,
+   "why": "partner"
+  },
+  {
+   "body_id": 1167965225,
+   "type": "EL",
+   "instance": "EL(EQ5)_R",
+   "synapses_onto_circuit": 345,
+   "synapses_from_circuit": 881,
+   "why": "partner"
+  },
+  {
+   "body_id": 1167977970,
+   "type": "ER4m",
+   "instance": "ER4m(ring)_L",
+   "synapses_onto_circuit": 1576,
+   "synapses_from_circuit": 374,
+   "why": "partner"
+  },
+  {
+   "body_id": 1167982211,
+   "type": "ER4d",
+   "instance": "ER4d(ring)_L",
+   "synapses_onto_circuit": 309,
+   "synapses_from_circuit": 50,
+   "why": "partner"
+  },
+  {
+   "body_id": 1168055653,
+   "type": "ER3w_b",
+   "instance": "ER3w_b(ring)_L",
+   "synapses_onto_circuit": 501,
+   "synapses_from_circuit": 15,
+   "why": "partner"
+  },
+  {
+   "body_id": 1168059800,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_L",
+   "synapses_onto_circuit": 592,
+   "synapses_from_circuit": 151,
+   "why": "partner"
+  },
+  {
+   "body_id": 1168064774,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_L",
+   "synapses_onto_circuit": 615,
+   "synapses_from_circuit": 127,
+   "why": "partner"
+  },
+  {
+   "body_id": 1168241257,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_R",
+   "synapses_onto_circuit": 574,
+   "synapses_from_circuit": 132,
+   "why": "partner"
+  },
+  {
+   "body_id": 1168249921,
+   "type": "ER2_d",
+   "instance": "ER2_d(ring)_R",
+   "synapses_onto_circuit": 518,
+   "synapses_from_circuit": 102,
+   "why": "partner"
+  },
+  {
+   "body_id": 1168340507,
+   "type": "EL",
+   "instance": "EL(EQ5)_L",
+   "synapses_onto_circuit": 325,
+   "synapses_from_circuit": 1022,
+   "why": "partner"
+  },
+  {
+   "body_id": 1168392003,
+   "type": "ER3w_b",
+   "instance": "ER3w_b(ring)_L",
+   "synapses_onto_circuit": 573,
+   "synapses_from_circuit": 12,
+   "why": "partner"
+  },
+  {
+   "body_id": 1168392468,
+   "type": "ER3w_b",
+   "instance": "ER3w_b(ring)_L",
+   "synapses_onto_circuit": 547,
+   "synapses_from_circuit": 38,
+   "why": "partner"
+  },
+  {
+   "body_id": 1168923315,
+   "type": "ER2_b",
+   "instance": "ER2_b(ring)_R",
+   "synapses_onto_circuit": 536,
+   "synapses_from_circuit": 91,
+   "why": "partner"
+  },
+  {
+   "body_id": 1187844616,
+   "type": "PFNd",
+   "instance": "PFNd(PB04)_L9_C8",
+   "synapses_onto_circuit": 1,
+   "synapses_from_circuit": 230,
+   "why": "partner"
+  },
+  {
+   "body_id": 1188388754,
+   "type": "IbSpsP",
+   "instance": "IbSpsP(PB17)_R9",
+   "synapses_onto_circuit": 244,
+   "synapses_from_circuit": 155,
+   "why": "partner"
+  },
+  {
+   "body_id": 1190171884,
+   "type": "PEG",
+   "instance": "PEG(PB07)_L2",
+   "synapses_onto_circuit": 139,
+   "synapses_from_circuit": 787,
+   "why": "partner"
+  },
+  {
+   "body_id": 1192152791,
+   "type": "EL",
+   "instance": "EL(EQ5)_R",
+   "synapses_onto_circuit": 377,
+   "synapses_from_circuit": 1046,
+   "why": "partner"
+  },
+  {
+   "body_id": 1198006801,
+   "type": "ER4d",
+   "instance": "ER4d(ring)_L",
+   "synapses_onto_circuit": 507,
+   "synapses_from_circuit": 136,
+   "why": "partner"
+  },
+  {
+   "body_id": 1198257581,
+   "type": "ER2_a",
+   "instance": "ER2_a(ring)_R",
+   "synapses_onto_circuit": 570,
+   "synapses_from_circuit": 119,
+   "why": "partner"
+  },
+  {
+   "body_id": 1198326456,
+   "type": "ER4m",
+   "instance": "ER4m(ring)_R",
+   "synapses_onto_circuit": 1443,
+   "synapses_from_circuit": 346,
+   "why": "partner"
+  },
+  {
+   "body_id": 1198330286,
+   "type": "ExR2",
+   "instance": "ExR2(PPM3-EB-DAN/ring)_R",
+   "synapses_onto_circuit": 649,
+   "synapses_from_circuit": 731,
+   "why": "partner"
+  },
+  {
+   "body_id": 1198330641,
+   "type": "ExR4",
+   "instance": "ExR4(ring)_L",
+   "synapses_onto_circuit": 3233,
+   "synapses_from_circuit": 891,
+   "why": "partner"
+  },
+  {
+   "body_id": 1198334861,
+   "type": "ER2_a",
+   "instance": "ER2_a(ring)_L",
+   "synapses_onto_circuit": 564,
+   "synapses_from_circuit": 98,
+   "why": "partner"
+  },
+  {
+   "body_id": 1198413357,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_L",
+   "synapses_onto_circuit": 540,
+   "synapses_from_circuit": 106,
+   "why": "partner"
+  },
+  {
+   "body_id": 1198667367,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_L",
+   "synapses_onto_circuit": 653,
+   "synapses_from_circuit": 129,
+   "why": "partner"
+  },
+  {
+   "body_id": 1198671494,
+   "type": "ER4m",
+   "instance": "ER4m(ring)_L",
+   "synapses_onto_circuit": 1451,
+   "synapses_from_circuit": 316,
+   "why": "partner"
+  },
+  {
+   "body_id": 1198671672,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_L",
+   "synapses_onto_circuit": 584,
+   "synapses_from_circuit": 130,
+   "why": "partner"
+  },
+  {
+   "body_id": 1198675740,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_L",
+   "synapses_onto_circuit": 582,
+   "synapses_from_circuit": 117,
+   "why": "partner"
+  },
+  {
+   "body_id": 1198680122,
+   "type": "ER2_a",
+   "instance": "ER2_a(ring)_L",
+   "synapses_onto_circuit": 590,
+   "synapses_from_circuit": 140,
+   "why": "partner"
+  },
+  {
+   "body_id": 1198680249,
+   "type": "ER2_a",
+   "instance": "ER2_a(ring)_L",
+   "synapses_onto_circuit": 562,
+   "synapses_from_circuit": 120,
+   "why": "partner"
+  },
+  {
+   "body_id": 1198680426,
+   "type": "ER2_d",
+   "instance": "ER2_d(ring)_L",
+   "synapses_onto_circuit": 552,
+   "synapses_from_circuit": 110,
+   "why": "partner"
+  },
+  {
+   "body_id": 1198680441,
+   "type": "ER2_d",
+   "instance": "ER2_d(ring)_L",
+   "synapses_onto_circuit": 571,
+   "synapses_from_circuit": 99,
+   "why": "partner"
+  },
+  {
+   "body_id": 1198684596,
+   "type": "ER2_a",
+   "instance": "ER2_a(ring)_L",
+   "synapses_onto_circuit": 582,
+   "synapses_from_circuit": 96,
+   "why": "partner"
+  },
+  {
+   "body_id": 1198693217,
+   "type": "ER4d",
+   "instance": "ER4d(ring)_R",
+   "synapses_onto_circuit": 459,
+   "synapses_from_circuit": 64,
+   "why": "partner"
+  },
+  {
+   "body_id": 1198931241,
+   "type": "ER4d",
+   "instance": "ER4d(ring)_R",
+   "synapses_onto_circuit": 473,
+   "synapses_from_circuit": 102,
+   "why": "partner"
+  },
+  {
+   "body_id": 1198943369,
+   "type": "ER2_d",
+   "instance": "ER2_d(ring)_R",
+   "synapses_onto_circuit": 584,
+   "synapses_from_circuit": 98,
+   "why": "partner"
+  },
+  {
+   "body_id": 1199017128,
+   "type": "ER2_b",
+   "instance": "ER2_b(ring)_L",
+   "synapses_onto_circuit": 499,
+   "synapses_from_circuit": 58,
+   "why": "partner"
+  },
+  {
+   "body_id": 1199086313,
+   "type": "ER3p_a",
+   "instance": "ER3p_a(ring)_L",
+   "synapses_onto_circuit": 552,
+   "synapses_from_circuit": 9,
+   "why": "partner"
+  },
+  {
+   "body_id": 1199289203,
+   "type": "ER3w_a",
+   "instance": "ER3w_a(ring)_R",
+   "synapses_onto_circuit": 536,
+   "synapses_from_circuit": 33,
+   "why": "partner"
+  },
+  {
+   "body_id": 1199427845,
+   "type": "ER3w_b",
+   "instance": "ER3w_b(ring)_L",
+   "synapses_onto_circuit": 532,
+   "synapses_from_circuit": 13,
+   "why": "partner"
+  },
+  {
+   "body_id": 1199431561,
+   "type": "ER3w_a",
+   "instance": "ER3w_a(ring)_L",
+   "synapses_onto_circuit": 574,
+   "synapses_from_circuit": 16,
+   "why": "partner"
+  },
+  {
+   "body_id": 1199432267,
+   "type": "ER3w_a",
+   "instance": "ER3w_a(ring)_L",
+   "synapses_onto_circuit": 517,
+   "synapses_from_circuit": 15,
+   "why": "partner"
+  },
+  {
+   "body_id": 1199625952,
+   "type": "ER3w_b",
+   "instance": "ER3w_b(ring)_R",
+   "synapses_onto_circuit": 576,
+   "synapses_from_circuit": 25,
+   "why": "partner"
+  },
+  {
+   "body_id": 1199677638,
+   "type": "PEG",
+   "instance": "PEG(PB07)_L9",
+   "synapses_onto_circuit": 78,
+   "synapses_from_circuit": 437,
+   "why": "partner"
+  },
+  {
+   "body_id": 1199699496,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_L",
+   "synapses_onto_circuit": 628,
+   "synapses_from_circuit": 146,
+   "why": "partner"
+  },
+  {
+   "body_id": 1199712167,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_L",
+   "synapses_onto_circuit": 575,
+   "synapses_from_circuit": 128,
+   "why": "partner"
+  },
+  {
+   "body_id": 1199712272,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_L",
+   "synapses_onto_circuit": 658,
+   "synapses_from_circuit": 163,
+   "why": "partner"
+  },
+  {
+   "body_id": 1200032115,
+   "type": "PFL3",
+   "instance": "PFL3(PB12c)_R7_C1",
+   "synapses_onto_circuit": 5,
+   "synapses_from_circuit": 572,
+   "why": "partner"
+  },
+  {
+   "body_id": 1200049187,
+   "type": "ER5",
+   "instance": "ER5(ring)_L",
+   "synapses_onto_circuit": 213,
+   "synapses_from_circuit": 1,
+   "why": "partner"
+  },
+  {
+   "body_id": 1200053009,
+   "type": "PFL2",
+   "instance": "PFL2(PB12b)_R5_C1",
+   "synapses_onto_circuit": 13,
+   "synapses_from_circuit": 644,
+   "why": "partner"
+  },
+  {
+   "body_id": 1217385533,
+   "type": "PFNa",
+   "instance": "PFNa(PB03)_R9_C1",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 213,
+   "why": "partner"
+  },
+  {
+   "body_id": 1218728541,
+   "type": "PFNa",
+   "instance": "PFNa(PB03)_R9_C1",
+   "synapses_onto_circuit": 2,
+   "synapses_from_circuit": 205,
+   "why": "partner"
+  },
+  {
+   "body_id": 1218732781,
+   "type": "PFNd",
+   "instance": "PFNd(PB04)_R9_C1",
+   "synapses_onto_circuit": 5,
+   "synapses_from_circuit": 328,
+   "why": "partner"
+  },
+  {
+   "body_id": 1218732931,
+   "type": "PFNd",
+   "instance": "PFNd(PB04)_R9_C1",
+   "synapses_onto_circuit": 4,
+   "synapses_from_circuit": 287,
+   "why": "partner"
+  },
+  {
+   "body_id": 1228683492,
+   "type": "ExR8",
+   "instance": "ExR8(ring)_L",
+   "synapses_onto_circuit": 5,
+   "synapses_from_circuit": 891,
+   "why": "partner"
+  },
+  {
+   "body_id": 1228692168,
+   "type": "ExR6",
+   "instance": "ExR6(ring)_L",
+   "synapses_onto_circuit": 4224,
+   "synapses_from_circuit": 3107,
+   "why": "partner"
+  },
+  {
+   "body_id": 1229288307,
+   "type": "ER3p_a",
+   "instance": "ER3p_a(ring)_R",
+   "synapses_onto_circuit": 617,
+   "synapses_from_circuit": 4,
+   "why": "partner"
+  },
+  {
+   "body_id": 1229369776,
+   "type": "ER2_b",
+   "instance": "ER2_b(ring)_R",
+   "synapses_onto_circuit": 529,
+   "synapses_from_circuit": 67,
+   "why": "partner"
+  },
+  {
+   "body_id": 1229710803,
+   "type": "ER2_b",
+   "instance": "ER2_b(ring)_L",
+   "synapses_onto_circuit": 479,
+   "synapses_from_circuit": 69,
+   "why": "partner"
+  },
+  {
+   "body_id": 1229965474,
+   "type": "ER4d",
+   "instance": "ER4d(ring)_R",
+   "synapses_onto_circuit": 474,
+   "synapses_from_circuit": 74,
+   "why": "partner"
+  },
+  {
+   "body_id": 1230026228,
+   "type": "ER4d",
+   "instance": "ER4d(ring)_L",
+   "synapses_onto_circuit": 465,
+   "synapses_from_circuit": 90,
+   "why": "partner"
+  },
+  {
+   "body_id": 1230026402,
+   "type": "ER4d",
+   "instance": "ER4d(ring)_L",
+   "synapses_onto_circuit": 437,
+   "synapses_from_circuit": 86,
+   "why": "partner"
+  },
+  {
+   "body_id": 1230121634,
+   "type": "ER3w_a",
+   "instance": "ER3w_a(ring)_L",
+   "synapses_onto_circuit": 536,
+   "synapses_from_circuit": 59,
+   "why": "partner"
+  },
+  {
+   "body_id": 1230125720,
+   "type": "ER3w_b",
+   "instance": "ER3w_b(ring)_L",
+   "synapses_onto_circuit": 490,
+   "synapses_from_circuit": 17,
+   "why": "partner"
+  },
+  {
+   "body_id": 1230319275,
+   "type": "ER3w_a",
+   "instance": "ER3w_a(ring)_R",
+   "synapses_onto_circuit": 503,
+   "synapses_from_circuit": 20,
+   "why": "partner"
+  },
+  {
+   "body_id": 1230324385,
+   "type": "ER3w_b",
+   "instance": "ER3w_b(ring)_R",
+   "synapses_onto_circuit": 532,
+   "synapses_from_circuit": 8,
+   "why": "partner"
+  },
+  {
+   "body_id": 1230480261,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_L",
+   "synapses_onto_circuit": 609,
+   "synapses_from_circuit": 163,
+   "why": "partner"
+  },
+  {
+   "body_id": 1230738118,
+   "type": "ER5",
+   "instance": "ER5(ring)_L",
+   "synapses_onto_circuit": 218,
+   "synapses_from_circuit": 0,
+   "why": "partner"
+  },
+  {
+   "body_id": 1230738163,
+   "type": "ER3a_c",
+   "instance": "ER3a_c(ring)_L",
+   "synapses_onto_circuit": 211,
+   "synapses_from_circuit": 11,
+   "why": "partner"
+  },
+  {
+   "body_id": 1230742517,
+   "type": "ER5",
+   "instance": "ER5(ring)_R",
+   "synapses_onto_circuit": 224,
+   "synapses_from_circuit": 3,
+   "why": "partner"
+  },
+  {
+   "body_id": 1230742552,
+   "type": "ER5",
+   "instance": "ER5(ring)_R",
+   "synapses_onto_circuit": 217,
+   "synapses_from_circuit": 0,
+   "why": "partner"
+  },
+  {
+   "body_id": 1231066662,
+   "type": "ER5",
+   "instance": "ER5(ring)_R",
+   "synapses_onto_circuit": 222,
+   "synapses_from_circuit": 1,
+   "why": "partner"
+  },
+  {
+   "body_id": 1231066741,
+   "type": "ER5",
+   "instance": "ER5(ring)_L",
+   "synapses_onto_circuit": 208,
+   "synapses_from_circuit": 2,
+   "why": "partner"
+  },
+  {
+   "body_id": 1231070792,
+   "type": "ER5",
+   "instance": "ER5(ring)_L",
+   "synapses_onto_circuit": 233,
+   "synapses_from_circuit": 2,
+   "why": "partner"
+  },
+  {
+   "body_id": 1231070863,
+   "type": "ER5",
+   "instance": "ER5(ring)_L",
+   "synapses_onto_circuit": 212,
+   "synapses_from_circuit": 3,
+   "why": "partner"
+  },
+  {
+   "body_id": 1231079482,
+   "type": "ER5",
+   "instance": "ER5(ring)_L",
+   "synapses_onto_circuit": 200,
+   "synapses_from_circuit": 5,
+   "why": "partner"
+  },
+  {
+   "body_id": 1258073453,
+   "type": "PFL3",
+   "instance": "PFL3(PB12c)_L1_C8_irreg",
+   "synapses_onto_circuit": 1,
+   "synapses_from_circuit": 304,
+   "why": "partner"
+  },
+  {
+   "body_id": 1258686925,
+   "type": "PFL3",
+   "instance": "PFL3(PB12c)_L2_C4",
+   "synapses_onto_circuit": 2,
+   "synapses_from_circuit": 455,
+   "why": "partner"
+  },
+  {
+   "body_id": 1259377221,
+   "type": "ER6",
+   "instance": "ER6(ring)_L",
+   "synapses_onto_circuit": 323,
+   "synapses_from_circuit": 72,
+   "why": "partner"
+  },
+  {
+   "body_id": 1259377325,
+   "type": "ER6",
+   "instance": "ER6(ring)_L",
+   "synapses_onto_circuit": 330,
+   "synapses_from_circuit": 66,
+   "why": "partner"
+  },
+  {
+   "body_id": 1259386264,
+   "type": "ExR7",
+   "instance": "ExR7(ring)_R",
+   "synapses_onto_circuit": 457,
+   "synapses_from_circuit": 935,
+   "why": "partner"
+  },
+  {
+   "body_id": 1259718093,
+   "type": "ExR8",
+   "instance": "ExR8(ring)_R",
+   "synapses_onto_circuit": 4,
+   "synapses_from_circuit": 829,
+   "why": "partner"
+  },
+  {
+   "body_id": 1260327246,
+   "type": "ER3p_b",
+   "instance": "ER3p_b(ring)_R",
+   "synapses_onto_circuit": 434,
+   "synapses_from_circuit": 8,
+   "why": "partner"
+  },
+  {
+   "body_id": 1260400286,
+   "type": "ER3w_a",
+   "instance": "ER3w_a(ring)_R",
+   "synapses_onto_circuit": 504,
+   "synapses_from_circuit": 17,
+   "why": "partner"
+  },
+  {
+   "body_id": 1260422110,
+   "type": "ER2_b",
+   "instance": "ER2_b(ring)_L",
+   "synapses_onto_circuit": 538,
+   "synapses_from_circuit": 59,
+   "why": "partner"
+  },
+  {
+   "body_id": 1260754053,
+   "type": "ER3w_a",
+   "instance": "ER3w_a(ring)_R",
+   "synapses_onto_circuit": 529,
+   "synapses_from_circuit": 18,
+   "why": "partner"
+  },
+  {
+   "body_id": 1260828727,
+   "type": "ER3p_a",
+   "instance": "ER3p_a(ring)_L",
+   "synapses_onto_circuit": 597,
+   "synapses_from_circuit": 15,
+   "why": "partner"
+  },
+  {
+   "body_id": 1261000309,
+   "type": "ER4d",
+   "instance": "ER4d(ring)_R",
+   "synapses_onto_circuit": 474,
+   "synapses_from_circuit": 88,
+   "why": "partner"
+  },
+  {
+   "body_id": 1261056809,
+   "type": "ER4d",
+   "instance": "ER4d(ring)_L",
+   "synapses_onto_circuit": 433,
+   "synapses_from_circuit": 73,
+   "why": "partner"
+  },
+  {
+   "body_id": 1261086734,
+   "type": "ER3d_a",
+   "instance": "ER3d_a(ring)_R",
+   "synapses_onto_circuit": 233,
+   "synapses_from_circuit": 0,
+   "why": "partner"
+  },
+  {
+   "body_id": 1261086755,
+   "type": "ER3d_a",
+   "instance": "ER3d_a(ring)_L",
+   "synapses_onto_circuit": 227,
+   "synapses_from_circuit": 4,
+   "why": "partner"
+  },
+  {
+   "body_id": 1261086756,
+   "type": "ER3d_a",
+   "instance": "ER3d_a(ring)_R",
+   "synapses_onto_circuit": 209,
+   "synapses_from_circuit": 2,
+   "why": "partner"
+  },
+  {
+   "body_id": 1261086863,
+   "type": "ER3d_a",
+   "instance": "ER3d_a(ring)_L",
+   "synapses_onto_circuit": 260,
+   "synapses_from_circuit": 1,
+   "why": "partner"
+  },
+  {
+   "body_id": 1261091124,
+   "type": "ER3d_a",
+   "instance": "ER3d_a(ring)_L",
+   "synapses_onto_circuit": 256,
+   "synapses_from_circuit": 1,
+   "why": "partner"
+  },
+  {
+   "body_id": 1261091157,
+   "type": "ER3d_c",
+   "instance": "ER3d_c(ring)_L",
+   "synapses_onto_circuit": 210,
+   "synapses_from_circuit": 0,
+   "why": "partner"
+  },
+  {
+   "body_id": 1261091174,
+   "type": "ER3d_a",
+   "instance": "ER3d_a(ring)_L",
+   "synapses_onto_circuit": 250,
+   "synapses_from_circuit": 0,
+   "why": "partner"
+  },
+  {
+   "body_id": 1261169514,
+   "type": "ER3p_a",
+   "instance": "ER3p_a(ring)_L",
+   "synapses_onto_circuit": 626,
+   "synapses_from_circuit": 7,
+   "why": "partner"
+  },
+  {
+   "body_id": 1261419142,
+   "type": "ER3d_c",
+   "instance": "ER3d_c(ring)_R",
+   "synapses_onto_circuit": 214,
+   "synapses_from_circuit": 1,
+   "why": "partner"
+  },
+  {
+   "body_id": 1261423370,
+   "type": "ER3d_a",
+   "instance": "ER3d_a(ring)_R",
+   "synapses_onto_circuit": 265,
+   "synapses_from_circuit": 0,
+   "why": "partner"
+  },
+  {
+   "body_id": 1261423444,
+   "type": "ER3d_c",
+   "instance": "ER3d_c(ring)_R",
+   "synapses_onto_circuit": 229,
+   "synapses_from_circuit": 0,
+   "why": "partner"
+  },
+  {
+   "body_id": 1261423454,
+   "type": "ER3d_c",
+   "instance": "ER3d_c(ring)_R",
+   "synapses_onto_circuit": 226,
+   "synapses_from_circuit": 2,
+   "why": "partner"
+  },
+  {
+   "body_id": 1261427765,
+   "type": "ER3d_c",
+   "instance": "ER3d_c(ring)_R",
+   "synapses_onto_circuit": 218,
+   "synapses_from_circuit": 2,
+   "why": "partner"
+  },
+  {
+   "body_id": 1261427857,
+   "type": "ER3d_a",
+   "instance": "ER3d_a(ring)_L",
+   "synapses_onto_circuit": 243,
+   "synapses_from_circuit": 0,
+   "why": "partner"
+  },
+  {
+   "body_id": 1261436305,
+   "type": "ER3d_c",
+   "instance": "ER3d_c(ring)_R",
+   "synapses_onto_circuit": 229,
+   "synapses_from_circuit": 1,
+   "why": "partner"
+  },
+  {
+   "body_id": 1261436508,
+   "type": "ER3d_a",
+   "instance": "ER3d_a(ring)_R",
+   "synapses_onto_circuit": 247,
+   "synapses_from_circuit": 1,
+   "why": "partner"
+  },
+  {
+   "body_id": 1261751722,
+   "type": "ER5",
+   "instance": "ER5(ring)_L",
+   "synapses_onto_circuit": 252,
+   "synapses_from_circuit": 4,
+   "why": "partner"
+  },
+  {
+   "body_id": 1261756007,
+   "type": "ER3d_a",
+   "instance": "ER3d_a(ring)_R",
+   "synapses_onto_circuit": 236,
+   "synapses_from_circuit": 1,
+   "why": "partner"
+  },
+  {
+   "body_id": 1261768832,
+   "type": "ER3a_c",
+   "instance": "ER3a_c(ring)_L",
+   "synapses_onto_circuit": 245,
+   "synapses_from_circuit": 53,
+   "why": "partner"
+  },
+  {
+   "body_id": 1261768859,
+   "type": "ER3d_b",
+   "instance": "ER3d_b(ring)_R",
+   "synapses_onto_circuit": 230,
+   "synapses_from_circuit": 2,
+   "why": "partner"
+  },
+  {
+   "body_id": 1261768880,
+   "type": "ER3d_b",
+   "instance": "ER3d_b(ring)_R",
+   "synapses_onto_circuit": 262,
+   "synapses_from_circuit": 4,
+   "why": "partner"
+  },
+  {
+   "body_id": 1261768913,
+   "type": "ER3m",
+   "instance": "ER3m(ring)_R",
+   "synapses_onto_circuit": 313,
+   "synapses_from_circuit": 1,
+   "why": "partner"
+  },
+  {
+   "body_id": 1290416713,
+   "type": "ExR8",
+   "instance": "ExR8(ring)_L",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 636,
+   "why": "partner"
+  },
+  {
+   "body_id": 1291094620,
+   "type": "ER1_b",
+   "instance": "ER1_b(ring)_R",
+   "synapses_onto_circuit": 658,
+   "synapses_from_circuit": 193,
+   "why": "partner"
+  },
+  {
+   "body_id": 1291094742,
+   "type": "ER1_b",
+   "instance": "ER1_b(ring)_L",
+   "synapses_onto_circuit": 571,
+   "synapses_from_circuit": 129,
+   "why": "partner"
+  },
+  {
+   "body_id": 1291099014,
+   "type": "ER1_b",
+   "instance": "ER1_b(ring)_R",
+   "synapses_onto_circuit": 509,
+   "synapses_from_circuit": 137,
+   "why": "partner"
+  },
+  {
+   "body_id": 1291103485,
+   "type": "ER1_a",
+   "instance": "ER1_a(ring)_L",
+   "synapses_onto_circuit": 441,
+   "synapses_from_circuit": 122,
+   "why": "partner"
+  },
+  {
+   "body_id": 1291366237,
+   "type": "ER3p_b",
+   "instance": "ER3p_b(ring)_R",
+   "synapses_onto_circuit": 373,
+   "synapses_from_circuit": 6,
+   "why": "partner"
+  },
+  {
+   "body_id": 1291435551,
+   "type": "ER1_a",
+   "instance": "ER1_a(ring)_R",
+   "synapses_onto_circuit": 438,
+   "synapses_from_circuit": 145,
+   "why": "partner"
+  },
+  {
+   "body_id": 1291435693,
+   "type": "ER1_b",
+   "instance": "ER1_b(ring)_R",
+   "synapses_onto_circuit": 590,
+   "synapses_from_circuit": 153,
+   "why": "partner"
+  },
+  {
+   "body_id": 1291435776,
+   "type": "ER3p_a",
+   "instance": "ER3p_a(ring)_R",
+   "synapses_onto_circuit": 571,
+   "synapses_from_circuit": 14,
+   "why": "partner"
+  },
+  {
+   "body_id": 1291444314,
+   "type": "ER1_a",
+   "instance": "ER1_a(ring)_L",
+   "synapses_onto_circuit": 440,
+   "synapses_from_circuit": 171,
+   "why": "partner"
+  },
+  {
+   "body_id": 1291780631,
+   "type": "ER3m",
+   "instance": "ER3m(ring)_L",
+   "synapses_onto_circuit": 290,
+   "synapses_from_circuit": 3,
+   "why": "partner"
+  },
+  {
+   "body_id": 1291780675,
+   "type": "ER3m",
+   "instance": "ER3m(ring)_R",
+   "synapses_onto_circuit": 229,
+   "synapses_from_circuit": 1,
+   "why": "partner"
+  },
+  {
+   "body_id": 1291780710,
+   "type": "ER3m",
+   "instance": "ER3m(ring)_L",
+   "synapses_onto_circuit": 307,
+   "synapses_from_circuit": 1,
+   "why": "partner"
+  },
+  {
+   "body_id": 1292113218,
+   "type": "ER3d_a",
+   "instance": "ER3d_a(ring)_L",
+   "synapses_onto_circuit": 222,
+   "synapses_from_circuit": 0,
+   "why": "partner"
+  },
+  {
+   "body_id": 1292423935,
+   "type": "PFL1",
+   "instance": "PFL1(PB12a)_L3_C4",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 558,
+   "why": "partner"
+  },
+  {
+   "body_id": 1292458303,
+   "type": "ER3d_b",
+   "instance": "ER3d_b(ring)_L",
+   "synapses_onto_circuit": 218,
+   "synapses_from_circuit": 9,
+   "why": "partner"
+  },
+  {
+   "body_id": 1292794996,
+   "type": "ER3m",
+   "instance": "ER3m(ring)_R",
+   "synapses_onto_circuit": 240,
+   "synapses_from_circuit": 5,
+   "why": "partner"
+  },
+  {
+   "body_id": 1292799346,
+   "type": "ER3m",
+   "instance": "ER3m(ring)_L",
+   "synapses_onto_circuit": 227,
+   "synapses_from_circuit": 2,
+   "why": "partner"
+  },
+  {
+   "body_id": 1292803650,
+   "type": "ER3m",
+   "instance": "ER3m(ring)_R",
+   "synapses_onto_circuit": 229,
+   "synapses_from_circuit": 3,
+   "why": "partner"
+  },
+  {
+   "body_id": 1292816565,
+   "type": "ER3m",
+   "instance": "ER3m(ring)_R",
+   "synapses_onto_circuit": 247,
+   "synapses_from_circuit": 0,
+   "why": "partner"
+  },
+  {
+   "body_id": 1292846965,
+   "type": "ER4d",
+   "instance": "ER4d(ring)_L",
+   "synapses_onto_circuit": 434,
+   "synapses_from_circuit": 64,
+   "why": "partner"
+  },
+  {
+   "body_id": 1292847181,
+   "type": "ER4m",
+   "instance": "ER4m(ring)_R",
+   "synapses_onto_circuit": 1521,
+   "synapses_from_circuit": 345,
+   "why": "partner"
+  },
+  {
+   "body_id": 1292882359,
+   "type": "EL",
+   "instance": "EL(EQ5)_R",
+   "synapses_onto_circuit": 281,
+   "synapses_from_circuit": 870,
+   "why": "partner"
+  },
+  {
+   "body_id": 1294082002,
+   "type": "ER1_b",
+   "instance": "ER1_b(ring)_R",
+   "synapses_onto_circuit": 622,
+   "synapses_from_circuit": 175,
+   "why": "partner"
+  },
+  {
+   "body_id": 1294414279,
+   "type": "ER1_a",
+   "instance": "ER1_a(ring)_R",
+   "synapses_onto_circuit": 449,
+   "synapses_from_circuit": 174,
+   "why": "partner"
+  },
+  {
+   "body_id": 1313594496,
+   "type": "LAL184",
+   "instance": "LAL184_R",
+   "synapses_onto_circuit": 553,
+   "synapses_from_circuit": 16,
+   "why": "partner"
+  },
+  {
+   "body_id": 1321140852,
+   "type": "EL",
+   "instance": "EL(EQ5)_R",
+   "synapses_onto_circuit": 324,
+   "synapses_from_circuit": 956,
+   "why": "partner"
+  },
+  {
+   "body_id": 1322129437,
+   "type": "ER1_a",
+   "instance": "ER1_a(ring)_L",
+   "synapses_onto_circuit": 449,
+   "synapses_from_circuit": 130,
+   "why": "partner"
+  },
+  {
+   "body_id": 1322129610,
+   "type": "ER1_b",
+   "instance": "ER1_b(ring)_R",
+   "synapses_onto_circuit": 553,
+   "synapses_from_circuit": 138,
+   "why": "partner"
+  },
+  {
+   "body_id": 1322129724,
+   "type": "ER1_b",
+   "instance": "ER1_b(ring)_L",
+   "synapses_onto_circuit": 522,
+   "synapses_from_circuit": 105,
+   "why": "partner"
+  },
+  {
+   "body_id": 1322129730,
+   "type": "ER1_b",
+   "instance": "ER1_b(ring)_L",
+   "synapses_onto_circuit": 557,
+   "synapses_from_circuit": 141,
+   "why": "partner"
+  },
+  {
+   "body_id": 1322129781,
+   "type": "ER1_a",
+   "instance": "ER1_a(ring)_R",
+   "synapses_onto_circuit": 361,
+   "synapses_from_circuit": 126,
+   "why": "partner"
+  },
+  {
+   "body_id": 1322133296,
+   "type": "ER1_a",
+   "instance": "ER1_a(ring)_L",
+   "synapses_onto_circuit": 515,
+   "synapses_from_circuit": 143,
+   "why": "partner"
+  },
+  {
+   "body_id": 1322133531,
+   "type": "ER1_b",
+   "instance": "ER1_b(ring)_L",
+   "synapses_onto_circuit": 549,
+   "synapses_from_circuit": 151,
+   "why": "partner"
+  },
+  {
+   "body_id": 1322133768,
+   "type": "ER1_a",
+   "instance": "ER1_a(ring)_L",
+   "synapses_onto_circuit": 457,
+   "synapses_from_circuit": 138,
+   "why": "partner"
+  },
+  {
+   "body_id": 1322133825,
+   "type": "ER1_a",
+   "instance": "ER1_a(ring)_L",
+   "synapses_onto_circuit": 481,
+   "synapses_from_circuit": 130,
+   "why": "partner"
+  },
+  {
+   "body_id": 1322133858,
+   "type": "ER1_a",
+   "instance": "ER1_a(ring)_R",
+   "synapses_onto_circuit": 427,
+   "synapses_from_circuit": 99,
+   "why": "partner"
+  },
+  {
+   "body_id": 1322133891,
+   "type": "ER1_b",
+   "instance": "ER1_b(ring)_L",
+   "synapses_onto_circuit": 567,
+   "synapses_from_circuit": 151,
+   "why": "partner"
+  },
+  {
+   "body_id": 1322137688,
+   "type": "ER1_b",
+   "instance": "ER1_b(ring)_R",
+   "synapses_onto_circuit": 506,
+   "synapses_from_circuit": 130,
+   "why": "partner"
+  },
+  {
+   "body_id": 1322138079,
+   "type": "ER1_b",
+   "instance": "ER1_b(ring)_R",
+   "synapses_onto_circuit": 574,
+   "synapses_from_circuit": 139,
+   "why": "partner"
+  },
+  {
+   "body_id": 1322142804,
+   "type": "ER1_b",
+   "instance": "ER1_b(ring)_L",
+   "synapses_onto_circuit": 169,
+   "synapses_from_circuit": 45,
+   "why": "partner"
+  },
+  {
+   "body_id": 1322466938,
+   "type": "ER1_a",
+   "instance": "ER1_a(ring)_R",
+   "synapses_onto_circuit": 479,
+   "synapses_from_circuit": 140,
+   "why": "partner"
+  },
+  {
+   "body_id": 1322470368,
+   "type": "ER1_a",
+   "instance": "ER1_a(ring)_R",
+   "synapses_onto_circuit": 456,
+   "synapses_from_circuit": 123,
+   "why": "partner"
+  },
+  {
+   "body_id": 1322470462,
+   "type": "ER1_a",
+   "instance": "ER1_a(ring)_R",
+   "synapses_onto_circuit": 441,
+   "synapses_from_circuit": 142,
+   "why": "partner"
+  },
+  {
+   "body_id": 1322470509,
+   "type": "ER3p_a",
+   "instance": "ER3p_a(ring)_L",
+   "synapses_onto_circuit": 649,
+   "synapses_from_circuit": 13,
+   "why": "partner"
+  },
+  {
+   "body_id": 1322470594,
+   "type": "ER3p_a",
+   "instance": "ER3p_a(ring)_L",
+   "synapses_onto_circuit": 551,
+   "synapses_from_circuit": 11,
+   "why": "partner"
+  },
+  {
+   "body_id": 1322474586,
+   "type": "ER3p_a",
+   "instance": "ER3p_a(ring)_R",
+   "synapses_onto_circuit": 633,
+   "synapses_from_circuit": 13,
+   "why": "partner"
+  },
+  {
+   "body_id": 1322811128,
+   "type": "ER3p_b",
+   "instance": "ER3p_b(ring)_L",
+   "synapses_onto_circuit": 479,
+   "synapses_from_circuit": 4,
+   "why": "partner"
+  },
+  {
+   "body_id": 1322811160,
+   "type": "ER3p_b",
+   "instance": "ER3p_b(ring)_L",
+   "synapses_onto_circuit": 347,
+   "synapses_from_circuit": 3,
+   "why": "partner"
+  },
+  {
+   "body_id": 1322811232,
+   "type": "ER3p_b",
+   "instance": "ER3p_b(ring)_L",
+   "synapses_onto_circuit": 487,
+   "synapses_from_circuit": 4,
+   "why": "partner"
+  },
+  {
+   "body_id": 1322811240,
+   "type": "ER3p_a",
+   "instance": "ER3p_a(ring)_R",
+   "synapses_onto_circuit": 567,
+   "synapses_from_circuit": 6,
+   "why": "partner"
+  },
+  {
+   "body_id": 1323156554,
+   "type": "ER3p_b",
+   "instance": "ER3p_b(ring)_R",
+   "synapses_onto_circuit": 432,
+   "synapses_from_circuit": 7,
+   "why": "partner"
+  },
+  {
+   "body_id": 1324145475,
+   "type": "ER4d",
+   "instance": "ER4d(ring)_R",
+   "synapses_onto_circuit": 409,
+   "synapses_from_circuit": 73,
+   "why": "partner"
+  },
+  {
+   "body_id": 1324430237,
+   "type": "ER6",
+   "instance": "ER6(ring)_R",
+   "synapses_onto_circuit": 646,
+   "synapses_from_circuit": 837,
+   "why": "partner"
+  },
+  {
+   "body_id": 1348057533,
+   "type": "FB1C",
+   "instance": "FB1C(NO1/NO3)_L",
+   "synapses_onto_circuit": 179,
+   "synapses_from_circuit": 112,
+   "why": "partner"
+  },
+  {
+   "body_id": 1352823209,
+   "type": "ER1_a",
+   "instance": "ER1_a(ring)_L",
+   "synapses_onto_circuit": 432,
+   "synapses_from_circuit": 140,
+   "why": "partner"
+  },
+  {
+   "body_id": 1353168228,
+   "type": "ER1_b",
+   "instance": "ER1_b(ring)_L",
+   "synapses_onto_circuit": 187,
+   "synapses_from_circuit": 58,
+   "why": "partner"
+  },
+  {
+   "body_id": 1355806197,
+   "type": "ER1_a",
+   "instance": "ER1_a(ring)_R",
+   "synapses_onto_circuit": 502,
+   "synapses_from_circuit": 104,
+   "why": "partner"
+  },
+  {
+   "body_id": 1379087619,
+   "type": "FB1C",
+   "instance": "FB1C(NO1/NO3)_L",
+   "synapses_onto_circuit": 115,
+   "synapses_from_circuit": 122,
+   "why": "partner"
+  },
+  {
+   "body_id": 1381484065,
+   "type": "PFL2",
+   "instance": "PFL2(PB12b)_L2_C6",
+   "synapses_onto_circuit": 4,
+   "synapses_from_circuit": 490,
+   "why": "partner"
+  },
+  {
+   "body_id": 1416900410,
+   "type": "ER4d",
+   "instance": "ER4d(ring)_L",
+   "synapses_onto_circuit": 390,
+   "synapses_from_circuit": 68,
+   "why": "partner"
+  },
+  {
+   "body_id": 1447253749,
+   "type": "EL",
+   "instance": "EL(EQ5)_R",
+   "synapses_onto_circuit": 258,
+   "synapses_from_circuit": 895,
+   "why": "partner"
+  },
+  {
+   "body_id": 1449247522,
+   "type": "ExR2",
+   "instance": "ExR2(PPM3-EB-DAN/ring)_R",
+   "synapses_onto_circuit": 648,
+   "synapses_from_circuit": 763,
+   "why": "partner"
+  },
+  {
+   "body_id": 1508369047,
+   "type": "EL",
+   "instance": "EL(EQ5)_R",
+   "synapses_onto_circuit": 325,
+   "synapses_from_circuit": 1027,
+   "why": "partner"
+  },
+  {
+   "body_id": 1509098829,
+   "type": "GLNO",
+   "instance": "GLNO(LAL-NO1)_L",
+   "synapses_onto_circuit": 1690,
+   "synapses_from_circuit": 603,
+   "why": "partner"
+  },
+  {
+   "body_id": 1509439784,
+   "type": "GLNO",
+   "instance": "GLNO(LAL-NO1)_L",
+   "synapses_onto_circuit": 1877,
+   "synapses_from_circuit": 706,
+   "why": "partner"
+  },
+  {
+   "body_id": 1513674176,
+   "type": "ER4d",
+   "instance": "ER4d(ring)_R",
+   "synapses_onto_circuit": 407,
+   "synapses_from_circuit": 50,
+   "why": "partner"
+  },
+  {
+   "body_id": 1537634396,
+   "type": "PFNa",
+   "instance": "PFNa(PB03)_L3_C2",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 309,
+   "why": "partner"
+  },
+  {
+   "body_id": 1539994995,
+   "type": "GLNO",
+   "instance": "GLNO(LAL-NO1)_R",
+   "synapses_onto_circuit": 2072,
+   "synapses_from_circuit": 758,
+   "why": "partner"
+  },
+  {
+   "body_id": 1566644645,
+   "type": "PFNa",
+   "instance": "PFNa(PB03)_R8_C3",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 203,
+   "why": "partner"
+  },
+  {
+   "body_id": 1600420555,
+   "type": "GLNO",
+   "instance": "GLNO(LAL-NO1)_R",
+   "synapses_onto_circuit": 2020,
+   "synapses_from_circuit": 889,
+   "why": "partner"
+  },
+  {
+   "body_id": 1601715638,
+   "type": "ExR8",
+   "instance": "ExR8(ring)_R",
+   "synapses_onto_circuit": 8,
+   "synapses_from_circuit": 772,
+   "why": "partner"
+  },
+  {
+   "body_id": 1661458144,
+   "type": "PFNa",
+   "instance": "PFNa(PB03)_L2_C1",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 212,
+   "why": "partner"
+  },
+  {
+   "body_id": 1730608428,
+   "type": "ExR4",
+   "instance": "ExR4(ring)_R",
+   "synapses_onto_circuit": 3280,
+   "synapses_from_circuit": 1904,
+   "why": "partner"
+  },
+  {
+   "body_id": 5812979082,
+   "type": "ER2_d",
+   "instance": "ER2_d(ring)_L",
+   "synapses_onto_circuit": 520,
+   "synapses_from_circuit": 72,
+   "why": "partner"
+  },
+  {
+   "body_id": 5812979222,
+   "type": "ER4d",
+   "instance": "ER4d(ring)_R",
+   "synapses_onto_circuit": 403,
+   "synapses_from_circuit": 67,
+   "why": "partner"
+  },
+  {
+   "body_id": 5812979230,
+   "type": "ER3w_b",
+   "instance": "ER3w_b(ring)_R",
+   "synapses_onto_circuit": 512,
+   "synapses_from_circuit": 15,
+   "why": "partner"
+  },
+  {
+   "body_id": 5812979459,
+   "type": "ER3p_a",
+   "instance": "ER3p_a(ring)_L",
+   "synapses_onto_circuit": 534,
+   "synapses_from_circuit": 3,
+   "why": "partner"
+  },
+  {
+   "body_id": 5812983734,
+   "type": "ER6",
+   "instance": "ER6(ring)_R",
+   "synapses_onto_circuit": 680,
+   "synapses_from_circuit": 837,
+   "why": "partner"
+  },
+  {
+   "body_id": 5812983887,
+   "type": "ER3d_a",
+   "instance": "ER3d_a(ring)_L",
+   "synapses_onto_circuit": 218,
+   "synapses_from_circuit": 4,
+   "why": "partner"
+  },
+  {
+   "body_id": 5812987684,
+   "type": "ExR7",
+   "instance": "ExR7(ring)_L",
+   "synapses_onto_circuit": 383,
+   "synapses_from_circuit": 1058,
+   "why": "partner"
+  },
+  {
+   "body_id": 5812987803,
+   "type": "PFNv",
+   "instance": "PFNv(PB05)_R9_C1",
+   "synapses_onto_circuit": 29,
+   "synapses_from_circuit": 220,
+   "why": "partner"
+  },
+  {
+   "body_id": 5813014062,
+   "type": "PFNd",
+   "instance": "PFNd(PB04)_R2_C8",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 255,
+   "why": "partner"
+  },
+  {
+   "body_id": 5813014882,
+   "type": "PEG",
+   "instance": "PEG(PB07)_R5",
+   "synapses_onto_circuit": 116,
+   "synapses_from_circuit": 734,
+   "why": "partner"
+  },
+  {
+   "body_id": 5813016150,
+   "type": "IbSpsP",
+   "instance": "IbSpsP(PB17)_R3",
+   "synapses_onto_circuit": 206,
+   "synapses_from_circuit": 178,
+   "why": "partner"
+  },
+  {
+   "body_id": 5813020409,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_R",
+   "synapses_onto_circuit": 597,
+   "synapses_from_circuit": 141,
+   "why": "partner"
+  },
+  {
+   "body_id": 5813020453,
+   "type": "ER5",
+   "instance": "ER5(ring)_R",
+   "synapses_onto_circuit": 203,
+   "synapses_from_circuit": 1,
+   "why": "partner"
+  },
+  {
+   "body_id": 5813020455,
+   "type": "ER3w_b",
+   "instance": "ER3w_b(ring)_R",
+   "synapses_onto_circuit": 562,
+   "synapses_from_circuit": 33,
+   "why": "partner"
+  },
+  {
+   "body_id": 5813020568,
+   "type": "ER3p_a",
+   "instance": "ER3p_a(ring)_R",
+   "synapses_onto_circuit": 558,
+   "synapses_from_circuit": 10,
+   "why": "partner"
+  },
+  {
+   "body_id": 5813020585,
+   "type": "ER3p_a",
+   "instance": "ER3p_a(ring)_R",
+   "synapses_onto_circuit": 683,
+   "synapses_from_circuit": 15,
+   "why": "partner"
+  },
+  {
+   "body_id": 5813020587,
+   "type": "ER3d_c",
+   "instance": "ER3d_c(ring)_L",
+   "synapses_onto_circuit": 208,
+   "synapses_from_circuit": 2,
+   "why": "partner"
+  },
+  {
+   "body_id": 5813027016,
+   "type": "FB4Y",
+   "instance": "FB4Y(EB/NO1)_R",
+   "synapses_onto_circuit": 637,
+   "synapses_from_circuit": 802,
+   "why": "partner"
+  },
+  {
+   "body_id": 5813038224,
+   "type": "ER3w_a",
+   "instance": "ER3w_a(ring)_L",
+   "synapses_onto_circuit": 513,
+   "synapses_from_circuit": 22,
+   "why": "partner"
+  },
+  {
+   "body_id": 5813041365,
+   "type": "PFL1",
+   "instance": "PFL1(PB12a)_L4_C5",
+   "synapses_onto_circuit": 12,
+   "synapses_from_circuit": 705,
+   "why": "partner"
+  },
+  {
+   "body_id": 5813041382,
+   "type": "IbSpsP",
+   "instance": "IbSpsP(PB17)_L4",
+   "synapses_onto_circuit": 344,
+   "synapses_from_circuit": 298,
+   "why": "partner"
+  },
+  {
+   "body_id": 5813045050,
+   "type": "ER3w_b",
+   "instance": "ER3w_b(ring)_L",
+   "synapses_onto_circuit": 501,
+   "synapses_from_circuit": 18,
+   "why": "partner"
+  },
+  {
+   "body_id": 5813047446,
+   "type": "ER2_a",
+   "instance": "ER2_a(ring)_L",
+   "synapses_onto_circuit": 596,
+   "synapses_from_circuit": 117,
+   "why": "partner"
+  },
+  {
+   "body_id": 5813047647,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_R",
+   "synapses_onto_circuit": 664,
+   "synapses_from_circuit": 139,
+   "why": "partner"
+  },
+  {
+   "body_id": 5813047793,
+   "type": "ER4m",
+   "instance": "ER4m(ring)_L",
+   "synapses_onto_circuit": 1435,
+   "synapses_from_circuit": 358,
+   "why": "partner"
+  },
+  {
+   "body_id": 5813048755,
+   "type": "PFGs",
+   "instance": "PFGs(PB10)_R3_C7",
+   "synapses_onto_circuit": 51,
+   "synapses_from_circuit": 179,
+   "why": "partner"
+  },
+  {
+   "body_id": 5813048896,
+   "type": "ER2_c",
+   "instance": "ER2_c(ring)_R",
+   "synapses_onto_circuit": 605,
+   "synapses_from_circuit": 127,
+   "why": "partner"
+  },
+  {
+   "body_id": 5813049931,
+   "type": "ER5",
+   "instance": "ER5(ring)_L",
+   "synapses_onto_circuit": 217,
+   "synapses_from_circuit": 0,
+   "why": "partner"
+  },
+  {
+   "body_id": 5813049948,
+   "type": "ER4m",
+   "instance": "ER4m(ring)_L",
+   "synapses_onto_circuit": 1498,
+   "synapses_from_circuit": 300,
+   "why": "partner"
+  },
+  {
+   "body_id": 5813050000,
+   "type": "PFNa",
+   "instance": "PFNa(PB03)_R3_C8",
+   "synapses_onto_circuit": 2,
+   "synapses_from_circuit": 356,
+   "why": "partner"
+  },
+  {
+   "body_id": 5813050767,
+   "type": "ER4m",
+   "instance": "ER4m(ring)_R",
+   "synapses_onto_circuit": 1481,
+   "synapses_from_circuit": 386,
+   "why": "partner"
+  },
+  {
+   "body_id": 5813053866,
+   "type": "ER4m",
+   "instance": "ER4m(ring)_R",
+   "synapses_onto_circuit": 1636,
+   "synapses_from_circuit": 388,
+   "why": "partner"
+  },
+  {
+   "body_id": 5813053983,
+   "type": "ER3w_b",
+   "instance": "ER3w_b(ring)_R",
+   "synapses_onto_circuit": 567,
+   "synapses_from_circuit": 12,
+   "why": "partner"
+  },
+  {
+   "body_id": 5813053988,
+   "type": "ER3w_a",
+   "instance": "ER3w_a(ring)_R",
+   "synapses_onto_circuit": 528,
+   "synapses_from_circuit": 64,
+   "why": "partner"
+  },
+  {
+   "body_id": 5813055913,
+   "type": "FB1C",
+   "instance": "FB1C(NO1/NO3)_R",
+   "synapses_onto_circuit": 137,
+   "synapses_from_circuit": 137,
+   "why": "partner"
+  },
+  {
+   "body_id": 5813056934,
+   "type": "PFNa",
+   "instance": "PFNa(PB03)_R3_C8",
+   "synapses_onto_circuit": 0,
+   "synapses_from_circuit": 415,
+   "why": "partner"
+  },
+  {
+   "body_id": 5813057274,
+   "type": "FB4Y",
+   "instance": "FB4Y(EB/NO1)_L",
+   "synapses_onto_circuit": 629,
+   "synapses_from_circuit": 696,
+   "why": "partner"
+  },
+  {
+   "body_id": 5813057963,
+   "type": "FB3B",
+   "instance": "FB3B(EB)_R",
+   "synapses_onto_circuit": 289,
+   "synapses_from_circuit": 169,
+   "why": "partner"
+  },
+  {
+   "body_id": 5813058389,
+   "type": "P6-8P9",
+   "instance": "P6-8P9(PB14)_R",
+   "synapses_onto_circuit": 109,
+   "synapses_from_circuit": 556,
+   "why": "partner"
+  },
+  {
+   "body_id": 5813059834,
+   "type": "PEG",
+   "instance": "PEG(PB07)_R8",
+   "synapses_onto_circuit": 81,
+   "synapses_from_circuit": 714,
+   "why": "partner"
+  },
+  {
+   "body_id": 5813059835,
+   "type": "ER1_a",
+   "instance": "ER1_a(ring)_L",
+   "synapses_onto_circuit": 458,
+   "synapses_from_circuit": 161,
+   "why": "partner"
+  },
+  {
+   "body_id": 5813060726,
+   "type": "ExR5",
+   "instance": "ExR5(ring)_R",
+   "synapses_onto_circuit": 873,
+   "synapses_from_circuit": 199,
+   "why": "partner"
+  },
+  {
+   "body_id": 5813069339,
+   "type": "IbSpsP",
+   "instance": "IbSpsP(PB17)_L9",
+   "synapses_onto_circuit": 232,
+   "synapses_from_circuit": 298,
+   "why": "partner"
+  },
+  {
+   "body_id": 5813077556,
+   "type": "ER2_b",
+   "instance": "ER2_b(ring)_R",
+   "synapses_onto_circuit": 507,
+   "synapses_from_circuit": 40,
+   "why": "partner"
+  },
+  {
+   "body_id": 5813081494,
+   "type": "PFR_b",
+   "instance": "PFR_b(PB11b)_R1_C8",
+   "synapses_onto_circuit": 34,
+   "synapses_from_circuit": 206,
+   "why": "partner"
+  },
+  {
+   "body_id": 5813087532,
+   "type": "IbSpsP",
+   "instance": "IbSpsP(PB17)_R9",
+   "synapses_onto_circuit": 155,
+   "synapses_from_circuit": 135,
+   "why": "partner"
+  }
+ ]
+}

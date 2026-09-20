@@ -9,17 +9,18 @@ import os
 
 import numpy as np
 
+import connectome
 import live
 import metrics
 import tests
 from live import BOOT_TICKS, TICKS_PER_BAR, LiveSession
 from market import MarketParams, ReplayMarket, SyntheticMarket
-from model_float import load_spec
-from trading import DriveMapper, DriveParams, Readout
+from model_float import Input, load_spec
+from trading import DriveMapper, DriveParams, Readout, ReadoutParams
 
-GOLDEN_PATH = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "spec", "golden.json"))
 MIN_DRIVE = DriveParams().min_drive
-IDLE_POSITION_MAX = 0.3  # |position| allowed after 3 bars without drive (resting-bump hops; 0.2 seen over 60 runs)
+CONTRACT_BARS = -(-ReadoutParams().window_ticks // TICKS_PER_BAR)  # bars that fill one readout window
+IDLE_POSITION_MAX = 0.3  # |position| allowed after a readout window without drive (trading fly: resting max 0.27)
 
 
 def _feed(mapper, returns):
@@ -50,6 +51,41 @@ def test_drive_respects_dead_band_warmup_cap_and_step_limit():
     assert _feed(DriveMapper(), [0.0] * 60).level() == 0.0             # no movement, no drive
 
 
+ABRUPT_STOP_SAFE = 1.1  # x threshold current: an abrupt stop from here keeps the bump (margin below the cap)
+
+
+def _pushpull(level, thr):
+    return Input(drive_pen_l=level * thr, drive_pen_r=-level * thr)
+
+
+def test_drive_limits_hold_on_the_tuned_fly():
+    """DriveParams rest on measurements of the tuned fly (trading.py docstring), re-checked here so a
+    retune cannot silently break them. After 3 s at +/-max_drive, the stop DriveMapper actually makes
+    (down max_step per bar) keeps one bump throughout; an abrupt stop from ABRUPT_STOP_SAFE does too;
+    and min_drive turns the bump at least ReadoutParams.min_speed (else the dead-band edge reads flat)."""
+    p, spec = load_spec(tests.SPEC_PATH)
+    cx = connectome.build(p, spec.get("connectome"))
+    thr = p.v_thresh / p.tau
+    dp, rp = DriveParams(), ReadoutParams()
+    base = tests.t1_phases(cx, p, spec["protocol"])
+    steps = int(np.ceil(dp.max_drive / dp.max_step))
+    for seed in spec["seeds"]:
+        for sign in (1, -1):
+            ramp = [tests.Phase(f"S ramp {k}", TICKS_PER_BAR, _pushpull(sign * max(dp.max_drive - k * dp.max_step, 0.0), thr))
+                    for k in range(1, steps + 1)]
+            for label, level, stop in (("ramp", dp.max_drive, ramp), ("abrupt", ABRUPT_STOP_SAFE, [])):
+                phases = base + [tests.Phase("D", 3000, _pushpull(sign * level, thr))] + stop + [tests.Phase("S rest", 1000, Input())]
+                run = tests.run_protocol(cx, p, phases, seed)
+                a, z = run.span("S")
+                assert run.bumps[a:z].min() == 1 == run.bumps[a:z].max(), \
+                    f"seed {seed}: {label} stop from {sign * level}x lost or split the bump"
+            run = tests.run_protocol(cx, p, base + [tests.Phase("D", 3000, _pushpull(sign * dp.min_drive, thr))], seed)
+            a, z = run.span("D")
+            u = metrics.unwrap(run.heading[a - 1:z], cx.n_wedges)
+            speed = (u[-1] - u[0]) / (z - a) * 1000.0 / p.dt
+            assert sign * speed >= rp.min_speed, f"seed {seed}: {sign * dp.min_drive}x turns only {speed:.2f} wedges/s"
+
+
 # ----------------------------------------------------------------- market --
 
 def test_market_is_reproducible_and_independent_of_the_brain_stream():
@@ -72,15 +108,16 @@ def test_replay_market_plays_the_series_then_goes_flat():
 # ---------------------------------------------------------------- readout --
 
 def test_readout_sign_wraparound_and_no_bump():
+    ticks = ReadoutParams().window_ticks + 100  # fill the readout window, then some
     r = Readout(n_wedges=16, dt_ms=1.0)
     h = 14.0
-    for _ in range(400):  # +8 wedges/s, crossing 16 -> 0
+    for _ in range(ticks):  # +8 wedges/s, crossing 16 -> 0
         h = (h + 0.008) % 16
         pos = r.update(h, strength=0.9, bumps=1)
     assert np.isclose(r.speed, 8.0, atol=0.05) and pos > 0.7  # CCW -> long
     r2 = Readout(n_wedges=16, dt_ms=1.0)
     h = 1.0
-    for _ in range(400):
+    for _ in range(ticks):
         h = (h - 0.008) % 16
         pos = r2.update(h, strength=0.9, bumps=1)
     assert pos < -0.7  # CW -> short
@@ -101,10 +138,10 @@ def _bars(session, n, shock_at=None, shock_dir=0):
 
 
 def _check_contract(levels, positions):
-    """Drive held at >= min_drive (same sign) for 3 bars -> position has that sign.
-    No drive for 3 bars -> the position is at most resting-bump noise."""
-    for k in range(3, len(levels)):
-        prev = levels[k - 3:k]
+    """Drive held at >= min_drive (same sign) for a full readout window of bars -> position has that sign.
+    No drive for that long -> the position is at most resting-bump noise."""
+    for k in range(CONTRACT_BARS, len(levels)):
+        prev = levels[k - CONTRACT_BARS:k]
         if np.all(np.abs(prev) >= MIN_DRIVE) and len(set(np.sign(prev))) == 1:
             assert np.sign(positions[k]) == np.sign(prev[-1]), (k, prev, positions[k])
         if np.all(prev == 0):
@@ -130,7 +167,9 @@ def test_fixed_series_turns_the_fly_the_right_way():
         pos = np.array([b["position"] for b in bars])
         assert violations == 0
         assert pos[45:90].mean() > 0.3 and pos[145:190].mean() < -0.3  # the later parts of each trend
-        assert np.mean(pos[45:90] < 0) == 0 and np.mean(pos[145:190] > 0) == 0
+        # no wrong-sign position beyond resting-bump noise: where the drive still flickers at the dead-band
+        # edge (e.g. -0.3, 0, -0.3 around bar 145), a wander blip of +0.08 is not a wrong turn
+        assert pos[45:90].min() >= -IDLE_POSITION_MAX and pos[145:190].max() <= IDLE_POSITION_MAX
 
 
 def test_no_price_movement_means_no_drive_and_only_idle_noise():
@@ -191,7 +230,7 @@ def test_live_session_replays_exactly_from_its_event_log():
 
 def test_trading_golden():
     _, spec = load_spec(live.SPEC_PATH)
-    with open(GOLDEN_PATH) as f:
+    with open(tests.GOLDEN_PATH) as f:  # the spec's own golden file
         g = json.load(f)["trading"]
     assert g["made_with"] == {"spec": tests.golden_key(spec), **live.trading_key()}, (
         "trading golden made with different params: regenerate with  python run.py --golden")

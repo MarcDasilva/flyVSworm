@@ -1,0 +1,9 @@
+{
+  "name": "fly-brain-sender",
+  "private": true,
+  "type": "module",
+  "description": "Signs and submits fly_brain transactions to Thru without spawning the CLI per transaction.",
+  "dependencies": {
+    "@thru/sdk": "^0.3.16"
+  }
+}

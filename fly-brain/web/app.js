@@ -8,7 +8,7 @@ const FLASH_TICKS = 80;     // a synapse stays lit this many ticks after its pre
 const RATE_FULL = 150;      // Hz at which a neuron's fill is fully saturated
 const POPS = ["EPG", "PEN_L", "PEN_R", "D7"];
 const POP_VAR = { EPG: "--epg", PEN_L: "--penl", PEN_R: "--penr", D7: "--d7" };
-const POP_ROLE = { EPG: "heading", PEN_L: "turns counterclockwise", PEN_R: "turns clockwise", D7: "global inhibition" };
+const POP_ROLE = { EPG: "heading", PEN_L: "turns counterclockwise", PEN_R: "turns clockwise", D7: "inhibition" };
 
 const S = { net: null, frame: null, seed: null, t: 0, bars: [], spikes: [], lastSpike: null,
             layout: null, hover: -1, seriesX: null, ws: null };
@@ -53,8 +53,60 @@ function prepNetwork(net) {
   for (const p of POPS) net.popSize[p] = (seen[p] ?? -1) + 1;
   for (const nr of net.neurons) if (!(nr.pop in net.popStart)) net.popStart[nr.pop] = nr.id;
   net.epg = net.neurons.filter((n) => n.pop === "EPG").sort((a, b) => a.wedge - b.wedge).map((n) => n.id);
+  // slot of each neuron among those sharing its population and wedge (several per wedge in the hemibrain)
+  const groups = {};
+  for (const nr of net.neurons) (groups[`${nr.pop}:${nr.wedge}`] ??= []).push(nr);
+  for (const g of Object.values(groups)) g.forEach((nr, i) => { nr.slot = i; nr.slots = g.length; });
+  net.big = net.N > 80;
   S.lastSpike = new Float64Array(net.N).fill(-1e9);
-  $("circuitMeta").textContent = `${net.N} neurons · ${net.synapses.length} synapses`;
+  const what = { hemibrain: "hemibrain v1.2.1 (measured)", hemibrain_averaged: "hemibrain v1.2.1 (rotation-averaged)",
+                 hemibrain_blend: "hemibrain v1.2.1 (averaged + measured blend)" }[net.source]
+    ?? "procedural (idealized)";
+  $("circuitMeta").textContent = `${what} · ${net.N} neurons · ${net.synapses.length} synapses`;
+  $("raster").parentElement.style.height = `${Math.max(260, net.N * 2.2 + 16)}px`;
+}
+
+function humanTime(seconds) {
+  const h = seconds / 3600;
+  if (h < 1) return `${Math.max(1, Math.round(seconds / 60))} min`;
+  return h < 48 ? `${h.toFixed(h < 10 ? 1 : 0)} h` : `${(h / 24).toFixed(1)} days`;
+}
+
+// The brain on Thru: one transaction per synapse, pushed by the backend while it runs.
+let chainShown = 0;
+
+async function pollChain() {
+  try {
+    const c = await (await fetch("/api/chain")).json();
+    const note = $("chainNote");
+    const counter = $("chainCount");
+    if (c.available && c.transactions !== undefined) {
+      counter.hidden = false;
+      if (c.transactions !== chainShown) {      // flash on each new synapse, then fade back
+        chainShown = c.transactions;
+        $("chainCountValue").textContent = chainShown.toLocaleString();
+        counter.classList.add("tick");
+        setTimeout(() => counter.classList.remove("tick"), 120);
+      }
+    } else {
+      counter.hidden = true;
+    }
+    if (c.available && c.transactions !== undefined) {
+      const n = (x) => Number(x).toLocaleString();
+      const eta = c.eta_seconds ? `, ~${humanTime(c.eta_seconds)} left` : "";
+      const trouble = c.error ? ` · stalled: ${c.error}` : c.note ? ` · ${c.note}` : "";
+      note.textContent = `On Thru (${c.network ?? "chain"}): ${n(c.transactions)} transactions — `
+        + `${c.neurons} neuron wallets, ${c.synapses} synapses`
+        + (c.pending ? ` · ${n(c.pending)} to go${c.sending ? `, sending${eta}` : ""}` : " · complete")
+        + trouble;
+      note.hidden = false;
+    } else {
+      note.hidden = true;
+    }
+  } catch (e) {
+    /* the chain view is optional: the fly runs with or without it */
+  }
+  setTimeout(pollChain, 1000);      // the count is served from memory, so a 1 s tick is cheap
 }
 
 function buildLegend() {
@@ -67,12 +119,17 @@ function buildLegend() {
 // of their wedge (the direction each pushes the bump); D7 in the centre.
 function layout(w, h) {
   const net = S.net, cx = w / 2, cy = h / 2, R = Math.min(w, h) * 0.34, step = (2 * Math.PI) / net.n_wedges;
+  const spread = (nr, width) => (nr.slots > 1 ? ((nr.slot + 0.5) / nr.slots - 0.5) * width : 0);
   const pts = net.neurons.map((nr) => {
     let a, r;
-    if (nr.pop === "EPG") { a = nr.wedge * step; r = R; }
-    else if (nr.pop === "PEN_L") { a = (nr.wedge + 0.3) * step; r = 0.74 * R; }
-    else if (nr.pop === "PEN_R") { a = (nr.wedge - 0.3) * step; r = 0.74 * R; }
-    else { a = (nr.k * 2 * Math.PI) / net.popSize[nr.pop] + step / 2; r = 0.24 * R; }
+    if (nr.pop === "EPG") { a = (nr.wedge + spread(nr, 0.8)) * step; r = R; }
+    else if (nr.pop === "PEN_L") { a = (nr.wedge + 0.3) * step; r = (0.74 - 0.07 * nr.slot) * R; }
+    else if (nr.pop === "PEN_R") { a = (nr.wedge - 0.3) * step; r = (0.74 - 0.07 * nr.slot) * R; }
+    else {  // D7 in the centre: one ring, or two interleaved rings when there are many
+      const two = net.popSize[nr.pop] > 16, per = two ? Math.ceil(net.popSize[nr.pop] / 2) : net.popSize[nr.pop];
+      a = ((nr.k % per) * 2 * Math.PI) / per + step / 2 + (two && nr.k >= per ? Math.PI / per : 0);
+      r = (two && nr.k >= per ? 0.34 : 0.24) * R;
+    }
     return { x: cx + r * Math.cos(a), y: cy - r * Math.sin(a), a };
   });
   return { cx, cy, R, step, pts };
@@ -94,7 +151,8 @@ function synPath(ctx, L, a, b) {
 
 function neuronName(i) {
   const nr = S.net.neurons[i];
-  return nr.pop === "D7" ? `D7 ${nr.k}` : `${nr.pop} ${nr.wedge}`;
+  if (nr.pop === "D7") return `D7 ${nr.k}`;
+  return nr.slots > 1 ? `${nr.pop} ${nr.wedge}.${nr.slot + 1}` : `${nr.pop} ${nr.wedge}`;
 }
 
 function neuronInfo(i) {
@@ -127,11 +185,21 @@ function drawCircuit() {
     ctx.fillText("☀ landmark", L.cx + r * Math.cos(a), L.cy - r * Math.sin(a));
   }
 
-  ctx.lineWidth = 1;
-  ctx.strokeStyle = rgba(C.ink3, 0.13);
-  ctx.beginPath();
-  for (const [a, b] of net.synapses) synPath(ctx, L, a, b);
-  ctx.stroke();
+  // every synapse, faint: drawn once into a cached layer and redrawn only on resize or theme change
+  const key = `${w}x${h}x${window.devicePixelRatio}x${C.ink3}`;
+  if (S.baseKey !== key) {
+    const d = window.devicePixelRatio || 1, off = (S.base ??= document.createElement("canvas"));
+    off.width = Math.round(w * d); off.height = Math.round(h * d);
+    const o = off.getContext("2d");
+    o.setTransform(d, 0, 0, d, 0, 0);
+    o.lineWidth = net.big ? 0.6 : 1;
+    o.strokeStyle = rgba(C.ink3, net.big ? 0.07 : 0.13);
+    o.beginPath();
+    for (const [a, b] of net.synapses) synPath(o, L, a, b);
+    o.stroke();
+    S.baseKey = key;
+  }
+  ctx.drawImage(S.base, 0, 0, w, h);
 
   for (let i = 0; i < net.N; i++) {  // synapses lit by recent presynaptic spikes
     const age = S.t - S.lastSpike[i];
@@ -140,8 +208,8 @@ function drawCircuit() {
     // the all-to-all EPG<->D7 wiring is drawn faint so the ring's own wiring stays readable
     const ring = [], global = [];
     for (const [b] of net.out[i]) (net.neurons[i].pop === "D7" || net.neurons[b].pop === "D7" ? global : ring).push(b);
-    ctx.strokeStyle = rgba(col, 0.15 + 0.7 * k);
-    ctx.lineWidth = 1 + 1.2 * k;
+    ctx.strokeStyle = rgba(col, (net.big ? 0.08 : 0.15) + (net.big ? 0.4 : 0.7) * k);
+    ctx.lineWidth = (net.big ? 0.6 : 1) + (net.big ? 0.6 : 1.2) * k;
     ctx.beginPath();
     for (const b of ring) synPath(ctx, L, i, b);
     ctx.stroke();
@@ -162,7 +230,7 @@ function drawCircuit() {
   for (let i = 0; i < net.N; i++) {
     const nr = net.neurons[i], p = L.pts[i], col = C.pop[nr.pop];
     const fill = Math.min(1, (f ? f.rates[i] : 0) / RATE_FULL);
-    const rad = nr.pop === "EPG" ? 8 : 6;
+    const rad = (nr.pop === "EPG" ? 8 : 6) * (net.big ? 0.6 : 1);
     ctx.beginPath();
     ctx.arc(p.x, p.y, rad, 0, 2 * Math.PI);
     ctx.fillStyle = C.card;
@@ -187,7 +255,7 @@ function drawCompass() {
   ctx.strokeStyle = C.grid;
   ctx.lineWidth = 1;
   for (const k of [1 / 3, 2 / 3, 1]) { ctx.beginPath(); ctx.arc(cx, cy, R * k, 0, 2 * Math.PI); ctx.stroke(); }
-  const epg = net.epg.map((i) => f.rates[i]);
+  const epg = f.wedge_rates ?? net.epg.map((i) => f.rates[i]);  // mean over the EPG in each wedge
   const top = Math.max(RATE_FULL, ...epg);
   ctx.fillStyle = C.pop.EPG;
   epg.forEach((v, i) => {  // one sector per wedge, radius = firing rate
@@ -474,7 +542,13 @@ async function init() {
     return;
   }
   prepNetwork(S.net);
+  // the explainer's trading numbers come from the server, so they follow DriveParams / ReadoutParams
+  for (const el of document.querySelectorAll("[data-trading]")) {
+    const v = S.net.trading?.[el.dataset.trading];
+    if (v !== undefined) el.textContent = String(v);
+  }
   buildLegend();
+  pollChain();
   bindControls();
   connect();
   requestAnimationFrame(draw);
