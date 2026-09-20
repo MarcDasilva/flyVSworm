@@ -697,11 +697,36 @@ function enterScene(): void {
   intro.classList.add("gone");
   freeCam = false;                 // hand-driving suspends the move that is about to run
   WIDE_FOCUS.copy(ENTER_FOCUS);
-  ambience("/sfx/fly.mp3", 0.25);
-  ambience("/sfx/dirt.mp3", 0.2);
+  ambience("/sfx/fly.mp3", 0.25, sfxCaption(FLY_NOISES));
+  ambience("/sfx/dirt.mp3", 0.2, sfxCaption(WORM_NOISES));
   translateBtn.disabled = false;
 }
 document.getElementById("enter")!.addEventListener("click", enterScene);
+
+// --- bed subtitles ------------------------------------------------------------
+// One caption per bed, shown for exactly the swell the bed is making, so a muted visitor still
+// knows which animal the room is hearing. The variants are picked fresh per swell.
+const FLY_NOISES = [
+  "Bizz... bizzzz bizzz...",
+  "Bzzzzzz... bzz. bzz.",
+  "bzzzzZZZZZzzzz...",
+  "Bizz bizz... bzzzzzzzz",
+  "*wings blur* bzzzZZzzz...",
+  "Bzzt. Bzzzzz... bizz.",
+];
+const WORM_NOISES = [
+  "*dirt shifting*",
+  "*damp soil crumbling*",
+  "*wet wriggling through dirt*",
+  "*loam settling*",
+  "*a slow squelch underground*",
+  "*grains of dirt trickling*",
+];
+const sfxLine = document.getElementById("sfx") as HTMLParagraphElement;
+function sfxCaption(variants: string[]): (on: boolean) => void {
+  const span = sfxLine.appendChild(document.createElement("span"));
+  return (on) => { span.textContent = on ? variants[Math.floor(Math.random() * variants.length)]! : ""; };
+}
 
 document.getElementById("touch-head")!.onclick = () => void touch("HEAD", "ALML");
 document.getElementById("touch-tail")!.onclick = () => void touch("TAIL", "PLML");

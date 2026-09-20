@@ -24,6 +24,12 @@
             font-size: 13px; line-height: 1.5; color: #e2e8f0; text-shadow: 0 1px 6px rgba(0,0,0,0.9);
             pointer-events: none; }
   #banter[hidden] { display: none; }
+  /* What the beds are doing, for anyone who cannot hear them. Stacks above the banter line. */
+  #sfx { position: fixed; left: 50%; transform: translateX(-50%); bottom: 72px; z-index: 2; margin: 0;
+         display: flex; flex-direction: column; align-items: center; gap: 2px;
+         font-size: 12px; font-style: italic; color: #94a3b8; text-shadow: 0 1px 6px rgba(0,0,0,0.9);
+         pointer-events: none; }
+  #sfx span:empty { display: none; }
   #banter .who { letter-spacing: 0.14em; font-size: 10px; margin-right: 8px; }
   #banter .fly { color: #7dd3fc; }
   #banter .worm { color: #fbbf24; }
@@ -230,15 +236,16 @@
 <body>
   <div id="loading" aria-label="Loading" role="status"><img src="/fly-vs-worms.png" width="720" height="580" alt=""><div class="dots"><i></i><i></i><i></i></div></div>
   <div id="ui">
-    <button id="back" hidden aria-label="Back to the room">ESC</button>
     <button id="mute" aria-pressed="false" aria-label="Mute sound">
       <svg class="on" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5.5a9 9 0 0 1 0 13"/></svg>
       <svg class="off" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="m22 9-6 6"/><path d="m16 9 6 6"/></svg>
     </button>
+    <button id="back" hidden aria-label="Back to the room">ESC</button>
     <button id="translate" aria-pressed="false" title="Hear what the fly and the worm are saying">TRANSLATE</button>
   </div>
   <!-- What the two of them are actually saying. Lives under the scene, out of the panels' way. -->
   <p id="banter" aria-live="polite" hidden></p>
+  <p id="sfx" aria-live="polite"></p>
   <aside id="worm-classifier" aria-labelledby="classifier-title" data-status="waiting" hidden>
     <div class="classifier-top"><h2 id="classifier-title">WORM BEHAVIOR / C. ELEGANS</h2><button id="classifier-close" aria-label="Close readout">&times;</button></div>
     <div class="classifier-body">

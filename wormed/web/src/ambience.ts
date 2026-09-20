@@ -38,8 +38,9 @@ export function duckAmbience(under: boolean): void {
   for (const a of beds) a.volume = (want.get(a) ?? a.volume) * duck;
 }
 
-/** Fade the bed up to `peak`, hold, fade out, sleep a random gap — forever. */
-export function ambience(url: string, peak: number): void {
+/** Fade the bed up to `peak`, hold, fade out, sleep a random gap — forever. `onSwell` fires true as
+ *  the bed starts rising and false once it is back at silence, so a caption tracks what is audible. */
+export function ambience(url: string, peak: number, onSwell?: (on: boolean) => void): void {
   const a = new Audio(url);
   a.loop = true;
   a.volume = 0;
@@ -50,9 +51,11 @@ export function ambience(url: string, peak: number): void {
     try { await a.play(); } catch { return; }
     for (;;) {
       await wait(rand(6_000, 25_000));
+      onSwell?.(true);
       await ramp(a, peak, rand(5_000, 9_000));
       await wait(rand(1_500, 5_000));
       await ramp(a, 0, rand(2_000, 5_000));
+      onSwell?.(false);
     }
   })();
 }
