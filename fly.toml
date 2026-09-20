@@ -15,6 +15,9 @@ primary_region = "yyz"
   auto_start_machines = true
   min_machines_running = 1
 
+# A shared-cpu-1x could not sign the worm's 2,048-batch (23 s, versus 6 s on a laptop) while the
+# fly settles 250 a second and the model steps one session per viewer — the relay's event loop
+# stalled, every WebSocket through it dropped once a minute, and the relay died once.
 [[vm]]
-  size = "shared-cpu-1x"
-  memory = "512mb"
+  size = "performance-2x"
+  memory = "4gb"
