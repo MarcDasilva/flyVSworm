@@ -1,3 +1,9 @@
 .venv
 .env
 *node_modules
+.DS_Store
+*.log
+*.exe
+
+# Generator bytecode
+tools/__pycache__/
