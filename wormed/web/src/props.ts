@@ -122,6 +122,59 @@ function soilSurface(w: number, d: number, mat: THREE.Material): THREE.Mesh {
   return mesh;
 }
 
+/** Lawn size in body lengths. Far bigger than the grid it replaces, and the
+ *  size is set by the FOG, not by the set: the far plane is at 34, so an edge
+ *  any closer than that is a horizon line drawn across the room. */
+const LAWN = 70;
+/** Photos of turf tile at roughly a metre. The patch's own UVs stretch ONE
+ *  photo over the whole tile, so at the set's scale — the laptop is 1.1 body
+ *  lengths across — that is a blade of grass the size of the animal unless the
+ *  map is repeated. */
+const GRASS_REPEAT = 20;
+/** Tuft height. At the model's own proportions the blades stand 0.94 across a
+ *  32-unit lawn, which is as tall as the worm is long and deep enough to
+ *  swallow both tables to the knee. */
+const GRASS_RELIEF = 0.07;
+/** The patch as authored: 300 units square, tufts 11.783 tall, Z up — a 3ds
+ *  Max export. Every scale below is measured against these, so a different
+ *  patch means new numbers here and nowhere else. */
+const PATCH_SPAN = 300, PATCH_HEIGHT = 11.783;
+
+/**
+ * The lawn, from wormed/data/grass.obj with wormed/data/textures/grass.jpg
+ * over it. The shipped tile had a 2 px black rule on all four edges, cropped
+ * out before it was committed — tiled twenty times it drew a grid of dark
+ * lines across the floor.
+ *
+ * The same image drives colour and bump. The geometry's own relief is squashed
+ * to almost nothing — see GRASS_RELIEF — so without the bump the floor reads
+ * as a photograph of grass lying flat on the ground, which is exactly what it
+ * would be.
+ */
+async function loadGrass(parent: THREE.Object3D): Promise<void> {
+  const { OBJLoader } = await import("three/examples/jsm/loaders/OBJLoader.js");
+  const model = await new OBJLoader().loadAsync("/grass.obj");
+
+  const tex = new THREE.TextureLoader().load("/textures/grass.jpg");
+  // A photograph, NOT a data map: skip the sRGB decode and the lawn comes out
+  // the colour of pond water.
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(GRASS_REPEAT, GRASS_REPEAT);
+  tex.anisotropy = 8;
+  const turf = new THREE.MeshStandardMaterial({
+    map: tex, bumpMap: tex, bumpScale: 0.8, roughness: 1, metalness: 0 });
+  // The .obj ships one group under one material; the traverse is what keeps
+  // that an assumption the file can break without taking the floor with it.
+  model.traverse(o => { const m = o as THREE.Mesh; if (m.isMesh) m.material = turf; });
+
+  // Z up, so lie it down FIRST — the scale below is in the patch's own axes,
+  // where z is the blade height and x,y are the ground.
+  model.rotation.x = -Math.PI / 2;
+  model.scale.set(LAWN / PATCH_SPAN, LAWN / PATCH_SPAN, GRASS_RELIEF / PATCH_HEIGHT);
+  parent.add(model);
+}
+
 /** Soil slab, four rim walls, and the plinth. ONE texture for all of it. */
 export function buildTerrarium(scene: THREE.Scene): THREE.Group {
   const group = new THREE.Group();
@@ -165,15 +218,18 @@ export function buildTerrarium(scene: THREE.Scene): THREE.Group {
   // neither model has loaded yet — see addPlinth and main.ts.
   void plinth;
 
-  // The room: a grey grid the whole set stands on, level with the underside
-  // of the terrarium so nothing floats.
-  const grid = new THREE.GridHelper(24, 96, 0x5a5f66, 0x2b2f34);
-  // Named so the host can slide the floor's centre under whatever the shot is built around. The
-  // grid's centre lines are the only origin anyone can SEE, so moving them is the same picture as
-  // moving every other object the other way — and one object instead of twenty.
-  grid.name = "floor";
-  grid.position.y = -SOIL_D - SOIL_RELIEF;
-  group.add(grid);
+  // The room: a lawn the whole set stands on, level with the underside of the
+  // terrarium so nothing floats.
+  //
+  // What carries the name is this EMPTY group, NOT the grass. The patch is two
+  // megabytes of geometry arriving whenever it arrives, and main.ts looks
+  // "floor" up the moment the desks land — hang the name on the mesh and that
+  // lookup finds nothing on a slow load and the floor never moves.
+  const floor = new THREE.Group();
+  floor.name = "floor";
+  floor.position.y = FLOOR_Y;
+  group.add(floor);
+  void loadGrass(floor).catch(e => console.warn("grass failed to load", e));
 
   scene.add(group);
   return group;
