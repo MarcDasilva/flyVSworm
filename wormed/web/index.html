@@ -38,19 +38,18 @@
   #feed .dim { color: #64748b; }
   #feed a { color: #7dd3fc; text-decoration: none; }
   #feed a:hover { text-decoration: underline; }
-  /* The title card. Sits on the right because the exhibits are composed left
-     of centre in the opening shot — see OPENING_FIXED in main.ts. Fades out
-     rather than unmounting, so the button keeps its size while the camera is
-     still moving and the layout never jumps. */
-  #intro { position: fixed; right: 54px; top: 50%; transform: translateY(-50%);
-           z-index: 3; display: flex; flex-direction: column;
-           align-items: flex-end; gap: 24px; text-align: right;
-           transition: opacity 700ms ease; }
+  /* The title card, top right — the exhibits are composed left of centre in
+     the opening shot, see OPENING_FIXED in main.ts. The whole card fades as
+     ONE element so the badge and its button leave together; fading rather
+     than unmounting keeps the layout still while the camera is moving. */
+  #intro { position: fixed; right: 40px; top: 26px; z-index: 3;
+           display: flex; flex-direction: column; align-items: center;
+           gap: 16px; transition: opacity 700ms ease; }
   #intro.gone { opacity: 0; pointer-events: none; }
-  #vs { font-size: 62px; font-weight: 600; line-height: 0.92;
-        letter-spacing: 0.05em; color: #e2e8f0; }
-  #vs em { display: block; font-style: normal; font-size: 24px;
-           letter-spacing: 0.34em; color: #64748b; margin: 10px 0 8px; }
+  /* vw-capped so the badge cannot swallow the scene on a narrow window. The
+     intrinsic width/height on the tag itself reserves the box before the PNG
+     arrives, or the button jumps when it does. */
+  #vs { display: block; width: min(340px, 26vw); height: auto; }
   #enter { padding: 13px 38px; font-size: 13px; letter-spacing: 0.24em; }
   #hint { position: fixed; left: 16px; bottom: 16px; font-size: 11px;
           opacity: 0.55; }
@@ -70,7 +69,7 @@
     <div id="feed"></div>
   </div>
   <div id="intro">
-    <div id="vs">FLY<em>VS</em>MAN</div>
+    <img id="vs" src="/fly-vs-worms.png" width="720" height="580" alt="Fly vs Worms">
     <button id="enter">ENTER</button>
   </div>
   <div id="hint">click the tank to look closer &middot; drag to orbit &middot; scroll to zoom &middot; live on Thru alphanet</div>
