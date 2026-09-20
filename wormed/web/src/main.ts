@@ -6,6 +6,8 @@ import { BrainCloud, parseMorphology } from "./brain.js";
 import { ChainFeed, type ChainConfig, type RelayStatus } from "./chain.js";
 import { ARENA, STAND_TOP, LAPTOP_GAP, TANK_EDGE, addPlinth, buildTerrarium, loadLaptop } from "./props.js";
 import { loadFlyDesk, type FlyDesk } from "./fly.js";
+import { FlyFeed } from "./flyfeed.js";
+import { FlyBrain } from "./flybrain.js";
 import { MONITOR_WIDTH } from "./computer.js";
 
 const scene = new THREE.Scene();
@@ -48,17 +50,32 @@ const WIDE_RADIUS = camera.position.distanceTo(WIDE_FOCUS);
 // Close enough to read the animal, far enough that the connectome hanging
 // above it stays in frame — the reveal shows BOTH or it shows nothing.
 const CLOSE_RADIUS = 3.8;
+/** Headroom kept above the fly for its brain, in scene units: SPAN * LIFT of
+ *  clearance plus half a brain. See flybrain.ts. */
+const FLY_BRAIN_ROOM = 1.15;
+/** The fly's desk is smaller than the terrarium, so its close shot is closer. */
+const FLY_RADIUS = 2.6;
 const FOCUS_LIFT = 0.62;        // aim between the worm and the brain above it
 // The connectome is anchored over the middle of the tank while the animal
 // wanders, so the camera follows the worm only PART of the way. Track it
 // fully and the brain swings out of frame every time the worm hits a wall.
 const TRACK = 0.65;
 const REVEAL_RATE = 3.2;        // e-folds per second, both directions
-let engaged = false;
+/** Which exhibit is open. ONE at a time: the two are across the room from
+ *  each other and no camera pose holds both close. */
+type Side = "none" | "worm" | "fly";
+let side: Side = "none";
 let reveal = 0;
+let wormAlpha = 0;
+let flyAlpha = 0;
 const wormFocus = new THREE.Vector3();
+const flyFocus = new THREE.Vector3();
+/** Where the camera is actually looking, damped. Clicking straight from one
+ *  exhibit to the other moves it ACROSS the room rather than cutting. */
+const focus = new THREE.Vector3();
 const wantFocus = new THREE.Vector3();
 const orbit = new THREE.Vector3();
+focus.copy(WIDE_FOCUS);
 
 // What counts as pointing at the worm: an INVISIBLE box around the tank, wide
 // enough to forgive an approach and tall enough to cover the air the
@@ -77,12 +94,24 @@ const trigger = new THREE.Mesh(
 trigger.position.y = TRIGGER_TOP / 2 - 0.2;
 scene.add(trigger);
 
+// The fly gets the same treatment, sized off its desk once that has loaded and
+// been scaled — the rig is authored in millimetres and placed by measurement,
+// so nothing here may guess at where it ended up.
+const flyTrigger = new THREE.Mesh(
+  new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ visible: false }));
+flyTrigger.visible = false;     // no desk yet: nothing to click at
+scene.add(flyTrigger);
+
 const pointer = new THREE.Vector2();
 const ray = new THREE.Raycaster();
-const overTank = (e: MouseEvent): boolean => {
+/** Which exhibit the pointer is over, if any. The NEAREST one wins: the two
+ *  boxes touch where the tank meets the desk, and picking by order instead
+ *  hands every click in the overlap to the same animal. */
+const sideAt = (e: MouseEvent): Side => {
   pointer.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
   ray.setFromCamera(pointer, camera);
-  return ray.intersectObject(trigger, false).length > 0;
+  const hit = ray.intersectObjects(flyTrigger.visible ? [trigger, flyTrigger] : [trigger], false);
+  return hit.length === 0 ? "none" : hit[0].object === flyTrigger ? "fly" : "worm";
 };
 
 // CLICK opens and closes it, never the pointer alone: a hover that flies the
@@ -91,7 +120,7 @@ const overTank = (e: MouseEvent): boolean => {
 // tank still says it can be clicked.
 const canvas = renderer.domElement;
 canvas.addEventListener("pointermove", e => {
-  canvas.style.cursor = overTank(e) ? "pointer" : "";
+  canvas.style.cursor = sideAt(e) === "none" ? "" : "pointer";
 });
 let pressed: { x: number; y: number } | null = null;
 canvas.addEventListener("pointerdown", e => { pressed = { x: e.clientX, y: e.clientY }; });
@@ -99,7 +128,13 @@ canvas.addEventListener("click", e => {
   // An orbit drag ends in a click event too. Without this a user who spins
   // the camera and lets go off the tank closes the scene every time.
   if (!pressed || Math.hypot(e.clientX - pressed.x, e.clientY - pressed.y) > 5) return;
-  engaged = overTank(e);
+  side = sideAt(e);
+  // The fly's brain is 22 MB of bake and its model is a socket to a process
+  // that may not be running. Both are only ever wanted here.
+  if (side === "fly") {
+    void flyBrain.load();
+    flyFeed.connect(stop.signal);
+  }
 });
 
 addEventListener("resize", () => {
@@ -135,6 +170,11 @@ const terrarium = buildTerrarium(scene);
 // guessed — and the fly rides that scale, which is the only way its feet stay on its own keys.
 // Neither model is 1.5 MB of nothing, and the worm runs while both load.
 let fly: FlyDesk | undefined;
+let flyHead: THREE.Object3D | undefined;
+// The fly's activity comes from the fly's own model, not from this scene. The
+// socket is opened on the first click of the fly, along with the bake.
+const flyFeed = new FlyFeed();
+const flyBrain = new FlyBrain(scene, flyFeed);
 /** Floor between the two tables, measured between the monitors that face each other across it.
  *  The pair is mirror-symmetric about the middle of this gap, and that is where the visible
  *  origin goes — see the floor slide below. */
@@ -166,6 +206,22 @@ void Promise.all([loadLaptop(scene), loadFlyDesk(scene)])
     // same margin from the table lip that the laptop keeps from the tank.
     desk.group.position.z = flyNear + LAPTOP_GAP - deskAtZero.min.z;
     fly = desk;
+    // FLYCAB is the head node of data/fly.glb (see fly.ts), and it is what the
+    // brain hangs over — it sways as the animal types, so the brain does too.
+    flyHead = desk.group.getObjectByName("FLYCAB");
+
+    // The fly's premises: its desk, plus the air above the head where the
+    // brain appears. Measured off the placed desk rather than declared, since
+    // the desk's scale is itself measured from the laptop.
+    desk.group.updateMatrixWorld(true);
+    const bounds = new THREE.Box3().setFromObject(desk.group);
+    const size = bounds.getSize(new THREE.Vector3());
+    const centre = bounds.getCenter(new THREE.Vector3());
+    const headY = flyHead ? flyHead.getWorldPosition(new THREE.Vector3()).y : bounds.max.y;
+    const top = Math.max(bounds.max.y, headY + FLY_BRAIN_ROOM);
+    flyTrigger.scale.set(size.x + 0.6, top - bounds.min.y, size.z + 0.6);
+    flyTrigger.position.set(centre.x, (top + bounds.min.y) / 2, centre.z);
+    flyTrigger.visible = true;
 
     // Re-centre the wide shot on the fly's SCREEN, now that there is one to measure. Camera and
     // target move by the same vector, so the angle and distance the shot was composed at survive
@@ -176,6 +232,7 @@ void Promise.all([loadLaptop(scene), loadFlyDesk(scene)])
     controls.target.add(shift);
     camera.position.add(shift);
     WIDE_FOCUS.copy(controls.target);
+    focus.copy(controls.target);   // or the first damped frame drags the shot back
     controls.update();
 
     // And the floor's origin goes under that screen too. Only the grid moves: its centre lines
@@ -389,35 +446,50 @@ function frame(now: number): void {
   }
 
   // --- The reveal, see WIDE_FOCUS above. ---
-  const opening = engaged ? 1 : 0;
+  const opening = side === "none" ? 0 : 1;
   const settled = Math.abs(reveal - opening) < 0.002;
   reveal = settled ? opening
     : THREE.MathUtils.damp(reveal, opening, REVEAL_RATE, dt);
   const eased = reveal * reveal * (3 - 2 * reveal);
-  brain.setReveal(eased);
+  // Each exhibit fades on its own, so clicking straight from one to the other
+  // crosses over instead of shutting the scene and opening it again.
+  wormAlpha = THREE.MathUtils.damp(wormAlpha, side === "worm" ? eased : 0, REVEAL_RATE, dt);
+  flyAlpha = THREE.MathUtils.damp(flyAlpha, side === "fly" ? eased : 0, REVEAL_RATE, dt);
+  brain.setReveal(wormAlpha);
+  flyBrain.setReveal(flyAlpha);
+  if (flyHead) flyBrain.follow(flyHead);
+  flyBrain.tick(dt);
   // The premises are generous while the scene is shut, so the tank is easy to
   // find from the wide shot, and tight once it is open: at close range a box
   // half a body length proud of the tank covers EVERY pixel, and then nothing
   // the pointer does can end the reveal. Height is left alone — the column
   // reaches the connectome, which is part of what the hover is pointing at.
-  const slack = THREE.MathUtils.lerp(TRIGGER_MARGIN, TRIGGER_TIGHT, eased);
+  const slack = THREE.MathUtils.lerp(TRIGGER_MARGIN, TRIGGER_TIGHT, wormAlpha);
   trigger.scale.set((ARENA.halfX + slack) / (ARENA.halfX + TRIGGER_MARGIN), 1,
                     (ARENA.halfY + slack) / (ARENA.halfY + TRIGGER_MARGIN));
-  txpanel.style.opacity = eased.toFixed(3);
-  txpanel.style.pointerEvents = eased > 0.6 ? "auto" : "none";
+  txpanel.style.opacity = wormAlpha.toFixed(3);
+  txpanel.style.pointerEvents = wormAlpha > 0.6 ? "auto" : "none";
 
   // Recentre by moving target and camera TOGETHER: whatever angle the user
   // orbited to survives the flight, and the worm stays framed as it crawls.
   const mid = body.points[body.points.length >> 1];
   wormFocus.set(mid[0] * TRACK, FOCUS_LIFT, mid[1] * TRACK);
-  wantFocus.lerpVectors(WIDE_FOCUS, wormFocus, eased).sub(controls.target);
+  // The fly is looked at where its brain is, not where its feet are.
+  if (flyHead) {
+    flyHead.getWorldPosition(flyFocus);
+    flyFocus.y += FLY_BRAIN_ROOM * 0.55;   // the brain, not the feet
+  }
+  wantFocus.lerpVectors(WIDE_FOCUS, side === "fly" ? flyFocus : wormFocus, eased);
+  focus.lerp(wantFocus, 1 - Math.exp(-REVEAL_RATE * dt));
+  wantFocus.copy(focus).sub(controls.target);
   controls.target.add(wantFocus);
   camera.position.add(wantFocus);
   // Distance is forced only while the scene is still opening or closing —
   // once it has settled the user's own zoom is the authority.
   if (!settled) {
     orbit.subVectors(camera.position, controls.target)
-      .setLength(THREE.MathUtils.lerp(WIDE_RADIUS, CLOSE_RADIUS, eased));
+      .setLength(THREE.MathUtils.lerp(
+        WIDE_RADIUS, side === "fly" ? FLY_RADIUS : CLOSE_RADIUS, eased));
     camera.position.copy(controls.target).add(orbit);
   }
 
