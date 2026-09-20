@@ -45,10 +45,15 @@ export class TransactionList {
   private pending: Synapse[] = [];
   private list = document.createElement("ol");
 
+  /** `kinds` is [false, true] for the receipt's own flag, and it is NOT the
+   *  same pair of words for both animals: the worm's synapses are electrical
+   *  or chemical, the fly's are excitatory or inhibitory. Printing the worm's
+   *  words over the fly's rows would misname every one of them. */
   constructor(private viewport: HTMLElement, latest: HTMLButtonElement,
-              private names: string[], private explorer: string) {
+              private names: string[], private explorer: string,
+              private kinds: [string, string] = ["electrical", "chemical"]) {
     this.list.className = "transactions";
-    viewport.replaceChildren(this.list);
+    this.attach();
     viewport.addEventListener("scroll", () => { latest.hidden = viewport.scrollTop < 4; });
     viewport.addEventListener("keydown", event => {
       if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "].includes(event.key))
@@ -56,6 +61,10 @@ export class TransactionList {
     });
     latest.onclick = () => { viewport.scrollTop = 0; latest.hidden = true; };
   }
+
+  /** Put THIS list's rows back in the viewport. The two exhibits share one
+   *  panel, so whichever is open owns it — see main.ts's panelSide. */
+  attach(): void { this.viewport.replaceChildren(this.list); }
 
   add(receipt: Synapse): void {
     this.pending.push(receipt);
@@ -72,7 +81,7 @@ export class TransactionList {
       row.dataset.signature = receipt.signature;
       const kind = document.createElement("span");
       kind.className = "tx-kind";
-      kind.textContent = receipt.chemical ? "chemical" : "electrical";
+      kind.textContent = this.kinds[receipt.chemical ? 1 : 0];
       const link = document.createElement("a");
       link.href = this.explorer + receipt.signature;
       link.target = "_blank";

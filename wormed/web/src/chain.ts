@@ -128,10 +128,16 @@ function decodeBehavior(data: Uint8Array): Behavior {
   };
 }
 
+export type Standing = { specimen: string; profit: number; trades: number; updated: number };
+
 export type RelayStatus = {
   balance: number; floor: number; faucet: string;
   stepping: boolean; awake: boolean; workerAlive: boolean;
   log: { t: number; op: string; sig?: string; ms?: number; error?: string }[];
+  /** The relay's ledger (wormed/web/store.mjs), ranked and totalled. Absent from an older relay
+   *  or one whose database would not open — the board falls back to what the page has counted. */
+  transactions?: number;
+  standings?: Standing[];
 };
 
 /** Floor on the gap between played frames. The chain delivers a burst every

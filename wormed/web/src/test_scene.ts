@@ -362,17 +362,22 @@ console.log("OK: both metal desks face outward, seat their computers, meet the f
 //
 // Canvas is stubbed down to a recorder of the text drawn: nothing here renders, and the one thing
 // worth pinning is WHICH numbers reach WHICH surface.
-type Recorder = { text: string[]; type: string[] };
+type Recorder = { text: string[]; type: string[]; ops: string[]; xs: number[];
+                  canvas: { width: number; height: number } };
 const drawn: Recorder[] = [];
 const fakeCanvas = () => {
-  const rec: Recorder = { text: [], type: [] };
+  const canvas = { width: 0, height: 0, getContext: () => ctx };
+  const rec: Recorder = { text: [], type: [], ops: [], xs: [], canvas };
   drawn.push(rec);
   const state: Record<string, unknown> = {
     fillText: (t: string) => { rec.text.push(t); rec.type.push(String(state.font)); },
     measureText: (t: string) => ({ width: t.length * 10 }),
+    setTransform: () => { rec.ops.push("reset"); },
+    translate: () => { rec.ops.push("translate"); },
+    moveTo: (x: number) => { rec.xs.push(x); },
   };
-  const ctx = new Proxy(state, { get: (target, key) => target[key as string] ?? (() => undefined) });
-  return { width: 0, height: 0, getContext: () => ctx };
+  const ctx: unknown = new Proxy(state, { get: (target, key) => target[key as string] ?? (() => undefined) });
+  return canvas;
 };
 (globalThis as { document?: unknown }).document = { createElement: fakeCanvas };
 
@@ -404,7 +409,7 @@ const chart = new THREE.Texture();
 chart.image = { width: 1024, height: 640 };
 const room = new THREE.Scene();
 const WIDTH = 5.2;
-const setTV = addLeaderboard(room, 1.3, WIDTH, chart);
+const tv = addLeaderboard(room, 1.3, WIDTH, chart);
 addLeaderboard(new THREE.Scene(), 1.3, WIDTH * 0.7, chart);
 const [wider, tighter] = drawn.slice(-2);
 assert.deepEqual(wider.text, tighter.text, "the two boards did not print the same sheet");
@@ -419,10 +424,63 @@ assert.ok(market.position.z > standings.position.z, "the market half is not on t
 const marketSize = new THREE.Box3().setFromObject(market).getSize(new THREE.Vector3());
 assert.ok(marketSize.z <= WIDTH / 2 + 1e-6, "the market half overruns its half of the board");
 assert.ok(Math.abs(marketSize.z / marketSize.y - 1024 / 640) < 1e-6, "the chart is stretched");
-setTV(0.5);
+tv.brightness(0.5);
 for (const p of [market, standings]) {
   const dim = ((p as THREE.Mesh).material as THREE.MeshBasicMaterial).color.r;
   assert.ok(Math.abs(dim - 0.5) < 1e-6, "a board half ignores the TV flicker");
 }
-console.log("OK: the board splits into a left market and a right standings board, and only the " +
-  "desks see the book");
+
+// The counter over the board. It must clear the board's own top edge or it prints over the
+// sheet, and it must sit on the board's centre line however many digits it has grown to.
+const { readoutText, addTVCounter } = await import("./props.js");
+assert.equal(readoutText(), "", "an unknown total printed a number");
+assert.equal(readoutText(0), "0000", "a ledger that reads zero printed blank");
+assert.equal(readoutText(7), "0007");
+assert.equal(readoutText(12345.9), "12345");
+assert.equal(readoutText(-3), "0000", "a negative total printed a sign");
+
+const overhead = new THREE.Scene();
+const setCounter = addTVCounter(overhead, 1.3);
+const stripRec = drawn[drawn.length - 1];
+
+// A page that has just opened does not know the all-time total — the ledger is the relay's. It
+// must print NOTHING rather than 0000, which would tell the room the exhibit has never traded.
+setCounter();
+assert.equal(stripRec.xs.length, 0, "the blank counter drew strokes");
+// Centred: the leftmost and rightmost strokes sit the same distance from the canvas's middle,
+// for a short total and for one that has grown three digits.
+for (const total of [4096, 4096000]) {
+  const before = stripRec.xs.length;
+  setCounter(total);
+  const xs = stripRec.xs.slice(before);
+  assert.ok(xs.length > 0, `nothing drawn for ${total}`);
+  assert.ok(Math.abs(Math.min(...xs) + Math.max(...xs) - stripRec.canvas.width) < 1e-6,
+    `the counter is off the board's centre line at ${total}`);
+}
+
+const strip = new THREE.Box3().setFromObject(overhead.children[0]);
+const boardTop = new THREE.Box3().setFromObject(room.children[0]).max.y;
+assert.ok(strip.min.y > boardTop, "the counter hangs over the board's face, not clear of it");
+assert.ok(strip.max.y - strip.min.y < 0.4, "the counter is not smallish any more");
+const stripMat = (overhead.children[0] as THREE.Mesh).material as THREE.MeshBasicMaterial;
+assert.equal(stripMat.blending, THREE.AdditiveBlending, "the counter will paint a black panel");
+
+// The standings come from the relay's ledger, ranked; the sheet prints them in the order it is
+// handed and reprints only when they change. A repaint that kept the last paint's transform
+// would walk the printing off the bottom of the board.
+const printed = () => wider.text.join("\n");
+assert.match(printed(), /\+0\.00/, "a board with no ledger yet printed no figures");
+const sheets = wider.ops.filter(op => op === "reset").length;
+tv.standings([{ specimen: "worm", profit: 1284.6 }, { specimen: "fly", profit: -212.4 }]);
+assert.equal(wider.ops.filter(op => op === "reset").length, sheets + 1, "the sheet did not print");
+assert.ok(wider.ops.lastIndexOf("reset") < wider.ops.lastIndexOf("translate"),
+  "the reprint inherited the last paint's transform");
+const rows = printed().split("\n");
+assert.ok(rows.lastIndexOf("WORM") < rows.lastIndexOf("FLY"), "the sheet ignored the ranking");
+assert.ok(rows.includes("+1,284.60") && rows.includes("-212.40"), "the figures are not printed");
+tv.standings([{ specimen: "worm", profit: 1284.6 }, { specimen: "fly", profit: -212.4 }]);
+assert.equal(wider.ops.filter(op => op === "reset").length, sheets + 1,
+  "the sheet reprinted for standings that had not changed");
+
+console.log("OK: the board splits into a left market and a right standings board, only the " +
+  "desks see the book, the ledger's standings print in rank, and the counter hangs centred above");

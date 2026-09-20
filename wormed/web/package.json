@@ -6,8 +6,8 @@
   "description": "C. elegans front-end: body kinematics, 3D scene, chain stream",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
-    "test": "node test_relay.mjs && node test_synapses.mjs && tsx src/test_body.ts && tsx src/test_scene.ts && tsx src/test_chain.ts && tsx src/test_transactions.ts && tsx src/test_classifier.ts && tsx src/test_flyfeed.ts && tsx src/test_flybrain.ts && tsx src/test_flicker.ts",
+    "build": "vite build && cp -r ../../frontend/public/brain dist/brain",
+    "test": "node test_relay.mjs && node test_synapses.mjs && node test_flysynapses.mjs && tsx src/test_body.ts && tsx src/test_scene.ts && tsx src/test_chain.ts && tsx src/test_transactions.ts && tsx src/test_classifier.ts && tsx src/test_portfolio.ts && tsx src/test_flyfeed.ts && tsx src/test_flychain.ts && tsx src/test_flybrain.ts && tsx src/test_flicker.ts && tsx src/test_ambience.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

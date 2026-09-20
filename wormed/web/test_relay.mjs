@@ -60,6 +60,24 @@ async function advance(ms, watching = true) {
 }
 
 const stepCount = () => commands.filter(cmd => cmd.op === "step").length;
+
+/** The ledger must not be the one in wormed/data: a test run that leaves rows behind puts a
+ *  fake standing on the real board. */
+process.env.EXHIBIT_DB = ":memory:";
+
+/** POST a body to the relay and hand back [code, parsed body]. */
+function post(path, body) {
+  const request = Object.assign(new EventEmitter(), { method: "POST", url: path });
+  let code, reply;
+  handleRequest(request, {
+    writeHead(status) { code = status; },
+    end(text) { reply = JSON.parse(text); },
+  });
+  request.emit("data", typeof body === "string" ? body : JSON.stringify(body));
+  request.emit("end");
+  return [code, reply];
+}
+
 try {
   await import("./relay.mjs");
   await advance(180_000);
@@ -110,7 +128,29 @@ try {
   balance = 100_000;
   await advance(30_000);
   assert.ok(stepCount() > broke, "top-up did not resume stepping without a poke");
-  console.log("OK: sustained movement input, queued pokes, viewer expiry, and balance recovery");
+  // The ledger. Every transaction the relay makes is counted once, wherever it came from, and
+  // the count is the number the board prints — a page reload must not reset it, so it is read
+  // back off the relay rather than kept in the browser.
+  const counted = status().transactions;
+  assert.ok(counted >= stepCount(), `ledger counted ${counted} for ${stepCount()} steps alone`);
+  await advance(20_000);
+  assert.ok(status().transactions > counted, "the ledger stopped counting transactions");
+
+  assert.deepEqual(post("/api/standing", { specimen: "worm", profit: -212.4, trades: 3 })[0], 200);
+  assert.deepEqual(post("/api/standing", { specimen: "fly", profit: 1284.6, trades: 12 })[0], 200);
+  assert.deepEqual(status().standings.map(row => row.specimen), ["fly", "worm"],
+    "the board is not ranked by profit");
+  assert.equal(status().standings[0].trades, 12);
+  // A visitor cannot add a specimen, print a screenful of digits, or crash the relay with junk.
+  for (const bad of [{ specimen: "hacker", profit: 1e9, trades: 1 },
+                     { specimen: "fly", profit: "1e400", trades: 1 },
+                     { specimen: "fly", profit: 1, trades: -5 }])
+    assert.equal(post("/api/standing", bad)[0], 400, `relay accepted ${JSON.stringify(bad)}`);
+  assert.equal(post("/api/standing", "not json")[0], 400);
+  assert.equal(status().standings.length, 2, "a rejected post still reached the board");
+
+  console.log("OK: sustained movement input, queued pokes, viewer expiry, balance recovery, " +
+    "and a ledger that counts every transaction and ranks the two specimens");
 } finally {
   mock.timers.reset();
   mock.restoreAll();

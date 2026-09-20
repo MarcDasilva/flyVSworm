@@ -47,6 +47,7 @@ export class TradingScreen {
   private drift = 0;
   private position = 0;
   private sinceCandle = 0;
+  private sequence = 0;
 
   private command = "";
   private typed = 0;          // characters of `command` typed so far
@@ -74,6 +75,15 @@ export class TradingScreen {
     this.command = this.nextCommand();
   }
 
+  /** Read the same market shown on the desks and wall; do not generate a second price feed.
+   *  `position` is the fly's own book — the fraction it is holding, which is what its side of
+   *  the board is scored on. */
+  get snapshot(): { price: number; candles: readonly Candle[]; sequence: number;
+                    position: number } {
+    return { price: this.price, candles: this.candles, sequence: this.sequence,
+             position: this.position };
+  }
+
   /** Advance the market and the cursor blink; redraws the texture only when something changed. */
   update(dt: number) {
     this.sinceCandle += dt;
@@ -81,6 +91,7 @@ export class TradingScreen {
       this.sinceCandle -= CANDLE_SECONDS;
       this.candles.push(this.nextCandle());
       this.candles.shift();
+      this.sequence++;
       this.dirty = true;
     }
     this.sinceBlink += dt;

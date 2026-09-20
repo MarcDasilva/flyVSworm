@@ -1,0 +1,24 @@
+import assert from "node:assert/strict";
+import { WormPortfolio } from "./portfolio.js";
+
+const account = new WormPortfolio();
+assert.equal(account.equity(100), 10_000);
+account.rebalance(100, .5);
+assert.equal(account.cash, 5000);
+assert.equal(account.shares, 50);
+assert.equal(account.equity(100), 10_000, "buying created paper profit");
+assert.equal(account.equity(110), 10_500, "price movement did not mark the position to market");
+account.rebalance(110, -1);
+assert.equal(account.cash, 10_500);
+assert.equal(account.shares, 0);
+assert.equal(account.equity(90), 10_500, "a closed position kept gaining or losing");
+account.rebalance(100, 4);
+assert.equal(account.cash, 0);
+assert.equal(account.shares, 105, "exposure exceeded available funds");
+assert.equal(account.equity(80), 8400);
+for (const [price, tilt] of [[0, 1], [NaN, 1], [100, NaN], [Infinity, 1]]) account.rebalance(price, tilt);
+assert.equal(account.shares, 105, "malformed input changed the book");
+account.rebalance(80, 0);
+assert.equal(account.cash, 8400);
+assert.equal(account.shares, 0);
+console.log("OK: paper cash, positions and P&L conserve value, close exposure, and reject invalid inputs");

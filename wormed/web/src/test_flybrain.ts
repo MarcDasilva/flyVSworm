@@ -17,7 +17,10 @@ const triangles = (root: THREE.Object3D) => {
   root.traverse(o => { const m = o as THREE.Mesh; if (m.isMesh) count += (m.geometry.index?.count ?? m.geometry.attributes.position.count) / 3; });
   return count;
 };
-const originalTriangles = triangles(original.scene);
+// Everything but the whole-brain outline, which flybrain.ts drops on purpose:
+// it is four times the width of the circuit and would be hung at that scale.
+const outline = original.scene.getObjectByName(manifest.outline.node)!;
+const originalTriangles = triangles(original.scene) - triangles(outline);
 const originalFetch = globalThis.fetch;
 const originalLoad = GLTFLoader.prototype.loadAsync;
 let loads = 0;
@@ -40,10 +43,16 @@ try {
     const material = m.material as THREE.Material;
     if (material.side === THREE.DoubleSide) assert.ok(material.forceSinglePass, "shell renders twice");
   });
-  assert.equal(meshes, manifest.neurons.length + 3, "static shells were not batched");
+  assert.equal(meshes, manifest.neurons.length + 2, "static shells were not batched");
+  assert.equal(brain.group.getObjectByName(manifest.outline.node), undefined, "the whole-brain outline was hung");
   for (const n of manifest.neurons) assert.ok(brain.group.getObjectByName(n.node), `lost neuron ${n.node}`);
-  const size = new THREE.Box3().setFromObject(brain.group).getSize(new THREE.Vector3());
-  assert.ok(Math.abs(Math.max(size.x, size.y, size.z) - 1) < 1e-5, "brain scale changed");
+  // SPAN measures the CELLS. Fitting the shells instead is the bug that left
+  // the ring a quarter of its readable size.
+  const cells = new THREE.Box3();
+  brain.group.updateMatrixWorld(true);   // no render loop here to do it
+  for (const n of manifest.neurons) cells.expandByObject(brain.group.getObjectByName(n.node)!);
+  const size = cells.getSize(new THREE.Vector3());
+  assert.ok(Math.abs(Math.max(size.x, size.y, size.z) - 1.2) < 1e-5, `cells span ${Math.max(size.x, size.y, size.z)}, not SPAN`);
   for (let i = 0; i < 5; i++) {
     brain.setReveal(1); brain.tick(1 / 60);
     assert.equal(brain.group.visible, true);

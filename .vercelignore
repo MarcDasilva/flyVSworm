@@ -1,0 +1,15 @@
+.git
+.venv
+.env*
+**/node_modules
+**/dist
+**/__pycache__
+**/.venv
+wormed/data/*.db*
+wormed/data/raw
+app
+legacy
+vendor
+docs
+sprites
+fly-brain

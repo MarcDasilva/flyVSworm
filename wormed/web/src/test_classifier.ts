@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { classifyBehavior, BEHAVIOR_STALE_MS } from "./classifier.js";
+import { classifyBehavior, BEHAVIOR_STALE_MS, SynapticHeuristic } from "./classifier.js";
 import { BEHAVIOR } from "./body.js";
 import type { Behavior } from "./chain.js";
 
@@ -49,3 +49,22 @@ for (const bad of [
 for (const age of [NaN, Infinity, -1]) assert.equal(read(forward, age).signal, 0);
 assert.equal(read({ ...forward, step: 0 }).status, "live", "step zero is valid after a reset");
 console.log("OK: behavior meanings, Buy/Sell direction, drive strength, missing/stale playback and malformed samples");
+
+const neural = new SynapticHeuristic(["AVBL", "AVAL", "OTHER"]);
+const event = { signature: "confirmed", step: 10, pre: 2, post: 0, amount: 20, chemical: true };
+const baseline = .4;
+const initial = neural.value(0, baseline, true);
+neural.observe(event, 100);
+const excitation = neural.value(100, baseline, true);
+assert.ok(excitation > initial + .4, "forward current did not change a held heuristic");
+neural.observe({ ...event, amount: -60 }, 200);
+assert.ok(neural.value(200, baseline, true) < 0, "inhibition did not reverse the current contribution");
+assert.equal(neural.value(201, baseline, false), 0, "inactive playback invented a trade");
+assert.ok(Math.abs(neural.value(10_000, baseline, true) - initial) < .001, "old impulses never decayed");
+const gap = new SynapticHeuristic(["AVBL", "AVAL", "OTHER"]);
+gap.observe({ ...event, pre: 0, post: 2, chemical: false }, 0);
+assert.ok(gap.value(0, 0, true) < 0, "gap donor current had the wrong sign");
+const unrelated = new SynapticHeuristic(["AVBL", "AVAL", "OTHER"]);
+unrelated.observe({ ...event, post: 2 }, 0);
+assert.equal(unrelated.value(0, 0, true), 0, "unrelated cells generated a tilt");
+console.log("OK: live currents change a constant baseline, preserve inhibition and donor signs, and decay without random input");

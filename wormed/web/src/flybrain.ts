@@ -15,10 +15,12 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import type { FlyFeed } from "./flyfeed.js";
 
 const ASSETS = "/brain";
-/** Width of the hanging brain in scene units (worm body lengths). Big enough
- *  that the ring of cells is readable from the revealed camera, which is what
- *  the whole thing is for. */
-const SPAN = 1.0;
+/** Width of the CELLS in scene units (worm body lengths) — the traced central
+ *  complex, not the bake's bounding box. The bake also carries a whole-brain
+ *  outline four times wider than the circuit, and fitting to that left the
+ *  ring a quarter of the size it reads at. Big enough that the ring is
+ *  readable from the revealed camera, which is what the whole thing is for. */
+const SPAN = 1.2;
 /** Centre height above the fly's head, as a fraction of SPAN. */
 const LIFT = 0.62;
 // Glow ramp, taken from the same numbers the fly-brain viewer uses: dark at
@@ -125,7 +127,10 @@ export class FlyBrain {
       new GLTFLoader().loadAsync(`${ASSETS}/brain.glb`),
       // The model's own account of itself. Without it the bake still draws,
       // it just cannot be lit — see mapToLive.
-      fetch("/fly/api/network").then(r => r.ok ? r.json() as Promise<Network> : null)
+      // Bounded: with server.py down the proxy can hang this fetch, and the
+      // whole brain would wait on a mapping it can draw without.
+      fetch("/fly/api/network", { signal: AbortSignal.timeout(3000) })
+        .then(r => r.ok ? r.json() as Promise<Network> : null)
         .catch(() => null),
     ]);
 
@@ -163,7 +168,13 @@ export class FlyBrain {
         part.geometry.dispose();
       }
     };
-    mesh(manifest.outline.node).material = shell(OUTLINE_COLOR, 0.06);
+    // The whole-brain outline is NOT hung: it is a 580 µm silhouette around a
+    // 141 µm circuit, and at the scale that makes the cells readable it would
+    // be a ghost the width of the desk. The ROI and context shells stay —
+    // they sit within a fifth of the cells' own extent.
+    const outline = mesh(manifest.outline.node);
+    outline.removeFromParent();
+    outline.geometry.dispose();
     const roi = shell(OUTLINE_COLOR, 0.1);
     mergeShells(manifest.rois, roi);
     const context = shell(CONTEXT_COLOR, 0.28);
@@ -193,7 +204,10 @@ export class FlyBrain {
     // The bake is in hemibrain microns and the scene is in worm body lengths,
     // so the brain is fitted to SPAN and re-centred on its own middle — its
     // authored origin is the template's, nowhere near the cells.
-    const box = new THREE.Box3().setFromObject(gltf.scene);
+    // The CELLS set the scale; the shells around them are deliberately not
+    // what is measured — see SPAN.
+    const box = new THREE.Box3();
+    for (const n of manifest.neurons) box.expandByObject(mesh(n.node));
     const size = box.getSize(new THREE.Vector3());
     const centre = box.getCenter(new THREE.Vector3());
     const scale = SPAN / Math.max(size.x, size.y, size.z);
@@ -201,6 +215,22 @@ export class FlyBrain {
     gltf.scene.position.copy(centre).multiplyScalar(-scale);
     this.group.add(gltf.scene);
     this.group.visible = this.alpha > 0.01;
+    this.setReveal(this.alpha);
+  }
+
+  /** Push the bake through the GPU ONCE while nobody is looking. Geometry
+   *  uploads and shaders compile on the first draw, and 20 MB of both on the
+   *  frame the fly is clicked is the stall this exists to move. Drawn at zero
+   *  opacity so the warm frame shows nothing; culling is off so an off-screen
+   *  brain still uploads. */
+  warm(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera): void {
+    if (!this.ready) return;
+    this.group.traverse(o => { o.frustumCulled = false; });
+    const materials = [...this.shells.keys(), ...this.neurons.map(n => n.material)];
+    for (const m of materials) m.opacity = 0;
+    this.group.visible = true;
+    renderer.render(scene, camera);
+    this.group.visible = false;
     this.setReveal(this.alpha);
   }
 

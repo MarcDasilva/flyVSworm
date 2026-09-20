@@ -6,7 +6,8 @@
 // The live half (that the node really delivers these bytes) cannot be tested
 // offline and is verified by running the stack.
 import { strict as assert } from "node:assert";
-import { decodeEvent } from "./chain.js";
+import { ChainFeed, decodeEvent } from "./chain.js";
+import { Pubkey, Signature } from "@thru/sdk";
 
 const N = 302;
 const TRACE_BYTES = 8 + N * 2 + 8;
@@ -136,3 +137,33 @@ function xferEvent(triples: [number, number, number][], step: number): Uint8Arra
 }
 
 console.log("OK: chain event decode holds at every byte offset, tag and truncation");
+
+// Recovery is a chain read, reuses the wire decoder, and restores chronological
+// callbacks even though the event index returns newest-first.
+const key = Pubkey.from(new Uint8Array(32).fill(1)).toThruFmt();
+const feed = new ChainFeed({ rpc: "https://unused.invalid", programId: key,
+  behaviorAccount: key, dtMs: 5, explorer: "", synapseTransactions: true });
+const recovered: number[] = [];
+feed.onSynapse(s => recovered.push(s.step));
+const event = (step: number) => {
+  const payload = new Uint8Array(24), d = new DataView(payload.buffer);
+  tag(payload, 0, "WORMSYNX");
+  d.setUint32(8, step, true); d.setUint16(12, 1, true); d.setUint16(14, 2, true);
+  d.setInt32(16, 3, true); payload[20] = 1; payload[23] = END;
+  return { payload, transactionSignature: Signature.from(new Uint8Array(64).fill(step)).toBytes() };
+};
+// Replace only the transport; never hit a node from this check.
+const recovery = feed as unknown as { thru: unknown; recoverSynapses(signal: AbortSignal): Promise<void> };
+recovery.thru = {
+  blocks: { getBlockHeight: async () => ({ finalized: 100n }) },
+  events: { list: async (options: { filter: { expression: string } }) => {
+    assert.match(options.filter.expression, /event.slot >= uint\(20\)/);
+    return { events: [event(20), event(10)] };
+  } },
+};
+await recovery.recoverSynapses(new AbortController().signal);
+assert.deepEqual(recovered, [10, 20]);
+const stopped = new AbortController(); stopped.abort();
+await recovery.recoverSynapses(stopped.signal);
+assert.deepEqual(recovered, [10, 20], "a closed exhibit received recovery callbacks");
+console.log("OK: stream recovery reads recent confirmed receipts in order and stops delivery on close");

@@ -5,5 +5,6 @@
   "reservoirAccount": "taRARRgTfVl7MaGLeUIycszvO26qMaaenSksc_nWRe2xuS",
   "topologyAccount": "tarOrW5e0YnfXZ1xXHx2n2RFvl65kPL0xi6oemJ1vD8lo2",
   "dtMs": 5,
+  "synapseTransactions": true,
   "explorer": "https://scan.thru.org/tx/"
 }

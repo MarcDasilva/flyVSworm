@@ -12,6 +12,14 @@ Task 5 needs the program account above for address derivation.
 
 PROGRAM_ADDRESS: taXILSqS99UxmqBxrvpcETPQ8j6zd-xmFmK6EQ5xFWrvgQ
 
+The fly exhibit runs a SECOND program, deployed 2026-09-20 from the same
+toolchain (`wormed/program/fly.c`, 1,232 bytes). It is not read by
+`pack_addr._program_id` — only `wormed/pipeline/deploy_fly.py` uses it.
+- Program account: `taACbGSvPJpP0Wy0QwcL71HVIUIFfWa_f80POFqBJo5Zcf`
+- Meta account: `ta9AXeppNsV7nbP-_wib9NTh13xKfCOdj7wqUAxzcrsMI3`
+- Seed: `hello-fly-v1`
+- One settled synapse: 7,010 CU, 0 state units, fee 1.
+
 ## SDK accessors
 
 Confirmed by reading the installed C SDK headers directly (see

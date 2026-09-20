@@ -213,6 +213,11 @@ typedef struct __attribute__((packed)) {
  * what settle_transfers should move. If a fourth field is ever needed here,
  * give it its OWN account; do not grow into this one. */
 typedef struct worm_scratch_s {
+    /* Fixed wire prefix, followed by persisted events. The remaining fields
+     * are scratch only; rebinding sim must never overwrite the outbox. */
+    uint32_t pending_magic, pending_count, pending_remaining, pending_generation;
+    worm_synapse_t pending[SYNAPSE_CAPACITY];
+    tn_pubkey_t pending_accounts[N_NEURONS];
     worm_sim_t sim;
     int32_t    V[N_NEURONS];
     int32_t    stim[N_NEURONS];
@@ -241,6 +246,11 @@ static void do_resize_scratch(uchar const *data, ulong sz) {
     if (sz != sizeof(resize_args_t)) tsdk_revert(ERR_BAD_INSTR_SIZE);
     uint16_t acct_idx = TSDK_LOAD(uint16_t, data + 4);
     uint32_t min_size = TSDK_LOAD(uint32_t, data + 6);
+    if (tsdk_get_account_meta(acct_idx)->data_sz >= sizeof(worm_scratch_t)) {
+        worm_scratch_t const *old = tsdk_get_account_data_ptr(acct_idx);
+        if (old->pending_magic == SYNAPSE_MAGIC && old->pending_remaining)
+            tsdk_revert(ERR_PENDING_SYNAPSES);
+    }
     uint32_t size = min_size < (uint32_t)sizeof(worm_scratch_t)
                   ? (uint32_t)sizeof(worm_scratch_t) : min_size;
     if (tsys_set_account_data_writable(acct_idx) != TSDK_SUCCESS)
@@ -352,6 +362,18 @@ static void do_step(uchar const *data, ulong sz) {
     worm_scratch_t *scratch;
     bind_accounts(acc_topology, acc_reservoir, acc_behavior, &scratch);
 
+    if (scratch->pending_magic == SYNAPSE_MAGIC && scratch->pending_remaining)
+        tsdk_revert(ERR_PENDING_SYNAPSES);
+    if (flags & 16u) {
+        scratch->pending_magic = SYNAPSE_MAGIC;
+        scratch->pending_count = 0;
+        scratch->pending_remaining = 0;
+        scratch->pending_generation++;
+        tn_pubkey_t const *accounts = tsdk_txn_get_acct_addrs(tsdk_get_txn());
+        for (uint32_t i = 0; i < N_NEURONS; i++)
+            scratch->pending_accounts[i] = accounts[scratch->neuron_to_slot[i]];
+    }
+
     /* Freshly created accounts have v_next == 0, which is NOT the resting
      * potential. Reset seeds V from the topology's E_leak parameters instead
      * of loading from accounts, and lets settlement push real balance into
@@ -379,12 +401,21 @@ static void do_step(uchar const *data, ulong sz) {
         if (chunk > n_steps - done) chunk = n_steps - done;
         if (chunk) worm_step(&scratch->sim, chunk);
         done += chunk;
+        if (flags & 16u) {
+            int32_t count = worm_collect_synapses(&scratch->sim,
+                scratch->pending + scratch->pending_count,
+                SYNAPSE_CAPACITY - scratch->pending_count, step0 + done);
+            if (count < 0) tsdk_revert(ERR_XFER_OVERFLOW);
+            scratch->pending_count += (uint32_t)count;
+            scratch->pending_remaining += (uint32_t)count;
+        }
         if (flags & 2u) emit_trace(scratch, step0 + done, acc_behavior);
         /* bit0: reservoir reconciliation. bit3: gap-junction transfers. Both
          * are Task 11's settlement bodies; either one firing is reason to
          * call in. */
         if (flags & (1u | 8u))
-            settle_transfers(scratch, flags, acc_reservoir, step0 + done);
+            settle_transfers(scratch, (flags & 16u) ? flags & ~8u : flags,
+                             acc_reservoir, step0 + done);
     } while (done < n_steps);
 
     beh->step = step0 + done;
@@ -653,6 +684,79 @@ static void settle_transfers(worm_scratch_t *scratch, uint32_t flags,
     }
 }
 
+/* Keep voltage's balance projection independent of the current ledger, as in
+ * the old batch reconciliation. One synapse transaction may include this
+ * reservoir bookkeeping, but never another synaptic event. */
+static void reconcile_neuron(uint16_t slot, uint16_t reservoir) {
+    worm_neuron_t const *neuron = tsdk_get_account_data_ptr(slot);
+    uint64_t want = v_to_balance(neuron->v_next);
+    if (want < BAL_MIN) want = BAL_MIN;
+    uint64_t have = tsdk_get_account_meta(slot)->balance;
+    if (want > have) {
+        if (tsys_account_transfer(reservoir, slot, want - have) != TSDK_SUCCESS)
+            tsdk_revert(ERR_TRANSFER_FAILED);
+    } else if (have > want) {
+        if (tsys_account_transfer(slot, reservoir, have - want) != TSDK_SUCCESS)
+            tsdk_revert(ERR_TRANSFER_FAILED);
+    }
+}
+
+static void do_settle_synapse(uchar const *data, ulong sz) {
+    if (sz != 20u) tsdk_revert(ERR_BAD_INSTR_SIZE);
+    uint32_t generation = TSDK_LOAD(uint32_t, data + 4);
+    uint32_t index = TSDK_LOAD(uint32_t, data + 8);
+    uint16_t reservoir = TSDK_LOAD(uint16_t, data + 12);
+    uint16_t pre = TSDK_LOAD(uint16_t, data + 14);
+    uint16_t post = TSDK_LOAD(uint16_t, data + 16);
+    ulong limit = 2 + tsdk_txn_readwrite_account_cnt(tsdk_get_txn());
+    if (reservoir < 2 || reservoir >= limit || pre < 2 || pre >= limit ||
+        post < 2 || post >= limit || reservoir == pre || reservoir == post)
+        tsdk_revert(ERR_BAD_SYNAPSE);
+    if (tsdk_get_account_meta(reservoir)->data_sz < sizeof(worm_scratch_t))
+        tsdk_revert(ERR_BAD_SYNAPSE);
+    if (tsys_set_account_data_writable(reservoir) != TSDK_SUCCESS)
+        tsdk_revert(ERR_RESIZE_FAILED);
+    worm_scratch_t *scratch = tsdk_get_account_data_ptr(reservoir);
+    if (scratch->pending_magic != SYNAPSE_MAGIC ||
+        generation != scratch->pending_generation || index >= scratch->pending_count)
+        tsdk_revert(ERR_BAD_SYNAPSE);
+    worm_synapse_t *event = &scratch->pending[index];
+    if (event->settled || !scratch->pending_remaining) tsdk_revert(ERR_BAD_SYNAPSE);
+    tn_pubkey_t const *accounts = tsdk_txn_get_acct_addrs(tsdk_get_txn());
+    if (memcmp(&accounts[pre], &scratch->pending_accounts[event->pre], sizeof(tn_pubkey_t)) ||
+        memcmp(&accounts[post], &scratch->pending_accounts[event->post], sizeof(tn_pubkey_t)))
+        tsdk_revert(ERR_BAD_SYNAPSE);
+
+    uint16_t from = event->kind ? (event->amount > 0 ? reservoir : post) : pre;
+    uint16_t to = event->kind ? (event->amount > 0 ? post : reservoir) : post;
+    uint64_t amount = event->amount < 0 ? -(int64_t)event->amount : event->amount;
+    uint64_t have = tsdk_get_account_meta(from)->balance;
+    if (from != reservoir && have < amount + BAL_MIN) {
+        if (tsys_account_transfer(reservoir, from, amount + BAL_MIN - have) != TSDK_SUCCESS)
+            tsdk_revert(ERR_TRANSFER_FAILED);
+    }
+    if (tsys_account_transfer(from, to, amount) != TSDK_SUCCESS)
+        tsdk_revert(ERR_TRANSFER_FAILED);
+    reconcile_neuron(post, reservoir);
+    if (!event->kind && pre != post) reconcile_neuron(pre, reservoir);
+
+    /* Fixed 24-byte receipt: type, step, pre, post, signed amount, kind, pad,
+     * terminator. The enclosing transaction signature identifies ONE event. */
+    struct __attribute__((packed, aligned(8))) {
+        uint64_t type;
+        uint32_t step;
+        uint16_t pre, post;
+        int32_t amount;
+        uint8_t kind, pad[2], end;
+    } receipt = { .type = WORM_EVENT_SYNAPSE, .step = event->step,
+        .pre = event->pre, .post = event->post, .amount = event->amount,
+        .kind = event->kind, .end = WORM_EVENT_END };
+    event->settled = 1;
+    scratch->pending_remaining--;
+    tsys_emit_event((uchar const *)&receipt, sizeof(receipt));
+    tsdk_return(TSDK_SUCCESS);
+}
+
 TSDK_ENTRYPOINT_FN void start(void) {
     tsdk_txn_t const *txn = tsdk_get_txn();
     uchar const *data = tsdk_txn_get_instr_data(txn);
@@ -668,6 +772,7 @@ TSDK_ENTRYPOINT_FN void start(void) {
         case INSTR_STIMULATE:          do_stimulate(data, sz); break;
         case INSTR_CLASSIFY:           do_classify(data, sz); break;
         case INSTR_RESIZE_SCRATCH:     do_resize_scratch(data, sz); break;
+        case INSTR_SETTLE_SYNAPSE:      do_settle_synapse(data, sz); break;
         default:                       tsdk_revert(ERR_BAD_INSTR_TYPE);
     }
     tsdk_return(TSDK_SUCCESS);

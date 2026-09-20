@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 #include "worm.h"
 #include "sim.h"
 
@@ -36,6 +37,27 @@ int worm_native_name_index(char const *name) {
 }
 
 int main(void) {
+    {
+        worm_topology_hdr_t header = { .n_neurons = 2 };
+        uint32_t rows[] = { 0, 1, 2 };
+        uint16_t columns[] = { 1, 0 };
+        int16_t conductances[] = { 256, 256 }, reversals[] = { 0, -80 };
+        int32_t voltages[] = { -40 * 65536, -60 * 65536 }, lut[LUT_ENTRIES];
+        for (int i = 0; i < LUT_ENTRIES; i++) lut[i] = 32768;
+        worm_param_t params[2] = {0};
+        worm_sim_t fixture = { .hdr = &header, .params = params, .V = voltages, .lut = lut,
+            .chem_rowptr = rows, .gap_rowptr = rows, .chem_col = columns, .gap_col = columns,
+            .chem_g = conductances, .gap_g = conductances, .chem_E = reversals };
+        worm_synapse_t events[3];
+        assert(worm_collect_synapses(&fixture, events, 3, 10) == 3);
+        assert(events[0].kind == 0 && events[0].pre == 0 && events[0].post == 1 && events[0].amount == 200);
+        assert(events[1].kind == 1 && events[1].pre == 1 && events[1].post == 0 && events[1].amount == 200);
+        assert(events[2].kind == 1 && events[2].pre == 0 && events[2].post == 1 && events[2].amount == -100);
+        for (int i = 0; i < 3; i++) assert(events[i].step == 10 && !events[i].settled);
+        assert(worm_collect_synapses(&fixture, events, 2, 10) == -1);
+        conductances[0] = conductances[1] = 0;
+        assert(worm_collect_synapses(&fixture, events, 3, 10) == 0);
+    }
     FILE *ft = fopen("../data/topology.bin", "rb");
     if (!ft) { fprintf(stderr, "run pipeline/pack.py first\n"); return 2; }
     fseek(ft, 0, SEEK_END); long tsz = ftell(ft); fseek(ft, 0, SEEK_SET);

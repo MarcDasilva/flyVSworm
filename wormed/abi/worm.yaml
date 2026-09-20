@@ -13,7 +13,7 @@
 abi:
   package: worm
   abi-version: 1
-  package-version: 1
+  package-version: 2
   description: "C. elegans nervous system: 302 neurons as accounts, synapses as transfers"
   options:
     program-metadata:
@@ -90,6 +90,18 @@ types:
           - { name: acct_idx, field-type: { primitive: u16 } }
           - { name: min_size, field-type: { primitive: u32 } }
 
+  - name: SettleSynapse
+    kind:
+      struct:
+        packed: true
+        fields:
+          - { name: generation, field-type: { primitive: u32 } }
+          - { name: index, field-type: { primitive: u32 } }
+          - { name: acc_reservoir, field-type: { primitive: u16 } }
+          - { name: acc_pre, field-type: { primitive: u16 } }
+          - { name: acc_post, field-type: { primitive: u16 } }
+          - { name: _pad, field-type: { primitive: u16 } }
+
   - name: WormInstruction
     kind:
       struct:
@@ -108,6 +120,7 @@ types:
                   - { name: classify, tag-value: 5, variant-type: { type-ref: { name: Classify } } }
                   - { name: create_singletons, tag-value: 6, variant-type: { type-ref: { name: CreateSingletons } } }
                   - { name: resize_scratch, tag-value: 7, variant-type: { type-ref: { name: ResizeScratch } } }
+                  - { name: settle_synapse, tag-value: 8, variant-type: { type-ref: { name: SettleSynapse } } }
 
   # --- Accounts -----------------------------------------------------------
   # 28 bytes, not the 32 the plan claimed: 302 accounts already exist on
@@ -213,4 +226,19 @@ types:
               array:
                 element-type: { type-ref: { name: GapTransfer } }
                 size: { field-ref: { path: [count] } }
+          - { name: end, field-type: { primitive: u8 } }
+
+  # event_type 0x584e59534d524f57 ("WORMSYNX"); exactly one per settlement transaction.
+  - name: SynapseSettlement
+    kind:
+      struct:
+        packed: true
+        fields:
+          - { name: step, field-type: { primitive: u32 } }
+          - { name: pre, field-type: { primitive: u16 } }
+          - { name: post, field-type: { primitive: u16 } }
+          - { name: amount, field-type: { primitive: i32 } }
+          - { name: kind, field-type: { primitive: u8 } }
+          - { name: _pad0, field-type: { primitive: u8 } }
+          - { name: _pad1, field-type: { primitive: u8 } }
           - { name: end, field-type: { primitive: u8 } }

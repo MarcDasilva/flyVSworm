@@ -4,15 +4,18 @@ import { WormBody, ChainClock, BEHAVIOR, type BehaviorState } from "./body.js";
 import { WormMesh } from "./worm.js";
 import { BrainCloud, parseMorphology } from "./brain.js";
 import { ChainFeed, type Behavior, type ChainConfig, type RelayStatus } from "./chain.js";
-import { classifyBehavior } from "./classifier.js";
+import { classifyBehavior, SynapticHeuristic } from "./classifier.js";
 import { TransactionPlayback, TransactionList } from "./transactions.js";
-import { ARENA, STAND_TOP, LAPTOP_GAP, TANK_EDGE, addLeaderboard, addTable, buildTerrarium, loadLaptop, loadTable } from "./props.js";
+import { WormPortfolio } from "./portfolio.js";
+import { ARENA, STAND_TOP, LAPTOP_GAP, TANK_EDGE, addLeaderboard, addTVCounter, addTable, buildTerrarium, loadLaptop, loadTable } from "./props.js";
 import { loadFlyDesk, type FlyDesk } from "./fly.js";
 import { TradingScreen } from "./tradingScreen.js";
 import { FlyFeed } from "./flyfeed.js";
 import { FlyBrain } from "./flybrain.js";
+import { FlyChain, flyNames } from "./flychain.js";
 import { MONITOR_WIDTH } from "./computer.js";
 import { createFlicker } from "./flicker.js";
+import { ambience, readMuted, setMuted } from "./ambience.js";
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0b0f14);
@@ -65,7 +68,8 @@ const wormBeam = beamFor(wormSpot, LAMP_HEIGHT, 0.25);
 const flyBeam = beamFor(flySpot, LAMP_HEIGHT);
 const wormFlicker = createFlicker(), flyFlicker = createFlicker(), tvFlicker = createFlicker();
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
-let setTVBrightness: ((brightness: number) => void) | undefined;
+let tvBoard: ReturnType<typeof addLeaderboard> | undefined;
+let setCounter: ((total?: number) => void) | undefined;
 /** Scratch for the fly's head. NOT flyFocus — that one is the camera's aim and
  *  is lifted off the head later in the same frame. */
 const spotAt = new THREE.Vector3();
@@ -224,10 +228,12 @@ const WIDE_RADIUS = camera.position.distanceTo(WIDE_FOCUS);
 // above it stays in frame — the reveal shows BOTH or it shows nothing.
 const CLOSE_RADIUS = 3.8;
 /** Headroom kept above the fly for its brain, in scene units: SPAN * LIFT of
- *  clearance plus half a brain. See flybrain.ts. */
-const FLY_BRAIN_ROOM = 1.15;
-/** The fly's desk is smaller than the terrarium, so its close shot is closer. */
-const FLY_RADIUS = 2.6;
+ *  clearance plus half a brain, with a fifth over for the context shells that
+ *  reach past the cells. See flybrain.ts. */
+const FLY_BRAIN_ROOM = 1.6;
+/** Set by the brain, not the desk: at SPAN 1.2 the hanging circuit needs this
+ *  much distance to stay inside a 50° frame with the fly under it. */
+const FLY_RADIUS = 3.2;
 const FOCUS_LIFT = 0.62;        // aim between the worm and the brain above it
 // The connectome is anchored over the middle of the tank while the animal
 // wanders, so the camera follows the worm only PART of the way. Track it
@@ -280,7 +286,11 @@ const ray = new THREE.Raycaster();
 /** Which exhibit the pointer is over, if any. The NEAREST one wins: the two
  *  boxes touch where the tank meets the desk, and picking by order instead
  *  hands every click in the overlap to the same animal. */
+// Declared up here, not beside enterScene: pointermove is live during the
+// top-level awaits below, and reading a `let` before its line runs throws.
+let entered = false;
 const sideAt = (e: MouseEvent): Side => {
+  if (!entered) return "none";     // the title card owns the screen until ENTER
   pointer.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
   ray.setFromCamera(pointer, camera);
   const hit = ray.intersectObjects(flyTrigger.visible ? [trigger, flyTrigger] : [trigger], false);
@@ -292,26 +302,25 @@ const sideAt = (e: MouseEvent): Side => {
 // cannot be held open while they read. Hover only offers the pointer cursor.
 const canvas = renderer.domElement;
 const classifier = document.getElementById("worm-classifier")!;
-const readoutButton = document.getElementById("worm-readout")!;
+const marketPanel = document.getElementById("worm-market")!;
 const readoutPart = (name: string) => document.getElementById(`classifier-${name}`)!;
+/** ONE readout for both animals: they are never open at the same time, and
+ *  two panels would be two copies of every field to keep in step. The labels
+ *  that differ are swapped by drawClassifier; everything else is shared. Must
+ *  run AFTER `side` is set — the touch row keys off it. */
 function showClassifier(open: boolean): void {
-  classifier.hidden = !open;
-  readoutButton.setAttribute("aria-expanded", String(open));
+  classifier.hidden = marketPanel.hidden = !open;
+  readoutPart("touch").hidden = side !== "worm";
 }
 
 function closeClassifier(): void {
-  if (classifier.contains(document.activeElement)) readoutButton.focus();
+  // Focus left inside a hidden panel strands the keyboard user; there is no
+  // opener button to hand it back to, so drop it and let Tab start over.
+  if (classifier.contains(document.activeElement) || marketPanel.contains(document.activeElement))
+    (document.activeElement as HTMLElement).blur();
   showClassifier(false);
 }
 
-readoutButton.onclick = () => {
-  if (!classifier.hidden) closeClassifier();
-  else {
-    side = "worm";
-    freeCam = false;
-    showClassifier(true);
-  }
-};
 readoutPart("close").onclick = closeClassifier;
 canvas.addEventListener("pointermove", e => {
   canvas.style.cursor = e.pointerType === "touch" || sideAt(e) === "none" ? "" : "pointer";
@@ -325,15 +334,19 @@ canvas.addEventListener("click", e => {
   // the camera and lets go off the tank closes the scene every time.
   if (!pressed || Math.hypot(e.clientX - pressed.x, e.clientY - pressed.y) > 5) return;
   side = sideAt(e);
-  showClassifier(side === "worm");
+  showClassifier(side !== "none");
   freeCam = false;             // a click asks for the composed shot back
-  // The fly's brain is 22 MB of bake and its model is a socket to a process
-  // that may not be running. Both are only ever wanted here.
-  if (side === "fly") {
-    void flyBrain.load();
-    flyFeed.connect(stop.signal);
-  }
+  if (side === "fly") openFly();
 });
+
+/** The fly's brain is 22 MB of bake, its model is a socket to a process that
+ *  may not be running, and its chain half signs real transactions. NONE of
+ *  the three is wanted until someone actually looks at the fly. */
+function openFly(): void {
+  void flyBrain.load();
+  flyFeed.connect(stop.signal);
+  void flyChain.start(stop.signal);
+}
 
 addEventListener("resize", () => {
   camera.aspect = innerWidth / innerHeight;
@@ -356,6 +369,7 @@ const body = new WormBody(24, ARENA);
 // a continuous gait from the latest confirmed motor state while activity is fresh.
 const clock = new ChainClock();
 const transactions = new TransactionPlayback();
+const neuralTilt = new SynapticHeuristic(names);
 const worm = new WormMesh(scene);
 const brain = new BrainCloud(scene, positions, names, morphology);
 const terrarium = buildTerrarium(scene);
@@ -377,12 +391,35 @@ const DESK_GAP = 0.35;
 // socket is opened on the first click of the fly, along with the bake.
 const flyFeed = new FlyFeed();
 const flyBrain = new FlyBrain(scene, flyFeed);
+// The fly's chain half. Its events are DERIVED from the model's spikes and
+// weights rather than produced on chain the way the worm's are — flychain.ts
+// says exactly what that does and does not claim, and the panel's caption
+// repeats it on screen.
+const flyChain = new FlyChain();
+/** Paced like the worm's receipts: the fly's land two dozen at a time every
+ *  couple of seconds, and dumping each batch into the list at once reads as a
+ *  stutter rather than a stream. */
+const flyTransactions = new TransactionPlayback();
+flyChain.onSynapse(s => { flyTransactions.push(s, performance.now()); flyRateTx++; });
+/** The model's tick the page has already turned into events. The render loop
+ *  runs faster than the model's 30 frames/s, and counting one frame twice
+ *  would double every fly transaction. */
+let flyObservedTick = -1;
 // ONE market for the whole room: the fly's monitor, the worm's laptop lid and the left half of
 // the board all show it, so no two displays can disagree about the price. The desks get the
 // trader's view and the board gets the price feed — orders belong to the animal that typed them,
 // not to the wall. The fly types into it; the clock below is the only thing that advances it.
 const market = new TradingScreen();
-void Promise.all([loadLaptop(scene, market.texture), loadFlyDesk(scene, market), loadTable()])
+const wormPortfolio = new WormPortfolio();
+// The same paper-trading model for the fly, so the two animals are ranked on one basis: equity
+// against the same stake, priced off the same candles. Its tilt is the fly's OWN position, which
+// is the book it types on its screen — see TradingScreen.
+// ponytail: the model is long-only, so the fly's short side scores as flat. Give the portfolio
+// a short leg if the board is ever meant to reward the fly for selling a falling market.
+const flyPortfolio = new WormPortfolio();
+let tradedCandle = -1;
+let chartCandle = -1;
+const props = Promise.all([loadLaptop(scene, market.texture), loadFlyDesk(scene, market), loadTable()])
   .then(([laptop, desk, table]) => {
     const scale = (laptop.lid.max.x - laptop.lid.min.x) / MONITOR_WIDTH;
     desk.setScale(scale);
@@ -407,8 +444,9 @@ void Promise.all([loadLaptop(scene, market.texture), loadFlyDesk(scene, market),
     // Backs the WHOLE set, tank included, so it is measured from the far end of the fly's table
     // to the far wall of the terrarium and not from either table alone.
     const setNear = -TANK_EDGE, setFar = flyNear + depth;
-    setTVBrightness = addLeaderboard(scene, (setNear + setFar) / 2, setFar - setNear + 0.6,
-                                     market.marketTexture);
+    tvBoard = addLeaderboard(scene, (setNear + setFar) / 2, setFar - setNear + 0.6,
+                             market.marketTexture);
+    setCounter = addTVCounter(scene, (setNear + setFar) / 2);
 
     // Slide the desk back onto its OWN table, seated by its measured near edge so it keeps the
     // same margin from the table lip that the laptop keeps from the tank.
@@ -488,6 +526,8 @@ const n = names.length;
 let behavior: BehaviorState = { state: BEHAVIOR.PAUSE, gain: 0 };
 let behaviorSample: Behavior | undefined;
 let behaviorAdvancedAt = 0;
+let reading = classifyBehavior(undefined, 0, false);
+let tradingTilt = 0;
 // A frame's mV is a VIEW over the received gRPC buffer (chain.ts), which
 // TypeScript types as ArrayBufferLike — annotate or the first assignment
 // from the chain will not fit a locally allocated Int16Array.
@@ -506,7 +546,53 @@ feed.onBehavior(b => {
   if (!behaviorSample || b.step !== behaviorSample.step) behaviorAdvancedAt = performance.now();
   behaviorSample = b;
 });
-feed.onStatus(s => { status = s; });
+/** Set once the relay's board has been read. Nothing is posted before it: a page that reported
+ *  its opening balance first would wipe the standing it is about to resume from. */
+let ledgerSeeded = false;
+feed.onStatus(s => {
+  status = s;
+  // The ledger rides the heartbeat: the relay answers /api/status with its own board, so the
+  // page needs no second poll. Both fall back when an older relay, or one whose database would
+  // not open, leaves them out.
+  tvBoard?.standings(s.standings ?? []);
+  ledgerTotal = s.transactions;
+  if (!ledgerSeeded && s.standings) {
+    // The board is ALL TIME, so a reload resumes the animals' books where the last session left
+    // them instead of posting a fresh zero over them. Cash carries the standing P&L and the
+    // position starts flat, which is the truth about a page that has just opened.
+    // ponytail: last writer wins, so two tabs would trade the same book twice over. One screen
+    // is the exhibit; give the store an owner token if that ever stops being true.
+    for (const row of s.standings) {
+      const book = row.specimen === "fly" ? flyPortfolio
+        : row.specimen === "worm" ? wormPortfolio : undefined;
+      if (!book) continue;
+      book.cash = Math.max(0, book.startingBalance + row.profit);
+      book.shares = 0;
+      book.trades = row.trades;
+    }
+    ledgerSeeded = true;
+  }
+});
+
+
+/** How often the page tells the relay what its animals are worth. Slow on purpose: these are
+ *  two rows on a printed sheet, and the ledger is written to disk on every post. */
+const STANDING_MS = 5000;
+/** The stake each animal starts with, and the figure the board's PROFIT column is measured
+ *  against — it lives in the portfolio, so a change there cannot desync the sheet. */
+const postStandings = () => {
+  if (!ledgerSeeded) return;
+  const price = market.snapshot.price;
+  for (const [specimen, book] of [["fly", flyPortfolio], ["worm", wormPortfolio]] as const)
+    void fetch("/api/standing", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ specimen, profit: book.equity(price) - book.startingBalance,
+                             trades: book.trades }),
+      signal: stop.signal,
+    }).catch(() => undefined);   // a relay that is down must not throw into the console every 5 s
+};
+const standingTimer = setInterval(postStandings, STANDING_MS);
+stop.signal.addEventListener("abort", () => clearInterval(standingTimer), { once: true });
 /** Playback state per transaction signature. Written in the SAME callback
  *  that fires the particles, which is what keeps the panel and the animation
  *  describing one event instead of two — a row's counters tick as its own
@@ -517,6 +603,15 @@ const txPlay = new Map<string, TxPlay>();
 /** Rolling rates, EMA. Raw per-frame counts are far too jumpy to read. */
 let framesPerSec = 0, transfersPerSec = 0, txPerMin = 0;
 let rateFrames = 0, rateTransfers = 0, rateTx = 0, rateAt = performance.now();
+// The fly's panel shows the SAME six numbers as the worm's, so the two read
+// as one exhibit. A fly receipt is ONE synaptic event, so its transfers/s and
+// tx/min count the same thing.
+let flyFramesPerSec = 0, flyTransfersPerSec = 0, flyTxPerMin = 0;
+let flyRateTx = 0, flyFramesSeen = 0;
+/** What the RELAY's ledger says: every transaction the exhibit has ever made. UNDEFINED until
+ *  the first heartbeat answers — the board shows nothing rather than a count of this page's own
+ *  session, which is not the number the room is being told. */
+let ledgerTotal: number | undefined;
 const seenSigs = new Set<string>();
 
 feed.onFrame(f => {
@@ -560,6 +655,12 @@ const stats = document.getElementById("txstats")!;
 const transactionList = cfg.synapseTransactions
   ? new TransactionList(log, document.getElementById("txlatest") as HTMLButtonElement, names, cfg.explorer)
   : undefined;
+/** The fly's rows, over the SAME panel: one exhibit is open at a time, and a
+ *  second panel would be a second copy of every rule about scrolling, pausing
+ *  and trimming. Built on the first click of the fly. */
+let flyList: TransactionList | undefined;
+/** Whose rows are currently mounted in the panel. */
+let panelSide: Side = "none";
 const clicks: string[] = [];
 
 /** The stimulus amplitude belongs to the relay, so the label does NOT quote
@@ -577,19 +678,43 @@ async function touch(label: string, neuron: string): Promise<void> {
 // and the reveal's own damped focus below carries target and camera together.
 // ---------------------------------------------------------------------------
 const ENTER_FOCUS = new THREE.Vector3(0.88, 0.98, 2.95);
+// The black screen lifts once the props have settled — loaded OR failed, a
+// broken desk is not a reason to hold the viewer on the logo forever.
+const loading = document.getElementById("loading")!;
+void Promise.allSettled([props, (loading.querySelector("img") as HTMLImageElement).decode()])
+  .then(() => {
+    loading.classList.add("gone");
+    // Preload the fly brain now, AFTER the room is up so it never delays the
+    // first frame. It stays invisible until the reveal (setReveal), so the
+    // click on the fly finds it already built instead of 22 MB away.
+    void flyBrain.load().then(() => flyBrain.warm(renderer, scene, camera));
+  });
 const intro = document.getElementById("intro")!;
-let entered = false;
 function enterScene(): void {
   if (entered) return;             // ENTER is a one-way door; re-arming it would fight a click
   entered = true;
   intro.classList.add("gone");
   freeCam = false;                 // hand-driving suspends the move that is about to run
   WIDE_FOCUS.copy(ENTER_FOCUS);
+  ambience("/sfx/fly.mp3", 0.25);
+  ambience("/sfx/dirt.mp3", 0.2);
 }
 document.getElementById("enter")!.addEventListener("click", enterScene);
 
 document.getElementById("touch-head")!.onclick = () => void touch("HEAD", "ALML");
 document.getElementById("touch-tail")!.onclick = () => void touch("TAIL", "PLML");
+
+// Applied BEFORE enter: the beds read the flag when they are created, so a
+// returning muted visitor never hears the first swell.
+const muteBtn = document.getElementById("mute") as HTMLButtonElement;
+let muted = readMuted();
+const paintMute = () => {
+  muteBtn.setAttribute("aria-pressed", String(muted));
+  muteBtn.setAttribute("aria-label", muted ? "Unmute sound" : "Mute sound");
+};
+setMuted(muted);
+paintMute();
+muteBtn.onclick = () => { muted = !muted; setMuted(muted); paintMute(); };
 
 /** Signatures and chain errors are remote strings going into innerHTML. */
 const esc = (t: string) => t.replace(/[&<>"]/g, c =>
@@ -619,18 +744,42 @@ function drawStats(): void {
   const low = status !== undefined && status.balance < status.floor;
   const tile = (k: string, v: string, warn = false) =>
     `<div><div class="k">${k}</div><div class="v${warn ? " warn" : ""}">${esc(v)}</div></div>`;
+  const caption = document.getElementById("txcaption")!;
+  if (panelSide === "fly") {
+    const frame = flyFeed.frame;
+    stats.innerHTML = [
+      tile("TX / MIN", flyTxPerMin.toFixed(1)),
+      tile("FRAMES / S", flyFramesPerSec.toFixed(1)),
+      tile("TRANSFERS / S", Math.round(flyTransfersPerSec).toLocaleString()),
+      // The model steps at 1000 ticks/s (flychain.ts), so ticks are ms.
+      tile("SIM CLOCK", frame ? `${(frame.tick / 1000).toFixed(1)}s` : "—"),
+      tile("BUFFERED TX", String(flyTransactions.pending)),
+      // The FLY's payer, which is a different account from the worm's — the
+      // worm's balance here would be a number this panel never spends.
+      tile("FEE PAYER", flyChain.stats.balance?.toLocaleString() ?? "?",
+           flyChain.stats.balance !== undefined && flyChain.stats.balance < 5_000),
+    ].join("");
+    // The honest caption. The model spikes at 1000 ticks/s and the chain
+    // confirms in seconds, so this list is a SAMPLE — saying "every synapse"
+    // here would be the one false claim in the room.
+    caption.title = flyChain.stats.error;
+    caption.textContent = flyChain.stats.error ? "Retrying · sampled synaptic events, one transaction each"
+      : flyFeed.status === "live" ? "Sampled synaptic events · one transaction each · latest 500"
+      : "Fly model offline · start fly-brain/python/server.py";
+    return;
+  }
   stats.innerHTML = [
     tile("TX / MIN", txPerMin.toFixed(1)),
     tile("FRAMES / S", framesPerSec.toFixed(1)),
     tile("TRANSFERS / S", Math.round(transfersPerSec).toLocaleString()),
-    tile("SIM CLOCK", `${(feed.stats.lastStep * cfg.dtMs / 1000).toFixed(1)}s`),
+    tile("SIM CLOCK", `${((behaviorSample?.step ?? feed.stats.lastStep) * cfg.dtMs / 1000).toFixed(1)}s`),
     tile(cfg.synapseTransactions ? "BUFFERED TX" : "QUEUE",
       String(cfg.synapseTransactions ? transactions.pending : feed.stats.lag)),
     tile("FEE PAYER", status ? status.balance.toLocaleString() : "?", low),
   ].join("");
   const error = status?.log[0]?.error;
-  const caption = document.getElementById("txcaption")!;
-  caption.textContent = error ? error.replace(/\s+/g, " ").slice(0, 120)
+  caption.title = error ?? "";
+  caption.textContent = error ? "Retrying chain confirmation · playing confirmed receipts"
     : transactions.active(performance.now()) ? "Confirmed receipts · paced playback · latest 500"
     : "Waiting for confirmed transactions · latest 500";
 }
@@ -639,6 +788,7 @@ function drawStats(): void {
  *  A row carries its own playback state, so the highlighted row is literally
  *  the transaction whose transfers are on screen right now. */
 function drawLog(): void {
+  if (panelSide === "fly") { flyList?.render(panelPaused); return; }
   if (transactionList) { transactionList.render(panelPaused); return; }
   const rows: string[] = clicks.slice(0, 3).map(c => `<div class="row dim">${esc(c)}</div>`);
   for (const e of status?.log ?? []) {
@@ -674,22 +824,107 @@ function integrateRates(now: number): void {
   transfersPerSec += (rateTransfers / span - transfersPerSec) * 0.4;
   txPerMin += (rateTx * 60 / span - txPerMin) * 0.4;
   rateFrames = rateTransfers = rateTx = 0;
+  const flyFrames = flyFeed.frames - flyFramesSeen;
+  flyFramesSeen = flyFeed.frames;
+  flyFramesPerSec += (flyFrames / span - flyFramesPerSec) * 0.4;
+  flyTransfersPerSec += (flyRateTx / span - flyTransfersPerSec) * 0.4;
+  flyTxPerMin += (flyRateTx * 60 / span - flyTxPerMin) * 0.4;
+  flyRateTx = 0;
 }
 
 let last = performance.now();
 /** The transaction panel redraws at 10 Hz, not once per frame. */
 let lastPanel = 0;
 
-function drawClassifier(now: number, playing: boolean): void {
+/** The model's threshold current, v_thresh / tau from fly-brain/spec/params.json.
+ *  The drives are quoted as a FRACTION of it, because a bare 0.069 means
+ *  nothing on a wall and "90% of threshold" is the thing the tuning was
+ *  scored on. Re-tuning the spec changes this number — they are one fact. */
+const FLY_THRESHOLD_CURRENT = 1.0 / 12.97;
+
+/** The fly's readout, in the worm's panel. Every field is the model's own:
+ *  the bump the ring is holding, the push-pull drive turning it, and the
+ *  momentum signal it trades on. Nothing here is generated by this page. */
+/** The fly may read the market ONLY once its brain is on screen and the chain is confirming its
+ *  synapses — the same bar the worm clears through reading.status. Before that the model's
+ *  frames still arrive, but nothing on screen backs them. */
+const flyLive = (now: number) => flyBrain.ready && flyTransactions.active(now);
+
+function drawFlyClassifier(now: number): void {
+  const text = (name: string, value: string) => {
+    const node = readoutPart(name);
+    if (node.textContent !== value) node.textContent = value;
+  };
+  text("title", "FLY HEADING / D. MELANOGASTER");
+  text("heading-label", "Bump heading");
+  text("forward-label", "PEN_L drive");
+  text("reverse-label", "PEN_R drive");
+  text("book-label", "FLY PAPER ACCOUNT · START $10,000");
+  text("signal-note", "Bump heading + the model's momentum signal · not a market forecast");
+  // Frames arrive before the brain is on screen and before a single receipt has confirmed, and
+  // a readout that already claims "bump held · 16% buy tilt" over 0% drives is a reading with
+  // nothing behind it. The frame is dropped until BOTH halves are up — see flyLive.
+  const f = flyLive(now) ? flyFeed.frame : undefined;
+  classifier.dataset.status = f ? "live" : "waiting";
+  text("status", flyFeed.status === "live" ? "Playing"
+    : flyFeed.status === "connecting" ? "Connecting" : "Model offline");
+  text("age", f ? `${((now - f.at) / 1000).toFixed(1)} s` : "—");
+  if (!f) {
+    text("state", "Awaiting activity");
+    text("meaning", !flyFeed.frame ? "The readout starts when fly-brain/python/server.py sends a frame."
+      : !flyBrain.ready ? "Loading the fly brain."
+      : "Waiting for the first confirmed synaptic transaction.");
+  } else if (f.phase === "boot") {
+    text("state", "Forming the bump");
+    text("meaning", "A landmark is driving EPG. The ring has not settled into a single bump yet.");
+  } else if (f.bumps === 1) {
+    text("state", "Heading bump held");
+    text("meaning", "One bump on the EPG ring. Push-pull drive onto PEN_L/PEN_R is what turns it.");
+  } else {
+    text("state", f.bumps === 0 ? "No bump" : `${f.bumps} bumps`);
+    text("meaning", "The ring is not holding a single heading — the circuit is outside the regime it was tuned for.");
+  }
+  const degrees = f ? (f.heading * 180 / Math.PI + 360) % 360 : 0;
+  text("heading", f ? `${Math.round(degrees) % 360}°` : "—");
+  readoutPart("heading-plot").setAttribute("transform", `rotate(${degrees} 100 100)`);
+  // Push-pull means the two drives are one number with opposite signs, so at
+  // most one wedge is ever up — the same reading as the worm's forward and
+  // reverse, which also never both fire.
+  for (const [name, drive] of [["forward", f?.driveL ?? 0], ["reverse", f?.driveR ?? 0]] as const) {
+    const fraction = Math.max(0, Math.min(1, drive / FLY_THRESHOLD_CURRENT));
+    text(`${name}-value`, f ? `${Math.round(fraction * 100)}%` : "—");
+    const r = fraction * 72, y = 100 - r * Math.cos(Math.PI / 6);
+    readoutPart(name).setAttribute("d", r === 0 ? ""
+      : `M100 100 L${100 - r / 2} ${y} A${r} ${r} 0 0 1 ${100 + r / 2} ${y} Z`);
+  }
+  const signal = f ? Math.max(-1, Math.min(1, f.signal)) : 0;
+  const tilt = Math.round(signal * 100);
+  const label = tilt === 0 ? "Neutral" : `${Math.abs(tilt)}% ${tilt > 0 ? "Buy" : "Sell"} tilt`;
+  text("tilt", label);
+  readoutPart("needle").style.left = `${50 + signal * 50}%`;
+  readoutPart("meter").setAttribute("aria-valuenow", String(tilt));
+  readoutPart("meter").setAttribute("aria-valuetext", label);
+  drawMarket(flyPortfolio);
+}
+
+function drawClassifier(now: number): void {
   if (classifier.hidden) return;
+  if (side === "fly") { drawFlyClassifier(now); return; }
   const age = now - behaviorAdvancedAt;
-  const activityAge = cfg.synapseTransactions ? Math.min(age, transactions.age(now)) : age;
-  const reading = classifyBehavior(behaviorSample, activityAge, playing);
   classifier.dataset.status = reading.status;
   const text = (name: string, value: string) => {
     const node = readoutPart(name);
     if (node.textContent !== value) node.textContent = value;
   };
+  // The panel is shared with the fly, so every label it swaps has to be put
+  // back — a field left reading "Bump heading" over the worm's numbers is
+  // worse than no label at all.
+  text("title", "WORM BEHAVIOR / C. ELEGANS");
+  text("heading-label", "Head heading");
+  text("forward-label", "Forward drive");
+  text("reverse-label", "Reverse drive");
+  text("book-label", "WORM PAPER ACCOUNT · START $10,000");
+  text("signal-note", "Motor state + recent synaptic currents · not a market forecast");
   text("state", reading.label);
   text("meaning", reading.meaning);
   text("status", reading.status === "live" ? "Playing"
@@ -706,12 +941,56 @@ function drawClassifier(now: number, playing: boolean): void {
     readoutPart(name).setAttribute("d", r === 0 ? ""
       : `M100 100 L${100 - r / 2} ${y} A${r} ${r} 0 0 1 ${100 + r / 2} ${y} Z`);
   }
-  const tilt = Math.round(reading.signal * 100);
+  const tilt = Math.round(tradingTilt * 100);
   const label = tilt === 0 ? "Neutral" : `${Math.abs(tilt)}% ${tilt > 0 ? "Buy" : "Sell"} tilt`;
   text("tilt", label);
-  readoutPart("needle").style.left = `${50 + reading.signal * 50}%`;
+  readoutPart("needle").style.left = `${50 + tradingTilt * 50}%`;
   readoutPart("meter").setAttribute("aria-valuenow", String(tilt));
   readoutPart("meter").setAttribute("aria-valuetext", label);
+  drawMarket(wormPortfolio);
+}
+
+/** ONE market, whichever animal is open — the chart is the room's shared
+ *  price feed and only the book over it changes. */
+function drawMarket(book: WormPortfolio): void {
+  const { price, candles, sequence } = market.snapshot;
+  const money = (value: number) => value.toLocaleString("en-US", { style: "currency", currency: "USD" });
+  const equity = book.equity(price), pnl = equity - book.startingBalance;
+  readoutPart("equity").textContent = money(equity);
+  const profit = readoutPart("pnl");
+  profit.textContent = `${pnl >= 0 ? "+" : "−"}${money(Math.abs(pnl))} (${(pnl / book.startingBalance * 100).toFixed(2)}%)`;
+  profit.dataset.direction = pnl >= 0 ? "up" : "down";
+  readoutPart("cash").textContent = money(book.cash);
+  readoutPart("position").textContent = `${book.shares.toFixed(2)} shares`;
+  readoutPart("trades").textContent = `${book.trades} paper fills`;
+  if (chartCandle === sequence) return;
+  chartCandle = sequence;
+  readoutPart("price").textContent = money(price);
+  const change = (price / candles[0].open - 1) * 100;
+  const changeText = readoutPart("change");
+  changeText.textContent = `${change >= 0 ? "+" : ""}${change.toFixed(2)}%`;
+  changeText.dataset.direction = change >= 0 ? "up" : "down";
+  const low = Math.min(...candles.map(c => c.low));
+  const high = Math.max(...candles.map(c => c.high));
+  const pad = Math.max(.05, (high - low) * .08);
+  // The plot runs 60..140 in the SVG's own units and the viewBox is cropped to match — the
+  // grid lines and labels in index.html sit on the SAME three y's, so a change here moves them
+  // too or the candles float off the rules.
+  const y = (value: number) => 140 - (value - low + pad) / (high - low + 2 * pad) * 80;
+  let upWicks = "", downWicks = "", upBodies = "", downBodies = "";
+  candles.forEach((c, i) => {
+    const x = 8 + i * 7;
+    const wick = `M${x},${y(c.high)}V${y(c.low)}`;
+    const body = `M${x},${y(c.open)}V${y(c.close) + (c.close === c.open ? .5 : 0)}`;
+    if (c.close >= c.open) { upWicks += wick; upBodies += body; }
+    else { downWicks += wick; downBodies += body; }
+  });
+  for (const [id, path] of [["up-wicks", upWicks], ["down-wicks", downWicks], ["up-bodies", upBodies], ["down-bodies", downBodies]])
+    readoutPart(id).setAttribute("d", path);
+  readoutPart("chart-high").textContent = (high + pad).toFixed(2);
+  readoutPart("chart-low").textContent = (low - pad).toFixed(2);
+  readoutPart("chart-mid").textContent = ((high + low) / 2).toFixed(2);
+  readoutPart("chart").setAttribute("aria-label", `Shared demo market, price ${money(price)}, ${change.toFixed(2)} percent over the visible window`);
 }
 
 function frame(now: number): void {
@@ -723,27 +1002,67 @@ function frame(now: number): void {
   feed.tick();                       // paces the chain's frames onto the scene
   for (const receipt of transactions.tick(now)) {
     brain.fireEdge(receipt.pre, receipt.post, receipt.amount > 0);
+    neuralTilt.observe(receipt, now);
     transactionList?.add(receipt);
   }
   // Rendering the classified gait is continuous between settlements. This
   // does not advance the neural simulation clock or create transactions.
   // A real PAUSE still stops the body; a silent receipt feed stops it in 15 s.
   const movement = cfg.synapseTransactions ? (transactions.active(now) ? dt : 0) : clock.take(real);
+  const activityAge = cfg.synapseTransactions
+    ? Math.min(now - behaviorAdvancedAt, transactions.age(now)) : now - behaviorAdvancedAt;
+  reading = classifyBehavior(behaviorSample, activityAge, movement > 0);
+  tradingTilt = cfg.synapseTransactions
+    ? neuralTilt.value(now, reading.signal, reading.status === "live" &&
+      (reading.state === BEHAVIOR.FORWARD || reading.state === BEHAVIOR.REVERSE))
+    : reading.signal;
   body.update(movement, behavior);
-  transactionList?.render(panelPaused);
+  // The fly's half of the same loop. Its events are derived from the model's
+  // OWN spikes, one frame counted once, and the confirmed receipts come back
+  // off the chain — flychain.ts owns both halves.
+  const flyFrame = flyFeed.frame;
+  if (side === "fly" && flyFrame && flyFrame.tick !== flyObservedTick) {
+    flyObservedTick = flyFrame.tick;
+    flyChain.observe(flyFrame.tick, flyFrame.spiked);
+  }
+  if (side === "fly") flyChain.tick(now);
+  for (const receipt of flyTransactions.tick(now)) flyList?.add(receipt);
+  // The panel belongs to whichever exhibit is open. Mounting is the ONE thing
+  // that must not run every frame — it re-parents the whole list.
+  if (side !== "none" && side !== panelSide) {
+    panelSide = side;
+    if (side === "fly") {
+      flyList ??= new TransactionList(log, document.getElementById("txlatest") as HTMLButtonElement,
+                                      flyNames(), flyChain.cfg?.explorer ?? cfg.explorer,
+                                      ["excitatory", "inhibitory"]);
+      flyList.attach();
+    } else transactionList?.attach();
+  }
+  if (panelSide === "fly") flyList?.render(panelPaused);
+  else transactionList?.render(panelPaused);
   worm.update(body.points);
   // The typist and the market run on the WALL clock: they are scenery, not simulation, and
   // freezing them whenever the chain stalls would read as the page having crashed. The market
   // ticks even before the desk loads — the board is showing it either way.
   fly?.update(dt);
   market.update(dt);
+  const quote = market.snapshot;
+  if (quote.sequence !== tradedCandle) {
+    tradedCandle = quote.sequence;
+    if (reading.status === "live") wormPortfolio.rebalance(quote.price, tradingTilt);
+    // The fly trades on the model's position ONLY while flyLive holds — the same gate the worm
+    // has on reading.status, so neither book moves on a reading nothing backs. The typist keeps
+    // typing either way: that is scenery, and a desk that froze would read as the fly having
+    // stopped work.
+    if (flyLive(now) && flyFrame) flyPortfolio.rebalance(quote.price, flyFrame.position);
+  }
   brain.setVoltages(voltages);
   brain.tick(dt);
 
   integrateRates(now);
   if (now - lastPanel > 100) {
     lastPanel = now;
-    drawClassifier(now, movement > 0);
+    drawClassifier(now);
     if (!panelPaused) {
       drawLog();
       drawStats();
@@ -758,7 +1077,8 @@ function frame(now: number): void {
   flySpot.intensity = flySpotIntensity * flyLight;
   wormBeam.material.opacity = BEAM_OPACITY * wormLight;
   flyBeam.material.opacity = BEAM_OPACITY * flyLight;
-  setTVBrightness?.(reducedMotion.matches ? 1 : tvFlicker(now));
+  tvBoard?.brightness(reducedMotion.matches ? 1 : tvFlicker(now));
+  setCounter?.(ledgerTotal);
 
   // --- The reveal, see WIDE_FOCUS above. ---
   const opening = side === "none" ? 0 : 1;
@@ -784,8 +1104,12 @@ function frame(now: number): void {
   const slack = THREE.MathUtils.lerp(TRIGGER_MARGIN, TRIGGER_TIGHT, wormAlpha);
   trigger.scale.set((ARENA.halfX + slack) / (ARENA.halfX + TRIGGER_MARGIN), 1,
                     (ARENA.halfY + slack) / (ARENA.halfY + TRIGGER_MARGIN));
-  classifier.style.opacity = txpanel.style.opacity = wormAlpha.toFixed(3);
-  classifier.style.pointerEvents = txpanel.style.pointerEvents = wormAlpha > 0.6 ? "auto" : "none";
+  // Both exhibits share the panels, so they follow whichever one is revealed.
+  // Tied to wormAlpha alone the fly's readout would open at zero opacity.
+  const panelAlpha = Math.max(wormAlpha, flyAlpha);
+  classifier.style.opacity = marketPanel.style.opacity = txpanel.style.opacity = panelAlpha.toFixed(3);
+  classifier.style.pointerEvents = marketPanel.style.pointerEvents =
+    txpanel.style.pointerEvents = panelAlpha > 0.6 ? "auto" : "none";
 
   // Recentre by moving target and camera TOGETHER: whatever angle the user
   // orbited to survives the flight, and the worm stays framed as it crawls.

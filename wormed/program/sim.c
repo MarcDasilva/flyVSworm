@@ -91,3 +91,40 @@ void worm_step(worm_sim_t *sim, uint32_t n) {
         for (uint32_t i = 0; i < N; i++) sim->V[i] = sim->v_next[i];
     }
 }
+
+/* Same conductances and fixed-point arithmetic as the integrator. A "fire"
+ * here means a nonzero native-unit current settlement, not an action potential
+ * (this is a graded-potential model). No strongest-N filter or sampling. */
+int32_t worm_collect_synapses(worm_sim_t *sim, worm_synapse_t *out,
+                              uint32_t capacity, uint32_t step) {
+    uint32_t count = 0;
+    for (uint32_t j = 0; j < sim->hdr->n_neurons; j++) {
+        worm_param_t const *p = &sim->params[j];
+        sim->s[j] = sigmoid_q16(q16_mul(sim->V[j] - (int32_t)p->V_half_mV * Q16,
+                                       (int32_t)p->k_recip << 8), sim->lut);
+    }
+    for (uint32_t i = 0; i < sim->hdr->n_neurons; i++) {
+        for (uint32_t kind = 0; kind < 2; kind++) {
+            uint32_t const *rows = kind ? sim->chem_rowptr : sim->gap_rowptr;
+            for (uint32_t e = rows[i]; e < rows[i + 1]; e++) {
+                uint32_t j = kind ? sim->chem_col[e] : sim->gap_col[e];
+                if (!kind && j <= i) continue;
+                int32_t flow;
+                uint16_t pre = (uint16_t)j, post = (uint16_t)i;
+                if (kind) {
+                    int32_t g = q16_mul((int32_t)sim->chem_g[e] << 8, sim->s[j]);
+                    flow = q16_mul(g, (int32_t)sim->chem_E[e] * Q16 - sim->V[i]);
+                } else {
+                    flow = q16_mul((int32_t)sim->gap_g[e] << 8, sim->V[j] - sim->V[i]);
+                    if (flow < 0) { pre = (uint16_t)i; post = (uint16_t)j; flow = -flow; }
+                }
+                int32_t amount = (int32_t)((int64_t)flow * BAL_SCALE / Q16);
+                if (!amount) continue;
+                if (count == capacity) return -1;
+                out[count++] = (worm_synapse_t){ .step = step, .pre = pre,
+                    .post = post, .amount = amount, .kind = (uint8_t)kind };
+            }
+        }
+    }
+    return (int32_t)count;
+}

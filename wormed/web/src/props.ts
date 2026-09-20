@@ -376,13 +376,27 @@ export async function loadLaptop(scene: THREE.Scene, screen: THREE.Texture): Pro
   return { group, lid: new THREE.Box3().setFromObject(lidPart) };
 }
 
-/** The board's face, drawn once. No ticker, no animation: this is a sheet
- *  posted on a wall, and a board that redraws invites someone to ask what the
- *  numbers mean. */
-function leaderboardFace(w: number, h: number): HTMLCanvasElement {
-  const c = document.createElement("canvas");
-  c.width = w;
-  c.height = h;
+/** The facility's register. The standings arrive from the relay's ledger as a specimen and a
+ *  figure; everything else about an animal — what it is called, what it is, the accession
+ *  written on its tank — belongs to the exhibit and NOT to the database. */
+const REGISTER: Record<string, { name: string; species: string; number: string }> = {
+  fly: { name: "FLY", species: "Drosophila melanogaster", number: "004117" },
+  worm: { name: "WORM", species: "Caenorhabditis elegans", number: "004118" },
+};
+
+/** One line of the sheet: which animal, and what its paper book is worth against the stake it
+ *  started with. Ranked by the relay, printed in the order handed over. */
+export type Standing = { specimen: string; profit: number };
+
+/** The two rows before the relay has said anything — a fresh ledger, or one that would not
+ *  open. A board printing nothing reads as a broken display; a board printing zeros reads as a
+ *  demo that has not started, which is the truth. */
+const UNTRADED: Standing[] = [{ specimen: "fly", profit: 0 }, { specimen: "worm", profit: 0 }];
+
+/** The board's face. It redraws ONLY when the standings change — this is a sheet posted on a
+ *  wall, and a board that repaints every frame reads as a ticker. */
+function paintLeaderboard(c: HTMLCanvasElement, standings: Standing[]): void {
+  const w = c.width, h = c.height;
   const g = c.getContext("2d")!;
   const mono = 'ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace';
   /** Column anchors, as fractions of the width. NUMBER and PROFIT are the
@@ -393,6 +407,10 @@ function leaderboardFace(w: number, h: number): HTMLCanvasElement {
   const FAINT = "#6c7178";
   const GAIN = "#1d6b43";
   const LOSS = "#a8322e";
+
+  // Reset first: the layout below translates into the printing band, and a repaint that
+  // inherited the last one would walk the sheet off the bottom of the board.
+  g.setTransform(1, 0, 0, 1, 0, 0);
 
   // Paper, not a screen. The scene's own lights fall on it and the panel's
   // emission is low (see addLeaderboard), so it reads as a printed sheet in a
@@ -447,13 +465,13 @@ function leaderboardFace(w: number, h: number): HTMLCanvasElement {
   // NUMBER is the animal's accession in the facility's register — the number
   // written on the tank and on the desk, nothing to do with what it trades.
   // The legend at the foot says so; without it the column reads as a score.
-  const rows: { rank: string; name: string; species: string; number: string;
-                profit: string; gain: boolean }[] = [
-    { rank: "1", name: "FLY", species: "Drosophila melanogaster",
-      number: "004117", profit: "+1,284.60", gain: true },
-    { rank: "2", name: "WORM", species: "Caenorhabditis elegans",
-      number: "004118", profit: "-212.40", gain: false },
-  ];
+  const rows = standings.filter(s => REGISTER[s.specimen]).map((s, i) => ({
+    rank: String(i + 1),
+    ...REGISTER[s.specimen],
+    profit: `${s.profit >= 0 ? "+" : "-"}${Math.abs(s.profit).toLocaleString("en-US",
+      { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+    gain: s.profit >= 0,
+  }));
   const top = band * 0.33, rowH = band * 0.245;
   rows.forEach((r, i) => {
     const y = top + rowH * (i + 0.5);
@@ -495,7 +513,6 @@ function leaderboardFace(w: number, h: number): HTMLCanvasElement {
   g.textAlign = "right";
   g.fillText("USD \u00b7 SETTLED ON THRU \u00b7 UNAUDITED", w * COL.profit, band * 0.935);
   g.textAlign = "left";
-  return c;
 }
 
 /** Emission of the board's face. See addLeaderboard: this is a backlight
@@ -530,7 +547,10 @@ const BOARD_BACK = STAND_W / 2 + 2.4;
  * spill in sync.
  */
 export function addLeaderboard(scene: THREE.Scene, zCentre: number, width: number,
-                               chart: THREE.Texture): (brightness: number) => void {
+                               chart: THREE.Texture): {
+  brightness: (level: number) => void;
+  standings: (rows: Standing[]) => void;
+} {
   const group = new THREE.Group();
   const shell = new THREE.Mesh(
     new THREE.BoxGeometry(0.12, BOARD_H + 0.18, width + 0.18),
@@ -543,7 +563,10 @@ export function addLeaderboard(scene: THREE.Scene, zCentre: number, width: numbe
   // at higher z — get this backwards and the standings land on the chart side.
   const half = width / 2;
   const faceY = FLOOR_Y + BOARD_H / 2 + 0.09;
-  const face = leaderboardFace(1536, Math.round(1536 * BOARD_H / half));
+  const face = document.createElement("canvas");
+  face.width = 1536;
+  face.height = Math.round(1536 * BOARD_H / half);
+  paintLeaderboard(face, UNTRADED);
   const tex = new THREE.CanvasTexture(face);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 8;
@@ -609,11 +632,139 @@ export function addLeaderboard(scene: THREE.Scene, zCentre: number, width: numbe
   }
 
   scene.add(group);
-  return brightness => {
-    panel.material.color.setScalar(brightness);
-    panel.material.emissiveIntensity = BACKLIGHT * brightness;
-    chartPanel.material.color.setScalar(brightness);
-    halo.material.opacity = 0.05 * brightness;
-    for (const spill of spills) spill.intensity = SPILL_WATTS * brightness;
+  let printed = "";
+  return {
+    brightness(level) {
+      panel.material.color.setScalar(level);
+      panel.material.emissiveIntensity = BACKLIGHT * level;
+      chartPanel.material.color.setScalar(level);
+      halo.material.opacity = 0.05 * level;
+      for (const spill of spills) spill.intensity = SPILL_WATTS * level;
+    },
+    standings(rows) {
+      // The relay reports on its own heartbeat and the figures barely move between polls, so
+      // the sheet is reprinted only when it would actually read differently.
+      const key = JSON.stringify(rows);
+      if (key === printed) return;
+      printed = key;
+      paintLeaderboard(face, rows.length ? rows : UNTRADED);
+      tex.needsUpdate = true;
+    },
+  };
+}
+
+/** Seven-segment masks. Bit 0 is the top bar and the bits run clockwise from it; bit 6 is the
+ *  middle. Only the ten digits — the counter over the board shows a number and nothing a letter
+ *  could be made of. */
+const SEG: Record<string, number> = {
+  "0": 0b0111111, "1": 0b0000110, "2": 0b1011011, "3": 0b1001111, "4": 0b1100110,
+  "5": 0b1101101, "6": 0b1111101, "7": 0b0000111, "8": 0b1111111, "9": 0b1101111,
+};
+/** Air after each digit, in cell heights. Part of a digit's advance, and therefore NOT part of
+ *  the run's visible width — subtract one when centring or the number sits a hair left. */
+const DIGIT_GAP = 0.22;
+
+/** Draws one digit at (x, y) with cell height `h`, or measures it when `g` is null.
+ *  Returns the advance, so a caller can lay out and centre a string in the same pass. */
+function segmentChar(g: CanvasRenderingContext2D | null, ch: string, x: number, y: number,
+                     h: number): number {
+  const w = h * 0.58, mid = y + h / 2, inset = h * 0.07;
+  const bits = SEG[ch] ?? 0;
+  if (g) {
+    const bars: [number, number, number, number][] = [
+      [x + inset, y, x + w - inset, y],
+      [x + w, y + inset, x + w, mid - inset],
+      [x + w, mid + inset, x + w, y + h - inset],
+      [x + inset, y + h, x + w - inset, y + h],
+      [x, mid + inset, x, y + h - inset],
+      [x, y + inset, x, mid - inset],
+      [x + inset, mid, x + w - inset, mid],
+    ];
+    bars.forEach(([x0, y0, x1, y1], i) => {
+      if (!(bits & (1 << i))) return;
+      g.beginPath();
+      g.moveTo(x0, y0);
+      g.lineTo(x1, y1);
+      g.stroke();
+    });
+  }
+  return w + h * DIGIT_GAP;
+}
+
+const segmentRun = (g: CanvasRenderingContext2D | null, text: string, x: number, y: number,
+                    h: number): number => {
+  let advance = 0;
+  for (const ch of text) advance += segmentChar(g, ch, x + advance, y, h);
+  return advance;
+};
+
+/**
+ * What the counter says: the running total, zero-padded so it does not jitter on every carry.
+ *
+ * An UNKNOWN total reads blank, never zero. The total is all-time and lives in the relay's
+ * ledger, so between a page opening and the relay's first answer the page does not know it —
+ * and a counter that shows 0000 for that second is telling the room the exhibit has never
+ * traded. A real zero from the ledger still prints 0000. Exported for the test; the display
+ * has no other way to be checked.
+ */
+export function readoutText(total?: number): string {
+  return total === undefined ? "" : String(Math.max(0, Math.floor(total))).padStart(4, "0");
+}
+
+/** The counter strip, in canvas pixels. The cell height sets the type; the rest is room for the
+ *  digits. ponytail: fits a thirteen-digit total — past that the count clips, and the fix is a
+ *  wider canvas, not a smaller font, or the counter stops matching the board. */
+const CELL = 120, STRIP_W = 1280, STRIP_H = 180;
+/** Height of a digit on the wall, in scene units. An instrument bolted over the board, NOT part
+ *  of it: keep it well under the board's own type or it reads as the headline. */
+const READOUT_CELL = 0.2;
+/** Air between the board's top edge and the digits. */
+const READOUT_GAP = 0.16;
+
+/**
+ * The counter over the board: the application's running transaction total, centred.
+ *
+ * Red strokes on a transparent ground, blended ADDITIVELY — the canvas never paints its own
+ * black rectangle on the wall, so what hangs there is the lines and nothing else. Nothing here
+ * dims with the board: it is an instrument over the display, not part of its backlight.
+ *
+ * Returns a setter taking the total, undefined until the ledger has answered. It redraws only
+ * when the digits change.
+ */
+export function addTVCounter(scene: THREE.Scene, zCentre: number): (total?: number) => void {
+  const canvas = document.createElement("canvas");
+  canvas.width = STRIP_W;
+  canvas.height = STRIP_H;
+  const g = canvas.getContext("2d")!;
+  g.strokeStyle = "#ff2a1f";
+  g.lineWidth = CELL * 0.1;
+  g.lineCap = "round";
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  const strip = new THREE.Mesh(
+    new THREE.PlaneGeometry(READOUT_CELL * STRIP_W / CELL, READOUT_CELL * STRIP_H / CELL),
+    new THREE.MeshBasicMaterial({
+      map: tex, transparent: true, depthWrite: false, toneMapped: false,
+      blending: THREE.AdditiveBlending }));
+  strip.rotation.y = Math.PI / 2;
+  // Clear of the shell's own top edge, which stands proud of the face by half its trim.
+  strip.position.set(-BOARD_BACK + 0.07,
+                     FLOOR_Y + BOARD_H + 0.18 + READOUT_GAP + READOUT_CELL * STRIP_H / CELL / 2,
+                     zCentre);
+  scene.add(strip);
+
+  let showing: string | undefined;
+  return total => {
+    const count = readoutText(total);
+    if (count === showing) return;
+    showing = count;
+    g.clearRect(0, 0, STRIP_W, STRIP_H);
+    // Measured, then centred on the board: the total grows a digit at a time and a fixed left
+    // edge would walk it off the middle.
+    const span = segmentRun(null, count, 0, 0, CELL) - CELL * DIGIT_GAP;
+    segmentRun(g, count, (STRIP_W - span) / 2, (STRIP_H - CELL) / 2, CELL);
+    tex.needsUpdate = true;
   };
 }

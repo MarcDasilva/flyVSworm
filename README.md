@@ -3,8 +3,10 @@
 The 302-neuron nervous system of *C. elegans* runs on the Thru alphanet. Every
 neuron is its own on-chain account. A timestep is a program instruction that
 reads all 302 accounts, integrates the membrane equation in Q16.16 fixed point,
-and writes them back. Gap-junction current settles as real
-`tsys_account_transfer` calls between neuron accounts. A classifier reads the
+and writes them back. The live relay records every nonzero electrical and
+chemical synaptic current settlement in a persistent on-chain outbox. Each
+entry then executes as its own signed alphanet transaction, with one synapse
+receipt and real `tsys_account_transfer` calls. A classifier reads the
 five command interneurons and writes one byte of behavior. A browser renders
 that byte as a crawling animal.
 
@@ -17,8 +19,68 @@ What is NOT claimed: that locomotion emerges from the connectome. It does not,
 for anyone. The brain classifies; the body animates a published gait. The seam
 is stated out loud, here and in the caveats below.
 
+The live transaction mode uses `INSTR_SETTLE_SYNAPSE` (8): one modeled
+synaptic event per signature. "Fire" means a nonzero current at the existing
+10-step (50 ms of simulation) settlement cadence; this graded-potential model
+does not produce discrete spikes. Sub-unit currents round to zero. Every
+remaining chemical and electrical event is queued, without sampling. Bulk
+RPC submission transports separate signed transactions; it does not combine
+their execution. Gap events transfer between neurons; chemical events
+transfer between the reservoir and postsynaptic neuron, including inhibition.
+Reservoir bookkeeping restores affected neurons' voltage balance projections
+within that same transaction, so repeated current records do not drain a cell.
+
+The outbox blocks the next simulation batch until all events settle. Failed
+sends and relay restarts reload its persisted completion flags. An absent
+viewer pauses submission without deleting pending events. While watched,
+the relay replenishes a depleted test balance from the alphanet faucet;
+failed refills leave the queue intact and retry at most every 15 seconds.
+Automatic refills are restricted to the alphanet RPC. The relay
+uses the installed TypeScript SDK and its server-side `worm` signing key;
+the browser buffers confirmed `WORMSYNX` receipts for steady playback, with
+individual explorer links and a scrollable history of the latest 500 displayed
+transactions. Scrolling back holds the visible list; **Latest** returns to
+the live flow. The older batch settlement remains available to the reference
+tests and recorded benchmark; their throughput numbers below describe that
+older mode, not individual synapse transactions.
+
+The worm readout's Buy/Sell tilt combines motor state with rapidly decaying
+confirmed command-neuron currents. A $10,000 session paper portfolio shows
+equity, P&L, cash and position in the full-height right readout. The shared
+demo-market chart sits in its own bottom-center panel.
+See `wormed/BEHAVIOR_CLASSIFIER.md` for the heuristic and accounting rules.
+
 Program account: `taXILSqS99UxmqBxrvpcETPQ8j6zd-xmFmK6EQ5xFWrvgQ` (seed
 `hello-worm-v1`). ABI: `taTUnO3Mr-xryw6pCHLYhs1oVG1N9JgcBvplQofLjyzxXV`.
+
+### The fly
+
+The second exhibit is a fruit-fly heading circuit — 56 neurons of the central
+complex (EPG, PEN_L, PEN_R, D7) from `fly-brain/`. It gets the same three
+things the worm has: the firing lights the baked hemibrain geometry hanging
+over its head, the readout panel reports the bump the ring is holding, and
+every row in the transaction panel is a real alphanet transaction with an
+explorer link.
+
+What is claimed, and it is less than the worm's: the fly's spiking model runs
+in `fly-brain/python/server.py`, not on chain. The browser derives synaptic
+events from that model's own spikes and its own weight matrix, the relay signs
+one transaction per event, and `wormed/program/fly.c` moves the charge between
+the two neurons' accounts and emits a `FLY_SYNX` receipt. The ledger movement
+and the signature are real and checkable; the arithmetic that produced the
+event happened off chain. The panel also shows a SAMPLE, not everything: the
+model spikes at 1,000 ticks per second and a transaction confirms in seconds,
+so a uniform sample of each window is settled and the caption on screen says
+so.
+
+The fly signs with its own fee payer, not the worm's. One account is one nonce
+sequence, and the worm's thousand-transaction batches strand anything
+allocated behind them — measured, see the comment in
+`wormed/web/flysynapses.mjs`.
+
+Fly program account: `taACbGSvPJpP0Wy0QwcL71HVIUIFfWa_f80POFqBJo5Zcf` (seed
+`hello-fly-v1`), 56 neuron accounts plus a reservoir, created by
+`python3 -m wormed.pipeline.deploy_fly setup`.
 
 ## The three layers
 
@@ -55,6 +117,13 @@ ring because the animal has one. It reads the behavior byte and the voltage
 frames off the node's gRPC event stream. A small Node relay (`relay.mjs`) is
 the only process in the demo that can spend: the browser reads the chain
 directly but never signs anything.
+
+The relay also keeps the exhibit's ledger (`store.mjs`, SQLite through
+`node:sqlite`, no dependency): the standings the board prints and the running
+total of every transaction the relay has submitted. It is created at
+`wormed/data/exhibit.db` on first start, and it is what makes both survive a
+page reload and a relay restart. Delete the file to reset the demo; set
+`EXHIBIT_DB` to put it somewhere else.
 
 ## The verification chain
 
@@ -164,7 +233,7 @@ the network is — a resting worm settles fewer junctions than a touched one.
 |---|---|
 | 9,458 steps per transaction = **47 s of worm per transaction** | *Compute capacity.* Marginal cost is 363,236 CU/step against `req_compute_units`' uint32 ceiling. It says nothing about wall-clock throughput. |
 | **2.89x real time** | *Measured end to end*, `wormed/data/benchmark.json`: 300 s of worm in 104 s, 20 transactions of 3,000 steps. |
-| **0.55-0.75x real time** | *The live browser demo.* It steps 600 at a time so a click is not stuck behind a long transaction; per-transaction latency then dominates and the worm runs slower than life. |
+| **0.55-0.75x real time** | *The previous browser mode.* It stepped 600 at a time using batch settlements. The current individual-transaction mode advances 100 steps, then drains every queued synapse; its speed is transaction-limited and substantially slower. |
 
 The first is not a throughput claim, and quoting it as one would be the most
 dishonest sentence available here.
@@ -193,42 +262,36 @@ entry into and exit from OMEGA is tested on chain, but the rendered turn is
 only checked geometrically — that the direction of travel changes by more than
 a threshold — not against how a real animal turns.
 
-**12. The demo touches the worm for you, and that is why it moves.** With
-nobody touching it, both drives sit near 0.016, under the classifier's
-release threshold, so the honest output is PAUSE — and `body.ts` returns
-early on PAUSE, meaning a genuinely untouched animal is not slow, it is
-frozen. Because a frozen animal is also a blank demo, the relay stimulates
-ALML or PLML itself every 22 seconds while a viewer is present, alternating
-head and tail. Each one buys roughly 20 seconds of reverse, omega turn and
-forward before the classifier settles back to PAUSE.
+**12. The demo supplies sustained sensory input, and that is why it moves.**
+Without input the model settles to PAUSE. The relay holds a tail stimulus
+(PLML) to start crawling forward, then alternates head and tail every 22
+seconds. It releases the previous input before applying the next, so opposing
+stimuli never accumulate. A manual poke selects the direction immediately
+after the simulation cycle already in flight and holds it until the next switch.
 
-Nothing about that motion is emergent. It is the same escape response a click
-produces, triggered by a timer in `relay.mjs` instead of by you, and it is
-logged as `auto-stim` / `auto-rel` rather than `stimulate` / `release` so the
-transaction panel never passes off an injected stimulus as spontaneous
-behaviour. Set `AUTO_TOUCH_MS = 0` in `wormed/web/relay.mjs` for the older
-click-to-move demo, in which the animal stands still until asked. The
-automatic touches cost about 2,000 units/minute on top of the stepper's
-4,500.
+These are injected inputs, logged as `auto-stim` / `auto-rel`, not emergent
+locomotion. The on-chain classifier controls movement state and gain; fresh
+confirmed synapse receipts sustain continuous gait animation between neural
+updates. Set `AUTO_TOUCH_MS = 0` in `wormed/web/relay.mjs` to
+require a manual poke to start moving.
 
-**The animal moves only while the chain is delivering.** `ChainClock` in
-`body.ts` advances the body by the worm-seconds the played frames actually
-carry — step delta times dt — and never by the wall clock. With nothing
-arriving it hands out zero, and `WormBody.update` treats zero as a no-op, so
-the worm stops. This is not cosmetic. The browser reads the behaviour account
-directly, that account keeps returning its last byte forever after the chain
-stops, and driving the gait from it was measured doing exactly the wrong
-thing: 24 seconds after the relay was killed the animal was still crawling in
-8 of 12 samples, stuck in FORWARD, with no transactions behind it at all.
-With the clock in place the same test freezes it in 0 of 12.
+Stepping continues as long as the page polls the relay, without requiring a
+poke. It stops after 15 seconds without a viewer. At the balance floor it
+waits for an alphanet faucet refill before resuming pending settlements.
 
-A timeout could not do this job. Gaps between played frames reach 10.7 s in
-healthy operation (p90 6.1 s), so any threshold tight enough to catch a stall
-promptly also fires constantly while the chain is fine. The cost of doing it
-properly is visible: motion is intermittent, because the chain's delivery is
-intermittent. Measured with nobody clicking, the terrarium changes in about
-18 of 45 two-second samples rather than all of them. The worm pausing between
-bursts is the alphanet's latency made visible, not a dropped frame.
+**Continuous presentation, confirmed chain state.** `TransactionPlayback` in
+`web/src/transactions.ts` spreads incoming receipt bursts over an eight-second
+buffer. The particles and transaction rows play the same confirmed signatures.
+The body animates the most recent on-chain motor state continuously while new
+receipts arrive, rather than exhausting half a second of gait and freezing
+until the next neural batch. A classified PAUSE still stops the worm. Rendering
+this gait does not advance the neural simulation clock or invent transactions.
+
+After 15 seconds without fresh receipts, the individual-mode gait stops and
+stale buffered rows expire. Duplicate signatures do not renew activity, and
+returning from a hidden tab does not replay an old backlog. Display queues and
+the visible 500-row history are bounded; every actual settlement remains on
+alphanet. Legacy batch playback still uses `ChainClock` and simulated time.
 
 **13. The geometry is measured; where a synapse is drawn is not.** Neuron
 shapes and soma positions come from the tracing and are checked against known
@@ -249,6 +312,28 @@ describes, curving through about a fifth of a body length. It does not flex
 with the animated body below it, so the brain's pose and the body's gait are
 independent. The two are separate objects, as the seam in caveat 4 already
 implies.
+
+## Hosting
+
+The page is static and lives on Vercel (`wormed/web/vercel.json`, project
+`wormed`, root directory `wormed/web`). The two things that hold state — the
+relay with its ledger and the fly model — run as ONE container on Fly.io
+(`Dockerfile`, `wormed/serve.sh`, `fly.toml`) with `exhibit.db` on a mounted
+volume, so standings and the transaction total outlive a redeploy. Vercel
+rewrites `/api` and `/fly` to that container; the spike WebSocket cannot go
+through a rewrite, so the page opens it against the container directly
+(`VITE_FLY_WS`); the relay proxies `/fly` to the model so there is one port.
+
+```bash
+fly apps create wormed-exhibit                  # once: the name in fly.toml
+fly volumes create exhibit_data --size 1 -r yyz
+fly secrets set THRU_CONFIG_B64="$(base64 < ~/.thru/cli/config.yaml)"
+fly deploy --remote-only
+vercel deploy --prod                           # from the repo root
+```
+
+The relay still pauses stepping when nobody has polled `/api/status` for 15
+seconds — the chain state and the ledger persist either way; only spend stops.
 
 ## Cost and operations
 

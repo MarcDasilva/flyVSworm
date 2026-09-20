@@ -271,7 +271,7 @@ def ensure_scratch() -> dict:
 
 
 def run_steps(n: int, settle_every: int = 0, emit: bool = False,
-              reset: bool = False, gap: bool = False) -> dict:
+              reset: bool = False, gap: bool = False, individual: bool = False) -> dict:
     """flags: bit0 settle (reconcile balances against the reservoir), bit1
     emit trace, bit2 reset, bit3 gap-junction transfers (worm.c step_args_t).
     settle_every requests bit0 automatically, matching do_step's chunking.
@@ -283,14 +283,23 @@ def run_steps(n: int, settle_every: int = 0, emit: bool = False,
     after the full n-step chunk (do_step's do-while runs one chunk when
     settle_every is 0)."""
     flags = (1 if settle_every else 0) | (2 if emit else 0) | (4 if reset else 0) \
-          | (8 if gap else 0)
+          | (8 if gap else 0) | (16 if individual else 0)
+    if individual:
+        if reset or n <= 0 or settle_every <= 0:
+            raise ValueError("individual settlement needs positive steps and settlement cadence, without reset")
+        # Every possible chemical edge and unique gap junction must fit;
+        # reject before submitting rather than silently truncating events.
+        topology = (DATA / "topology.bin").read_bytes()
+        _, _, _, chemical, gaps = struct.unpack_from("<5I", topology)
+        if -(-n // settle_every) * (chemical + gaps // 2) > 32768:
+            raise ValueError("step batch exceeds the synapse outbox capacity")
     payload = struct.pack("<IIII", INSTR_STEP, n, flags, settle_every) \
             + struct.pack("<HHHH", *_slots(), 0)
     # thru txn execute's own default (300,000,000) covers roughly the first
     # 824 steps; pass an explicit budget (50% margin over the measured
     # fixed+marginal cost) so larger n doesn't silently starve on CU.
     chunks = -(-n // settle_every) if settle_every else 1
-    settle_cu = SETTLE_CU * chunks if flags & (1 | 2 | 8) else 0
+    settle_cu = (SETTLE_CU + (1_500_000 if individual else 0)) * chunks if flags & (1 | 2 | 8) else 0
     compute_units = min(REQ_COMPUTE_UNITS_MAX,
                         int(1.5 * (FIXED_CU + MARGINAL_CU * max(n, 1) + settle_cu)))
     out = _exec(_step_accounts(), payload.hex(), FEE_STEP, compute_units=compute_units)
@@ -506,5 +515,6 @@ def write_chain_config() -> None:
         "reservoirAccount": _reservoir_account(),
         "topologyAccount": _topology_account(),
         "dtMs": 5,
+        "synapseTransactions": True,
         "explorer": "https://scan.thru.org/tx/",
     }, indent=2) + "\n")

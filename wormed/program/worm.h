@@ -17,6 +17,7 @@
 #define INSTR_CLASSIFY           5u
 #define INSTR_CREATE_SINGLETONS  6u
 #define INSTR_RESIZE_SCRATCH     7u
+#define INSTR_SETTLE_SYNAPSE     8u
 
 /* Error codes. Returned via tsdk_revert(). */
 #define ERR_BAD_INSTR_SIZE    0x1001u
@@ -27,6 +28,22 @@
 #define ERR_ACCOUNT_COUNT     0x1006u
 #define ERR_TRANSFER_FAILED   0x1007u
 #define ERR_XFER_OVERFLOW     0x1008u
+#define ERR_PENDING_SYNAPSES  0x1009u
+#define ERR_BAD_SYNAPSE       0x100Au
+
+/* Persistent outbox. Each nonzero current settlement has exactly one entry
+ * and must be executed by its own INSTR_SETTLE_SYNAPSE transaction. */
+#define SYNAPSE_MAGIC 0x53594e50u
+#define SYNAPSE_CAPACITY 32768u
+typedef struct {
+    uint32_t step;
+    uint16_t pre, post;
+    int32_t amount;       /* chemical: signed reservoir -> post; gap: pre -> post */
+    uint8_t kind;         /* 0 = electrical, 1 = chemical */
+    uint8_t settled;
+    uint16_t _pad;
+} worm_synapse_t;
+_Static_assert(sizeof(worm_synapse_t) == 16, "synapse outbox wire size");
 
 /* Topology header. EVERY array below starts 8-byte aligned — ThruVM faults on
  * unaligned access AND on any access spanning a 4KB page boundary. 4096 is a
@@ -117,6 +134,7 @@ _Static_assert(sizeof(worm_behavior_t) == 32,
  * `events_size` counts the emitted buffer. */
 #define WORM_EVENT_TRACE 0x454352544d524f57ull   /* "WORMTRCE" */
 #define WORM_EVENT_XFER  0x585041474d524f57ull   /* "WORMGAPX" */
+#define WORM_EVENT_SYNAPSE 0x584e59534d524f57ull /* "WORMSYNX" */
 #define WORM_EVENT_END   0xA5u       /* never zero — see the finding above */
 
 /* One frame of the whole brain as int16 millivolts, then the absolute step

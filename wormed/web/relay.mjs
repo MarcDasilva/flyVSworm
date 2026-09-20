@@ -4,12 +4,14 @@
 // the ONLY thing in the demo that can spend.
 //
 // Run from wormed/web: `node relay.mjs`. vite proxies /api to it (vite.config.ts).
-import { createServer } from "node:http";
+import { createServer, request as httpRequest } from "node:http";
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { settleSynapses } from "./synapses.mjs";
+import { settleFlySynapses } from "./flysynapses.mjs";
+import { openStore } from "./store.mjs";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));   // repo root
 const NAMES = new Set(JSON.parse(
@@ -49,10 +51,31 @@ let autoAt = 0;
 let drivenNeuron;
 const touches = [];
 let pendingSynapses = false;
+/** One fly submission at a time — see the /api/fly/synapses handler. */
+let flyInFlight = false;
 let needsReset = true;
 const log = [];
 
+// The exhibit's ledger — the standings the board prints and the transaction total over it.
+// ponytail: an unopenable ledger must NOT take the exhibit down with it. The relay is the only
+// thing that can drive the animals; it runs without a scoreboard, and the page falls back to
+// what it has counted itself.
+let store;
+try {
+  store = openStore();
+} catch (e) {
+  console.error(`relay: ledger unavailable (${e.message}); standings will not persist`);
+  store = { countTransactions() {}, recordStanding: () => false,
+            board: () => ({ transactions: 0, standings: [] }) };
+}
+
+/**
+ * The relay's log, and the ONE place every transaction it makes is counted. Both paths pass
+ * through here — chain() notes the worker's replies and settleSynapses notes one receipt per
+ * event it submits — so counting anywhere else would miss half the exhibit's spend.
+ */
 function note(entry) {
+  if (entry.sig) store.countTransactions();
   log.unshift({ t: Date.now(), ...entry });
   log.length = Math.min(log.length, 60);
 }
@@ -221,13 +244,27 @@ function json(res, code, body) {
   res.end(text);
 }
 
+// The fly model (fly-brain/python/server.py) sits behind the relay when hosted, so the exhibit
+// is ONE public port: a shared Fly.io IPv4 serves only 80/443, and Vercel rewrites /fly here.
+// vite.config.ts does the same job in development.
+// ponytail: hand-rolled proxy, no hop-by-hop header hygiene; the only client is our own page.
+const FLY = { host: "127.0.0.1", port: 8000 };
+function proxyFly(req, res) {
+  const up = httpRequest({ ...FLY, path: req.url.slice(4), method: req.method, headers: req.headers },
+    (r) => { res.writeHead(r.statusCode, r.headers); r.pipe(res); });
+  up.on("error", () => json(res, 502, { error: "fly model offline" }));
+  req.pipe(up);
+}
+
 createServer((req, res) => {
   const url = new URL(req.url, "http://localhost");
   if (req.method === "GET" && url.pathname === "/api/status") {
     viewerSeen = Date.now();
+    // The board rides the heartbeat the page already makes. A second poll for two numbers that
+    // change as slowly as the standings do would be a second thing to keep alive.
     json(res, 200, {
       balance, floor, faucet, stepping, awake: awake(), workerAlive, pendingSynapses,
-      stepN: STEP_N, settleEvery: SETTLE_EVERY, log,
+      stepN: STEP_N, settleEvery: SETTLE_EVERY, log, ...store.board(),
     });
     return;
   }
@@ -252,7 +289,68 @@ createServer((req, res) => {
     });
     return;
   }
+  if (req.method === "POST" && url.pathname === "/api/standing") {
+    let body = "";
+    req.on("data", c => { body += c; if (body.length > 1024) req.destroy(); });
+    req.on("end", () => {
+      let posted;
+      try { posted = JSON.parse(body); } catch { json(res, 400, { error: "bad json" }); return; }
+      // TRUST BOUNDARY. The page measures its own animals' books, so this accepts figures it
+      // cannot verify — the store bounds them and names the two specimens that exist, which is
+      // what keeps a POST from writing a screenful of digits onto the wall.
+      if (!store.recordStanding(posted.specimen, posted.profit, posted.trades)) {
+        json(res, 400, { error: "bad standing" });
+        return;
+      }
+      viewerSeen = Date.now();
+      json(res, 200, store.board());
+    });
+    return;
+  }
+  if (req.method === "POST" && url.pathname === "/api/fly/synapses") {
+    let body = "";
+    req.on("data", c => { body += c; if (body.length > 16384) req.destroy(); });
+    req.on("end", async () => {
+      let events;
+      try { events = JSON.parse(body).events; } catch { json(res, 400, { error: "bad json" }); return; }
+      if (!Array.isArray(events)) { json(res, 400, { error: "events must be an array" }); return; }
+      // TRUST BOUNDARY. Every field reaches a signed transaction, so each event
+      // is checked against the accounts data/fly.json actually has before it can
+      // cost a fee — flysynapses.validEvent, not a shape check here.
+      viewerSeen = Date.now();
+      // ONE submission in flight. A second would allocate nonces against the
+      // fly's fee payer concurrently and the chain would reject one of the two.
+      if (flyInFlight) { json(res, 202, { submitted: 0, busy: true }); return; }
+      flyInFlight = true;
+      try {
+        // The fly pays from its OWN account (flysynapses.mjs says why), so the
+        // worm's balance and its floor are NOT consulted here and NOT updated.
+        const out = await settleFlySynapses(events);
+        json(res, 202, { submitted: out.submitted, balance: out.balance });
+      } catch (error) {
+        const message = String(error?.message ?? error).replace(/\s+/g, " ").slice(0, 200);
+        log.unshift({ t: Date.now(), op: "fly-synapse", error: message });
+        log.length = Math.min(log.length, 30);
+        json(res, 502, { error: message });
+      } finally {
+        flyInFlight = false;
+      }
+    });
+    return;
+  }
+  if (url.pathname.startsWith("/fly/")) { proxyFly(req, res); return; }
   json(res, 404, { error: "not found" });
+}).on("upgrade", (req, socket, head) => {
+  if (!req.url.startsWith("/fly/")) { socket.destroy(); return; }
+  const up = httpRequest({ ...FLY, path: req.url.slice(4), method: "GET", headers: req.headers });
+  up.on("upgrade", (r, upSocket, upHead) => {
+    const lines = Object.entries(r.headers).map(([k, v]) => `${k}: ${v}`).join("\r\n");
+    socket.write(`HTTP/1.1 101 Switching Protocols\r\n${lines}\r\n\r\n`);
+    if (upHead.length) socket.write(upHead);
+    upSocket.pipe(socket).pipe(upSocket);
+  });
+  up.on("error", () => socket.destroy());
+  up.end(head);
 }).listen(PORT, async () => {
   console.log(`relay on :${PORT} (repo root ${ROOT})`);
   const warm = await chain("warm", { op: "warm" });

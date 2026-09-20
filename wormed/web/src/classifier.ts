@@ -1,9 +1,48 @@
 import { BEHAVIOR } from "./body.js";
-import type { Behavior } from "./chain.js";
+import type { Behavior, Synapse } from "./chain.js";
 
 // Healthy chain playback can have ~11 s gaps. Re-reading an unchanged account
 // must not keep an old directional signal alive indefinitely.
 export const BEHAVIOR_STALE_MS = 15_000;
+
+/** A fast current-based contribution to the existing motor-state heuristic.
+ * Uses the same five command cells and weights as the on-chain classifier.
+ * Chemical inhibition subtracts; gap current also subtracts from its donor.
+ * Decay smooths real receipts; no random or clock-generated buy/sell values. */
+export class SynapticHeuristic {
+  private weights: number[];
+  private signed = 0;
+  private total = 0;
+  private at = 0;
+
+  constructor(names: string[]) {
+    const weights: Record<string, number> = { AVBL: .6, PVCL: .4, AVAL: -.5, AVDL: -.3, AVEL: -.2 };
+    this.weights = names.map(name => weights[name] ?? 0);
+  }
+
+  private decay(now: number): void {
+    const factor = Math.exp(-Math.max(0, now - this.at) / 450);
+    this.signed *= factor;
+    this.total *= factor;
+    this.at = now;
+  }
+
+  observe(receipt: Synapse, now: number): void {
+    this.decay(now);
+    const weight = this.weights[receipt.post] - (receipt.chemical ? 0 : this.weights[receipt.pre]);
+    const current = receipt.amount * weight;
+    this.signed += current;
+    this.total += Math.abs(current);
+  }
+
+  value(now: number, baseline: number, active: boolean): number {
+    this.decay(now);
+    if (!active) return 0;
+    // 2 native units regularize tiny currents instead of amplifying noise.
+    const activity = this.signed / (this.total + 2);
+    return Math.max(-1, Math.min(1, .3 * baseline + .7 * activity));
+  }
+}
 
 const STATES = [
   { label: "Pause", meaning: "Low locomotor output. The model is holding its position." },

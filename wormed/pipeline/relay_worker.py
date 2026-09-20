@@ -19,7 +19,9 @@ Two invariants the relay depends on:
 Run with cwd = repo root (the package is imported as wormed.pipeline.deploy).
 """
 import contextlib
+import base64
 import json
+import struct
 import sys
 
 from . import deploy
@@ -45,9 +47,18 @@ def _handle(cmd: dict) -> dict:
         # first touch of the demo is not the slowest one.
         deploy._step_accounts()
         deploy._slots()
-        return _balance()
+        account = deploy._run_json(["account", "info", deploy._reservoir_account()])["account_info"]
+        data = base64.b64decode(account["data"])
+        pending = len(data) >= 16 and struct.unpack_from("<I", data)[0] == 0x53594e50 \
+            and struct.unpack_from("<I", data, 8)[0] > 0
+        return {**_balance(), "pending": pending}
     if op == "balance":
         return _balance()
+    if op == "refill":
+        if deploy._rpc_base_url().rstrip("/") != "https://rpc.alphanet.thru.org":
+            raise ValueError("Automatic faucet refill is restricted to Thru alphanet")
+        out = deploy._run_json(["faucet", "withdraw", deploy.FEE_PAYER, "10000"])["faucet_withdraw"]
+        return {**_balance(), "sig": out["signature"]}
     if op == "reset":
         out = deploy.reset_sim()
         return {"sig": out["signature"]}
@@ -56,8 +67,8 @@ def _handle(cmd: dict) -> dict:
         return {"sig": out["signature"], "cu": out["compute_units_consumed"]}
     if op == "step":
         out = deploy.run_steps(int(cmd["n"]), settle_every=int(cmd["settleEvery"]),
-                               emit=True, gap=True)
-        return {"sig": out["signature"], "cu": out["compute_units_consumed"]}
+                               emit=True, individual=True)
+        return {"sig": out["signature"], "cu": out["compute_units_consumed"], "pending": True}
     if op == "classify":
         out = deploy.classify()
         return {"sig": out["signature"], "cu": out["compute_units_consumed"]}

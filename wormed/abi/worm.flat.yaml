@@ -2,7 +2,7 @@ abi:
   package: worm
   name: null
   abi-version: 1
-  package-version: '1'
+  package-version: '2'
   description: 'C. elegans nervous system: 302 neurons as accounts, synapses as transfers'
   imports: []
   options:
@@ -138,6 +138,31 @@ types:
       - name: min_size
         field-type:
           primitive: u32
+- name: SettleSynapse
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: generation
+        field-type:
+          primitive: u32
+      - name: index
+        field-type:
+          primitive: u32
+      - name: acc_reservoir
+        field-type:
+          primitive: u16
+      - name: acc_pre
+        field-type:
+          primitive: u16
+      - name: acc_post
+        field-type:
+          primitive: u16
+      - name: _pad
+        field-type:
+          primitive: u16
 - name: WormInstruction
   kind:
     struct:
@@ -200,6 +225,12 @@ types:
               variant-type:
                 type-ref:
                   name: ResizeScratch
+                  comment: null
+            - name: settle_synapse
+              tag-value: 8
+              variant-type:
+                type-ref:
+                  name: SettleSynapse
                   comment: null
 - name: Neuron
   kind:
@@ -381,6 +412,37 @@ types:
                 name: GapTransfer
                 comment: null
             jagged: false
+      - name: end
+        field-type:
+          primitive: u8
+- name: SynapseSettlement
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: step
+        field-type:
+          primitive: u32
+      - name: pre
+        field-type:
+          primitive: u16
+      - name: post
+        field-type:
+          primitive: u16
+      - name: amount
+        field-type:
+          primitive: i32
+      - name: kind
+        field-type:
+          primitive: u8
+      - name: _pad0
+        field-type:
+          primitive: u8
+      - name: _pad1
+        field-type:
+          primitive: u8
       - name: end
         field-type:
           primitive: u8

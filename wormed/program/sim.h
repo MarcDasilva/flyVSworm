@@ -21,4 +21,7 @@ typedef struct {
 void worm_sim_bind(worm_sim_t *sim, void const *topology, int32_t *V, int32_t *i_stim);
 void worm_sim_reset(worm_sim_t *sim);
 void worm_step(worm_sim_t *sim, uint32_t n);
+/* Returns -1 on overflow; never truncates the set of active synapses. */
+int32_t worm_collect_synapses(worm_sim_t *sim, worm_synapse_t *out,
+                              uint32_t capacity, uint32_t step);
 #endif
