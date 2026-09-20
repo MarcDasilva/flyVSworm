@@ -1,5 +1,7 @@
 # Fly vs Worm
 
+![The fly at its trading desk, with the Fly vs Worms title card](fly-vs-worm.png)
+
 ## Inspiration
 
 Two animals have nervous systems we actually know the wiring of. *C. elegans*
@@ -19,7 +21,10 @@ hash of a model that ran somewhere else. We wanted the arithmetic itself —
 every membrane equation, every synapse — inside the VM, with a signature you
 can open in a block explorer.
 
-That only works if the chain is fast enough to be boring about it. Thru is.
+That only works if the chain lets a program touch three hundred accounts in
+one instruction and burn hundreds of millions of compute units doing it,
+for a fee you can print. We have shipped on Solana and on the XRP Ledger
+before, and neither can. Thru can, and this project is the measurement.
 
 ## What it does
 
@@ -33,17 +38,28 @@ classifier reads the five command interneurons and writes one byte of
 behaviour. A browser renders that byte as a crawling animal, with the real
 traced anatomy lighting up as the voltages move.
 
-**The fly trades.** A 56-neuron ring attractor from the central complex —
-EPG, PEN-left, PEN-right and D7 populations over 16 wedges — takes price
-momentum as push-pull turning drive. The heading bump rotates; counterclockwise
-is long, clockwise is short, size proportional to turning speed and scaled by
-bump strength as a confidence signal. No single bump means flat.
+**The fly trades.** A 134-neuron ring attractor from the *Drosophila* central
+complex — 50 EPG, 21 PEN-left, 21 PEN-right and 42 Δ7 cells with cell-level
+connectivity from the Janelia hemibrain — takes price momentum as push-pull
+turning drive. The heading bump rotates; counterclockwise is long, clockwise
+is short, size proportional to turning speed and scaled by bump strength as a
+confidence signal. No single bump means flat.
+
+**The fly's synapses settle on Thru too.** Its anatomy ledger is live on
+alphanet with 6,772 transactions behind it, and the brain reuses the worm's
+account shape: a neuron's balance is its membrane potential, a spike is a
+balance transfer. One synaptic event is one transaction with one `FLY_SYNX`
+receipt — excitatory events move charge pre → post, inhibitory events take it
+from the postsynaptic cell back to the reservoir, since nothing flows up an
+axon. The relay settles 250 events a second, measured at ~94 transactions a
+second sustained, 44 of 45 batches executed.
 
 **They compete.** A scoreboard behind the two desks keeps the standings.
 
-To be exact about it: the worm is on chain, the fly runs in Python alongside
-it. Putting the fly on chain is the next piece of work, not a thing we are
-claiming.
+To be exact about what is finished: the worm's arithmetic is verified
+bit-for-bit on live chain state; the fly's is verified bit-for-bit through
+native C, and its synaptic events are settled on chain as a sample of a model
+that spikes at 1,000 ticks a second.
 
 ## How we built it
 
@@ -79,12 +95,52 @@ compiler, the VM and the account plumbing — not a fourth rewrite of the
 arithmetic.
 
 **Fly.** Leaky integrate-and-fire with exponentially decaying synaptic current,
-weights signed in the connectome so there is no separate inhibitory mask. The
-wiring is the 16-wedge idealisation of the protocerebral bridge from Hulse et
-al. (2021). Parameters came out of random search then evolutionary refinement,
+weights signed in the connectome so there is no separate inhibitory mask,
+ported to Q16.16 so it can share the worm's program shape. Dynamics were tuned
+on the 16-wedge idealisation of the protocerebral bridge from Hulse et al.
+(2021), then the wiring was replaced with cell-level connectivity from the
+hemibrain v1.2.1 once the acceptance tests passed. Cell meshes are drawn in
+JRC2018F space. Parameters came out of random search then evolutionary refinement,
 scored not on peak performance but on robustness: nominal plus ten
 one-at-a-time ±10% weight perturbations across five seeds, against an eight-test
 acceptance protocol.
+
+## Why Thru
+
+We have built on Solana and on the XRP Ledger before. Both were the wrong
+shape for this, and not by a little.
+
+**The worm does not fit in a Solana transaction.** A timestep has to read and
+write all 302 neuron accounts in one instruction. Solana caps a transaction
+at 64 accounts, 256 with address lookup tables, and 1,232 bytes total. Thru
+allows 1,024 accounts and 32 KiB per transaction, so 302 × 32-byte addresses
+is 9.7 KiB and fits with room for the whole fly beside it.
+
+**The compute budget is three orders of magnitude bigger.** Solana's hard cap
+is 1.4 million compute units per transaction. Thru's `req_compute_units` is a
+uint32, and one timestep costs 363,236 CU — which is how a single transaction
+holds 9,458 steps, 47 seconds of worm life. The same program on Solana would
+be a handful of steps per transaction and the chain's 400 ms slot would be
+the clock, not the arithmetic. We had lived with that before and it is why
+everything we shipped there kept the model off chain and posted a hash.
+
+**The XRP Ledger cannot run it at all.** There is no general-purpose VM on
+mainnet; the ledger settles balances and closes every 3–5 seconds. It could
+store a worm. It cannot integrate one.
+
+**Thru's cost model rewards the honest algorithm.** Compute is charged by
+instruction size, not latency — a `divu` is 4 CU, the same as an `add` — so
+backward Euler's one divide per neuron is free relative to forward Euler and
+we got the unconditionally stable integrator without paying for it. The VM is
+RV64IMCB with no F or D extension, so fixed point is not a defensive choice,
+it is the only one, and that constraint is what made bit-for-bit verification
+possible in the first place.
+
+**Synapses are syscalls.** `tsys_account_transfer` is a flat 512 CU on native
+balance with no CPI and no token program, so a gap junction is literally a
+transfer between two cells and a live-chain test can assert charge is
+conserved. Every fee is exactly 200 units, so the price of five minutes of
+worm life is a number, not an estimate.
 
 ## Performance on Thru
 
@@ -164,6 +220,11 @@ fixed-point port, native C and RISC-V on a live chain.
 **Five minutes of worm life on chain in 104 seconds**, at 9,020 fee units,
 with all 20 signatures recorded and openable in a block explorer.
 
+**Two brains, one account model.** The fly reuses the worm's program shape
+without a rewrite — 6,772 transactions in its anatomy ledger and synaptic
+events settling at ~94 transactions a second from a relay that is the only
+process allowed to spend.
+
 **Electrical synapses that are actually transfers.** Gap-junction settlement
 moves real balance between real accounts and conserves the total — there is a
 live-chain test that asserts the conservation.
@@ -207,9 +268,11 @@ body from the motor neurons themselves. That needs a muscle model and it is the
 single biggest thing standing between this and a worm that really crawls
 because of its connectome.
 
-**Put the fly on chain too.** It is already fixed-point-ready and only 56
-neurons — a fraction of the worm's compute — so the same instruction shape
-should carry it, and then the competition happens entirely on Thru.
+**Put the fly's timestep on chain.** Its synaptic events already settle on
+Thru and its arithmetic is bit-for-bit through native C; the remaining link is
+the same `sim.c`-style compile for RISC-V that the worm already has, at 134
+neurons a fraction of the worm's compute. Then the competition happens
+entirely on Thru.
 
 **Measured synapse positions.** Neuron geometry is traced, but the connectome
 gives pre/post pairs with no coordinates, so a firing transfer is drawn cell
