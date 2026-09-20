@@ -34,18 +34,19 @@ const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.01, 1
 // running scene already includes that slide — left false it would be applied
 // a second time and the paste would land somewhere else entirely.
 // ---------------------------------------------------------------------------
-const OPENING_FIXED = false;
-camera.position.set(5.5, 2.8, 4.6);
+const OPENING_FIXED = true;
+camera.position.set(4.61, 2.46, 5.20);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 document.body.appendChild(renderer.domElement);
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.set(0.2, 0.7, 1.4);
-// How far back the page opens. Pulled in from the 6.54 the shot was composed
-// at — the angle above is kept exactly, ONLY the distance changes, so the set
-// still reads the same way. It has to stay well clear of CLOSE_RADIUS and
-// FLY_RADIUS below or the reveal has nowhere to fly in from.
+controls.target.set(0.88, 0.98, 2.95);   // az 59° polar 71° dist 4.60
+// How far back the page opens. The pose above was composed AT this distance,
+// so the normalise below is currently a no-op and is kept only so a future
+// paste at some other distance still opens from here — the angle is preserved
+// exactly, ONLY the distance is touched. It has to stay well clear of
+// CLOSE_RADIUS and FLY_RADIUS below or the reveal has nowhere to fly in from.
 const OPENING_RADIUS = 4.6;
 camera.position.sub(controls.target).setLength(OPENING_RADIUS).add(controls.target);
 controls.enableDamping = true;
