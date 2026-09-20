@@ -23,13 +23,41 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 document.body.appendChild(renderer.domElement);
-// The worm cannot leave the pen (props.ts ARENA, enforced in body.ts), so the
-// orbit target is the pen itself and the camera NEVER chases the animal.
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.target.set(0, 0.5, 0);
 controls.enableDamping = true;
 controls.maxPolarAngle = Math.PI * 0.49;   // stay above the agar
 controls.update();
+
+// ---------------------------------------------------------------------------
+// THE REVEAL. The page loads as a terrarium and nothing else: no nervous
+// system, no transaction feed, no explanation. Moving the pointer into the
+// window flies the camera down onto the worm and fades the rest in; taking it
+// out of the window puts everything back. One damped scalar drives all of it,
+// so the camera, the brain and the panel can never disagree about how far
+// open the scene is.
+// ---------------------------------------------------------------------------
+const WIDE_FOCUS = controls.target.clone();
+const WIDE_RADIUS = camera.position.distanceTo(WIDE_FOCUS);
+// Close enough to read the animal, far enough that the connectome hanging
+// above it stays in frame — the reveal shows BOTH or it shows nothing.
+const CLOSE_RADIUS = 3.8;
+const FOCUS_LIFT = 0.62;        // aim between the worm and the brain above it
+// The connectome is anchored over the middle of the tank while the animal
+// wanders, so the camera follows the worm only PART of the way. Track it
+// fully and the brain swings out of frame every time the worm hits a wall.
+const TRACK = 0.65;
+const REVEAL_RATE = 3.2;        // e-folds per second, both directions
+let engaged = false;
+let reveal = 0;
+const wormFocus = new THREE.Vector3();
+const wantFocus = new THREE.Vector3();
+const orbit = new THREE.Vector3();
+addEventListener("pointermove", () => { engaged = true; });
+// pointerleave on the ROOT element, not on the canvas: the feed sits on top
+// of the canvas, so a canvas-scoped handler would close the scene the moment
+// the user reached for the panel they were just shown.
+document.documentElement.addEventListener("pointerleave", () => { engaged = false; });
 
 addEventListener("resize", () => {
   camera.aspect = innerWidth / innerHeight;
@@ -130,6 +158,10 @@ feed.start(stop.signal);
 
 const STATE_NAME = ["PAUSE", "FORWARD", "REVERSE", "OMEGA"];
 const hud = document.getElementById("hud")!;
+const txpanel = document.getElementById("txpanel")!;
+// Hidden BEFORE the first paint — set from the frame loop it would flash once.
+txpanel.style.opacity = "0";
+txpanel.style.pointerEvents = "none";
 const log = document.getElementById("feed")!;
 const stats = document.getElementById("txstats")!;
 const clicks: string[] = [];
@@ -269,6 +301,31 @@ function frame(now: number): void {
       drawLog();
       drawStats();
     }
+  }
+
+  // --- The reveal, see WIDE_FOCUS above. ---
+  const opening = engaged ? 1 : 0;
+  const settled = Math.abs(reveal - opening) < 0.002;
+  reveal = settled ? opening
+    : THREE.MathUtils.damp(reveal, opening, REVEAL_RATE, dt);
+  const eased = reveal * reveal * (3 - 2 * reveal);
+  brain.setReveal(eased);
+  txpanel.style.opacity = eased.toFixed(3);
+  txpanel.style.pointerEvents = eased > 0.6 ? "auto" : "none";
+
+  // Recentre by moving target and camera TOGETHER: whatever angle the user
+  // orbited to survives the flight, and the worm stays framed as it crawls.
+  const mid = body.points[body.points.length >> 1];
+  wormFocus.set(mid[0] * TRACK, FOCUS_LIFT, mid[1] * TRACK);
+  wantFocus.lerpVectors(WIDE_FOCUS, wormFocus, eased).sub(controls.target);
+  controls.target.add(wantFocus);
+  camera.position.add(wantFocus);
+  // Distance is forced only while the scene is still opening or closing —
+  // once it has settled the user's own zoom is the authority.
+  if (!settled) {
+    orbit.subVectors(camera.position, controls.target)
+      .setLength(THREE.MathUtils.lerp(WIDE_RADIUS, CLOSE_RADIUS, eased));
+    camera.position.copy(controls.target).add(orbit);
   }
 
   controls.update();

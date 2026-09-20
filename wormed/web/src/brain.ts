@@ -108,6 +108,8 @@ export function parseMorphology(buf: ArrayBuffer): Morphology {
  */
 export class BrainCloud {
   readonly group = new THREE.Group();
+  /** Every material with the opacity it was authored at. See setReveal. */
+  private readonly baseOpacity = new Map<THREE.Material, number>();
   readonly segments: number;
   private readonly neurites: LineSegments2;
   private readonly material: LineMaterial;
@@ -229,6 +231,10 @@ export class BrainCloud {
     this.firing.frustumCulled = false;
     this.group.add(this.firing);
 
+    this.group.traverse(o => {
+      const mat = (o as THREE.Mesh).material as THREE.Material | undefined;
+      if (mat) this.baseOpacity.set(mat, mat.opacity);
+    });
     scene.add(this.group);
   }
 
@@ -237,6 +243,21 @@ export class BrainCloud {
    *  ratio of the two viewports, which on a maximise is very visible. */
   setResolution(width: number, height: number): void {
     this.material.resolution.set(width, height);
+  }
+
+  /**
+   * Fade the whole nervous system in and out, 0 to 1. Each material keeps its
+   * OWN base opacity — the arbors sit at 0.5 so that the wires behind show
+   * through, and driving them all to `alpha` would flatten that. Fully faded
+   * the group is hidden outright, so an invisible brain costs no draw calls.
+   */
+  setReveal(alpha: number): void {
+    this.group.visible = alpha > 0.01;
+    if (!this.group.visible) return;
+    for (const [mat, base] of this.baseOpacity) {
+      mat.transparent = true;
+      mat.opacity = base * alpha;
+    }
   }
 
   /** Membrane potential per neuron, index-aligned with names.json. Paints the
