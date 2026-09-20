@@ -1,2 +1,10 @@
 __pycache__/
 *.pyc
+.venv
+.env
+.DS_Store
+*.log
+*.exe
+
+# Generator bytecode
+tools/__pycache__/
