@@ -9,19 +9,106 @@ import { loadFlyDesk, type FlyDesk } from "./fly.js";
 import { FlyFeed } from "./flyfeed.js";
 import { FlyBrain } from "./flybrain.js";
 import { MONITOR_WIDTH } from "./computer.js";
+import { createFlicker } from "./flicker.js";
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0b0f14);
-// Far enough back to clear BOTH exhibits. At the old 6/16 the fly's desk and half the tank sat
-// past the far plane in the wide shot and faded into the background entirely.
-scene.fog = new THREE.Fog(0x0b0f14, 12, 34);
-scene.add(new THREE.AmbientLight(0xffffff, 0.5));
-const key = new THREE.DirectionalLight(0xffffff, 1.1);
+// Exponential, NOT linear. Real extinction is Beer-Lambert — every metre of air takes the same
+// FRACTION of what is left — and linear fog fakes it with a ramp between two planes, which shows
+// as a seam where the ramp starts and a wall of flat background where it ends. At this density a
+// subject seven units out loses about 7% and the far edge of the grid loses near half, which is
+// the room reading as air rather than as a curtain.
+//
+// The colour is the background exactly. Anything else and the grid fades to one colour while the
+// void behind it stays another, and the horizon draws a line across the scene.
+scene.fog = new THREE.FogExp2(0x0b0f14, 0.038);
+// ---------------------------------------------------------------------------
+// LIGHT. A dim room with two lit exhibits in it, not an evenly lit studio.
+// The ambient and the key carry just enough to read the furniture by; each
+// animal gets its own spot, and those spots are the ONLY shadow casters in
+// the scene. Lit flat, the set read as a product shot of three grey boxes.
+// ---------------------------------------------------------------------------
+scene.add(new THREE.AmbientLight(0xffffff, 0.18));
+const key = new THREE.DirectionalLight(0xffffff, 0.55);
 key.position.set(2, 4, 2);
 scene.add(key);
-const rim = new THREE.DirectionalLight(0x7dd3fc, 0.35);
+const rim = new THREE.DirectionalLight(0x7dd3fc, 0.22);
 rim.position.set(-3, 2, -2);
 scene.add(rim);
+
+/** Both lamps hang at the same world height, regardless of their animals' height. */
+const LAMP_HEIGHT = 6.4;
+const BEAM_OPACITY = 0.17;
+/** An exhibit lamp: warm, focused, shadowed. */
+function exhibitSpot(drop: number, intensity: number, angle: number): THREE.SpotLight {
+  const s = new THREE.SpotLight(0xfff1d8, intensity, 0, angle, 0.55, 2);
+  s.castShadow = true;
+  s.shadow.mapSize.set(1024, 1024);
+  s.shadow.camera.near = 0.4;
+  s.shadow.camera.far = drop * 3;
+  // A near-flat lawn under a steep lamp is the case that acnes. normalBias
+  // walks the sample along the SURFACE normal rather than toward the light,
+  // which leaves the blades their own shading instead of striping them.
+  s.shadow.bias = -0.0004;
+  s.shadow.normalBias = 0.02;
+  scene.add(s, s.target);
+  return s;
+}
+const wormSpot = exhibitSpot(LAMP_HEIGHT, 136, 0.179188935625);
+const flySpot = exhibitSpot(LAMP_HEIGHT, 136, 0.09);
+const wormSpotIntensity = wormSpot.intensity;
+const flySpotIntensity = flySpot.intensity;
+const wormBeam = beamFor(wormSpot, LAMP_HEIGHT, 0.25);
+const flyBeam = beamFor(flySpot, LAMP_HEIGHT);
+const wormFlicker = createFlicker(), flyFlicker = createFlicker(), tvFlicker = createFlicker();
+const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
+let setTVBrightness: ((brightness: number) => void) | undefined;
+/** Scratch for the fly's head. NOT flyFocus — that one is the camera's aim and
+ *  is lifted off the head later in the same frame. */
+const spotAt = new THREE.Vector3();
+
+/**
+ * The beam you can SEE. three has no volumetric spotlight and a real one is a
+ * raymarch through the fog; this is a cone of additive haze, bright at the
+ * lamp and fading toward the floor. Black adds nothing under additive
+ * blending, so the vertex gradient IS the falloff — no shader, no alpha sort,
+ * and it survives the camera passing through it.
+ */
+function beamFor(spot: THREE.SpotLight, drop: number, groundGlow = 0) {
+  const geo = new THREE.ConeGeometry(Math.tan(spot.angle) * drop, drop, 40, 1, true);
+  geo.translate(0, -drop / 2, 0);        // apex at the origin, cone hanging down
+  const pos = geo.attributes.position as THREE.BufferAttribute;
+  const col = new Float32Array(pos.count * 3);
+  const lamp = new THREE.Color(spot.color);
+  for (let i = 0; i < pos.count; i++) {
+    // Keep a little haze at the worm so its tall beam visibly reaches the soil.
+    // Float32 vertices can fall just below -drop; clamp before the fractional power.
+    const t = groundGlow + (1 - groundGlow) * Math.max(0, 1 + pos.getY(i) / drop) ** 2.2;
+    col[i * 3] = lamp.r * t;
+    col[i * 3 + 1] = lamp.g * t;
+    col[i * 3 + 2] = lamp.b * t;
+  }
+  geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+  const beam = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+    vertexColors: true, transparent: true, opacity: BEAM_OPACITY,
+    blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+  // Drawn after the set. Writing no depth, it still tests against it, so the
+  // tank and the machines cut the cone where they should.
+  beam.renderOrder = 2;
+  scene.add(beam);
+  return beam;
+}
+
+const DOWN = new THREE.Vector3(0, -1, 0);
+const beamDir = new THREE.Vector3();
+/** Hangs the cone off the lamp and points it wherever the lamp is pointing. */
+function aimBeam(beam: THREE.Mesh, spot: THREE.SpotLight): void {
+  beam.position.copy(spot.position);
+  beamDir.subVectors(spot.target.position, spot.position);
+  // Match the cone's length and radius to the target's actual distance below the lamp.
+  beam.scale.setScalar(beamDir.length() / (beam.geometry as THREE.ConeGeometry).parameters.height);
+  beam.quaternion.setFromUnitVectors(DOWN, beamDir.normalize());
+}
 
 const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.01, 100);
 // ---------------------------------------------------------------------------
@@ -39,6 +126,13 @@ camera.position.set(5.35, 2.94, 3.97);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
+// Filmic response and a stop of headroom under it. A spot bright enough to
+// read as a spot blows its pool to flat white under the linear default, and
+// the emissive screens — laptop, trading chart, standings board — go with it.
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.85;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.target.set(1.62, 1.46, 1.72);   // az 59° polar 71° dist 4.60
@@ -188,12 +282,13 @@ const sideAt = (e: MouseEvent): Side => {
 
 // CLICK opens and closes it, never the pointer alone: a hover that flies the
 // camera in fires while the user is on their way somewhere else, and it
-// cannot be held open while they read. Hover only offers the cursor, so the
-// tank still says it can be clicked.
+// cannot be held open while they read. Hover only offers the pointer cursor.
 const canvas = renderer.domElement;
 canvas.addEventListener("pointermove", e => {
-  canvas.style.cursor = sideAt(e) === "none" ? "" : "pointer";
+  canvas.style.cursor = e.pointerType === "touch" || sideAt(e) === "none" ? "" : "pointer";
 });
+canvas.addEventListener("pointerleave", () => { canvas.style.cursor = ""; });
+canvas.addEventListener("pointercancel", () => { canvas.style.cursor = ""; });
 let pressed: { x: number; y: number } | null = null;
 canvas.addEventListener("pointerdown", e => { pressed = { x: e.clientX, y: e.clientY }; });
 canvas.addEventListener("click", e => {
@@ -277,12 +372,20 @@ void Promise.all([loadLaptop(scene), loadFlyDesk(scene)])
     // Backs the WHOLE set, tank included, so it is measured from the far end of the fly's table
     // to the far wall of the terrarium and not from either table alone.
     const setNear = -TANK_EDGE, setFar = flyNear + depth;
-    addLeaderboard(scene, (setNear + setFar) / 2, setFar - setNear + 0.6);
+    setTVBrightness = addLeaderboard(scene, (setNear + setFar) / 2, setFar - setNear + 0.6);
 
     // Slide the desk back onto its OWN table, seated by its measured near edge so it keeps the
     // same margin from the table lip that the laptop keeps from the tank.
     desk.group.position.z = flyNear + LAPTOP_GAP - deskAtZero.min.z;
     fly = desk;
+    // The connectome is deliberately NOT in here: 302 spheres through two
+    // shadow passes buys a speckle of dots on the soil and nothing else.
+    for (const root of [laptop.group, desk.group, worm.group]) {
+      root.traverse(o => {
+        const m = o as THREE.Mesh;
+        if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; }
+      });
+    }
     // FLYCAB is the head node of data/fly.glb (see fly.ts), and it is what the
     // brain hangs over — it sways as the animal types, so the brain does too.
     flyHead = desk.group.getObjectByName("FLYCAB");
@@ -548,6 +651,16 @@ function frame(now: number): void {
     }
   }
 
+  // Independent ambience, unaffected by hover or brain selection. Only change
+  // brightness: hiding lights would trigger new shader variants.
+  const wormLight = reducedMotion.matches ? 1 : wormFlicker(now);
+  const flyLight = reducedMotion.matches ? 1 : flyFlicker(now);
+  wormSpot.intensity = wormSpotIntensity * wormLight;
+  flySpot.intensity = flySpotIntensity * flyLight;
+  wormBeam.material.opacity = BEAM_OPACITY * wormLight;
+  flyBeam.material.opacity = BEAM_OPACITY * flyLight;
+  setTVBrightness?.(reducedMotion.matches ? 1 : tvFlicker(now));
+
   // --- The reveal, see WIDE_FOCUS above. ---
   const opening = side === "none" ? 0 : 1;
   const settled = Math.abs(reveal - opening) < 0.002;
@@ -560,6 +673,8 @@ function frame(now: number): void {
   flyAlpha = THREE.MathUtils.damp(flyAlpha, side === "fly" ? eased : 0, REVEAL_RATE, dt);
   brain.setReveal(wormAlpha);
   flyBrain.setReveal(flyAlpha);
+  // Closing, Escape, and switching to the worm all stop the fly's background work.
+  if (side !== "fly") flyFeed.disconnect();
   if (flyHead) flyBrain.follow(flyHead);
   flyBrain.tick(dt);
   // The premises are generous while the scene is shut, so the tank is easy to
@@ -587,7 +702,18 @@ function frame(now: number): void {
     // wherever the user left the camera rather than snapping across the room.
     focus.copy(controls.target);
   } else {
-    wantFocus.lerpVectors(WIDE_FOCUS, side === "fly" ? flyFocus : wormFocus, eased);
+    // Keep the worm's light centred on the enclosure; the fly's follows its head.
+  wormSpot.position.set(0, LAMP_HEIGHT, 0);
+  wormSpot.target.position.set(0, 0, 0);
+  if (flyHead) {
+    flyHead.getWorldPosition(spotAt);
+    flySpot.position.set(spotAt.x, LAMP_HEIGHT, spotAt.z + 0.3);
+    flySpot.target.position.copy(spotAt);
+  }
+  aimBeam(wormBeam, wormSpot);
+  aimBeam(flyBeam, flySpot);
+
+  wantFocus.lerpVectors(WIDE_FOCUS, side === "fly" ? flyFocus : wormFocus, eased);
     focus.lerp(wantFocus, 1 - Math.exp(-REVEAL_RATE * dt));
     wantFocus.copy(focus).sub(controls.target);
     controls.target.add(wantFocus);

@@ -166,7 +166,14 @@ async function loadGrass(parent: THREE.Object3D): Promise<void> {
     map: tex, bumpMap: tex, bumpScale: 0.8, roughness: 1, metalness: 0 });
   // The .obj ships one group under one material; the traverse is what keeps
   // that an assumption the file can break without taking the floor with it.
-  model.traverse(o => { const m = o as THREE.Mesh; if (m.isMesh) m.material = turf; });
+  model.traverse(o => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    m.material = turf;
+    // Takes shadow, casts none. A near-flat sheet casting onto itself under a
+    // steep lamp is acne and nothing a viewer would ever call a shadow.
+    m.receiveShadow = true;
+  });
 
   // Z up, so lie it down FIRST — the scale below is in the patch's own axes,
   // where z is the blade height and x,y are the ground.
@@ -201,14 +208,21 @@ export function buildTerrarium(scene: THREE.Scene): THREE.Group {
                mat: THREE.Material = soil) => {
     const m = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), mat);
     m.position.set(x, y, z);
+    // Shadow flags live where the mesh is MADE, here and in addPlinth and
+    // loadGrass, never in a sweep over the scene from main.ts — the lawn
+    // arrives whenever it arrives and a sweep would miss whatever is late.
+    m.castShadow = m.receiveShadow = true;
     group.add(m);
     return m;
   };
   // The slab is sunk clear of the displaced surface above it — level with it
   // and the flat top would punch through every dip and z-fight.
   box(w * 2, SOIL_D, d * 2, 0, -SOIL_D / 2 - SOIL_RELIEF, 0, matte);
-  // Soil surface at y = 0, the plane the body integrator works in.
-  group.add(soilSurface(w, d, soil));
+  // Soil surface at y = 0, the plane the body integrator works in. It takes
+  // the worm's shadow but casts none of its own; it is the bottom of a pit.
+  const surface = soilSurface(w, d, soil);
+  surface.receiveShadow = true;
+  group.add(surface);
   box(w * 2, WALL_H, WALL_T, 0, WALL_H / 2, -d + WALL_T / 2, matte);
   box(w * 2, WALL_H, WALL_T, 0, WALL_H / 2, d - WALL_T / 2, matte);
   box(WALL_T, WALL_H, d * 2, -w + WALL_T / 2, WALL_H / 2, 0, matte);
@@ -249,6 +263,7 @@ export function addPlinth(scene: THREE.Scene, zNear: number, zFar: number): THRE
     // disappears into the table it stands on.
     new THREE.MeshStandardMaterial({ color: 0x23272b, roughness: 0.9, metalness: 0 }));
   m.position.set(0, (STAND_TOP - SOIL_D) / 2, (zNear + zFar) / 2);
+  m.castShadow = m.receiveShadow = true;
   scene.add(m);
   return m;
 }
@@ -485,8 +500,9 @@ const BOARD_BACK = STAND_W / 2 + 2.4;
  * `zCentre` and `width` come from the PLACED tables, not from constants here:
  * the fly's desk is sized by measurement at load time, so how long the set
  * turns out to be is not known until it has landed. See main.ts.
+ * Returns a brightness setter that keeps the face, halo and room spill in sync.
  */
-export function addLeaderboard(scene: THREE.Scene, zCentre: number, width: number): THREE.Group {
+export function addLeaderboard(scene: THREE.Scene, zCentre: number, width: number): (brightness: number) => void {
   const group = new THREE.Group();
   const shell = new THREE.Mesh(
     new THREE.BoxGeometry(0.12, BOARD_H + 0.18, width + 0.18),
@@ -539,13 +555,20 @@ export function addLeaderboard(scene: THREE.Scene, zCentre: number, width: numbe
   // standing in front of the board rather than as the board itself giving
   // light. Each is stood well off the panel: closer, and its own falloff
   // paints a bright blob on the face it is supposed to be lighting away from.
+  const spills: THREE.PointLight[] = [];
   for (let i = 0; i < SPILLS; i++) {
     const across = ((i + 0.5) / SPILLS - 0.5) * width;
     const spill = new THREE.PointLight(0xbcd6ff, SPILL_WATTS, 9, 2);
     spill.position.set(-BOARD_BACK + 1.4, panel.position.y, zCentre + across);
     group.add(spill);
+    spills.push(spill);
   }
 
   scene.add(group);
-  return group;
+  return brightness => {
+    panel.material.color.setScalar(brightness);
+    panel.material.emissiveIntensity = BACKLIGHT * brightness;
+    halo.material.opacity = 0.05 * brightness;
+    for (const spill of spills) spill.intensity = SPILL_WATTS * brightness;
+  };
 }

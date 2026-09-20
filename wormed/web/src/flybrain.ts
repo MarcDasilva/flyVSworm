@@ -11,6 +11,7 @@
 
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { FlyFeed } from "./flyfeed.js";
 
 const ASSETS = "/brain";
@@ -139,16 +140,33 @@ export class FlyBrain {
     const shell = (color: number, opacity: number): THREE.MeshStandardMaterial => {
       const m = new THREE.MeshStandardMaterial({
         color, transparent: true, opacity, depthWrite: false, roughness: 1,
-        side: THREE.DoubleSide,
+        side: THREE.DoubleSide, forceSinglePass: true,
       });
       this.shells.set(m, opacity);
       return m;
     };
+    // The static shells share materials. Merge their baked geometry instead of
+    // issuing 128 separate draw calls (and a second pass for every shell).
+    const mergeShells = (nodes: { node: string }[], material: THREE.Material) => {
+      const parts = nodes.map(n => mesh(n.node));
+      const geometries = parts.map(part => {
+        part.updateWorldMatrix(true, false);
+        return part.geometry.clone().applyMatrix4(part.matrixWorld);
+      });
+      const geometry = mergeGeometries(geometries);
+      for (const g of geometries) g.dispose();
+      if (!geometry) throw new Error("fly brain shell geometries cannot be merged");
+      gltf.scene.add(new THREE.Mesh(geometry, material));
+      for (const part of parts) {
+        part.removeFromParent();
+        part.geometry.dispose();
+      }
+    };
     mesh(manifest.outline.node).material = shell(OUTLINE_COLOR, 0.06);
     const roi = shell(OUTLINE_COLOR, 0.1);
-    for (const r of manifest.rois) mesh(r.node).material = roi;
+    mergeShells(manifest.rois, roi);
     const context = shell(CONTEXT_COLOR, 0.28);
-    for (const c of manifest.context) mesh(c.node).material = context;
+    mergeShells(manifest.context, context);
 
     const live = mapToLive(manifest, network);
     this.neurons = new Array(manifest.neurons.length);

@@ -36,20 +36,38 @@ export class FlyFeed {
   /** Frames seen, the HUD's proof that the fly is actually running. */
   frames = 0;
   private socket: WebSocket | null = null;
+  private retry: ReturnType<typeof setTimeout> | null = null;
+  private signal: AbortSignal | null = null;
 
   constructor(private readonly url = FLY_WS) {}
 
   connect(signal: AbortSignal): void {
-    if (this.socket || signal.aborted) return;
+    // A connection includes its retry delay, so another click cannot start a second loop.
+    if (this.signal || signal.aborted) return;
+    this.signal = signal;
+    signal.addEventListener("abort", this.disconnect, { once: true });
     this.open(signal);
   }
 
+  disconnect = (): void => {
+    this.signal?.removeEventListener("abort", this.disconnect);
+    this.signal = null;
+    if (this.retry !== null) clearTimeout(this.retry);
+    this.retry = null;
+    const socket = this.socket;
+    this.socket = null; // A deliberate close must not schedule another connection.
+    socket?.close();
+    this.frame = null;
+    this.status = "offline";
+  };
+
   private open(signal: AbortSignal): void {
-    if (signal.aborted) return;
+    if (signal.aborted || this.signal !== signal || this.socket) return;
     this.status = "connecting";
     const ws = new WebSocket(this.url);
     this.socket = ws;
     ws.onmessage = ev => {
+      if (this.socket !== ws) return;
       if (typeof ev.data !== "string") return;
       let msg: Record<string, unknown>;
       try {
@@ -75,10 +93,12 @@ export class FlyFeed {
       // Drop the last frame with the socket. Holding it would leave the brain
       // glowing with the firing of a model that is no longer running.
       this.frame = null;
-      if (!signal.aborted) setTimeout(() => this.open(signal), RETRY_MS);
+      if (!signal.aborted) this.retry = setTimeout(() => {
+        this.retry = null;
+        this.open(signal);
+      }, RETRY_MS);
     };
     ws.onclose = reopen;
     ws.onerror = () => ws.close();
-    signal.addEventListener("abort", () => ws.close(), { once: true });
   }
 }
