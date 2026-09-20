@@ -26,6 +26,16 @@ def rates(spike_history, window=50, dt_ms=1.0):
     return rate_series(spike_history, window, dt_ms)[-1]
 
 
+def wedge_rates(rate_epg, wedge_epg, n_wedges):
+    """Mean EPG rate per wedge, over the last axis. EPG must be ordered by wedge with no empty
+    wedge (every Connectome is). With one EPG per wedge this is the identity, bit for bit."""
+    starts = np.searchsorted(wedge_epg, np.arange(n_wedges))
+    sizes = np.diff(np.append(starts, len(wedge_epg)))
+    if np.any(sizes == 0) or np.any(np.diff(wedge_epg) < 0):
+        raise ValueError("wedge_rates: EPG must be sorted by wedge with no empty wedge")
+    return np.add.reduceat(np.asarray(rate_epg, dtype=float), starts, axis=-1) / sizes
+
+
 def heading(rate_epg, n_wedges):
     """Population vector over the last axis -> (wedge_float, strength).
 

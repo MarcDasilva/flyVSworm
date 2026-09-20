@@ -1,0 +1,58 @@
+{
+  "source": {
+    "file": "data/cx_csr.npz",
+    "content_sha256": "aeab8dcb1c7192b4c710e2440dfb655940d5159bad35b7420ebfa947e600d63f",
+    "dataset": "hemibrain:v1.2.1"
+  },
+  "content_sha256": "f5bcdcf9dec98d97fec163eff7b13ca80554f3656ee9bfd0204193f119363e5d",
+  "neurons": {
+    "EPG": 50,
+    "PEN_L": 21,
+    "PEN_R": 21,
+    "D7": 42
+  },
+  "n_wedges": 16,
+  "epg_per_wedge": [
+    3,
+    4,
+    2,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    4,
+    3,
+    3,
+    3,
+    4,
+    3,
+    3
+  ],
+  "pathway_synapses": {
+    "EPG->EPG": 8116,
+    "EPG->PEN": 10659,
+    "PEN->EPG": 22076,
+    "EPG->D7": 17698,
+    "D7->EPG": 7718,
+    "D7->D7": 24615,
+    "D7->PEN": 12554,
+    "PEN->PEN": 11387
+  },
+  "dropped_synapses": 31,
+  "ring": {
+    "singular_values": [
+      13778.9,
+      11813.2,
+      2392.1
+    ],
+    "orientation_flipped": true,
+    "wedge_offset_deg": 18.984,
+    "mean_pen_shift_deg": {
+      "PEN_L": 14.235263843756515,
+      "PEN_R": -14.40376829524213
+    }
+  },
+  "choices": "(the user's decisions are marked *):\n  classes   EPG = EPG + EPGt*; PEN_L / PEN_R = PEN_a(PEN1) + PEN_b(PEN2), split by protocerebral-bridge\n            side (the L/R letter of the glomerulus in the instance name); D7 = Delta7.\n  ring      plane = top two principal axes of the EPG ellipsoid-body input centroids. Orientation:\n            counterclockwise is the direction left-bridge PENs project (the model's convention).\n            16 equal wedges*; the angular offset puts EPG as close as possible to wedge centres.\n  wedges    EPG: its ellipsoid-body input centroid. PEN: its home wedge, the synapse-weighted\n            circular mean of the EPG that drive it. D7: -1.\n  pathways* EPG->EPG, EPG->PEN, PEN->EPG, EPG->D7, D7->EPG, D7->D7, D7->PEN, PEN->PEN, one gain each*.\n            PEN->D7 (31 synapses) is dropped.\n  signs     EPG and PEN excitatory (cholinergic), D7 inhibitory (glutamatergic).\n  weights*  W[pre, post] = sign * gain(pathway) * count / mean count per connection in that pathway\n            (applied by connectome.load_csr; stored here as integer counts)."
+}

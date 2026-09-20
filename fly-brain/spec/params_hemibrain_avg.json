@@ -1,0 +1,165 @@
+{
+  "_provenance": [
+    "Float reference parameters for the rotation-averaged hemibrain v1.2.1 ring (data/cx_averaged.npz, derive_cx.average): the 134 measured EPG/PEN/D7 neurons, evenly spaced per class, wired with the measured connection profiles by angle (smoothed 0.75 wedge, pairs under 0.5 synapse pruned). The exact measured wiring (spec/params_hemibrain.json, DRAFT) pins the bump in a few resting spots and cannot turn smoothly; the user chose this averaged ring (step 1 of 'averaged, then blend').",
+    "Tuned 2026-09-19 in a Claude Code session (scratch tooling, not in the repo): searches scored on T1-T8 from every start wedge (5 seeds), then on the worst normalized margin at nominal. Smoothing 0.5, 0.75 and 1.0 wedge were each tuned; 0.75 gave the widest hold (T2) and rate (T6) margins. Values are stored at full precision: rounding to 4 significant figures made seed 0 drift 1.02 wedges from one start (T2 limit 1.0).",
+    "Verified with the real suite: T1-T8 pass on seeds 0-15 (0-4 are the spec seeds, 5-15 held out).",
+    "Robustness: this ring does NOT meet the +/-10% one-at-a-time gate. Scans put several gains' passing windows under +/-5% (w_ee, w_ed fail at +/-5%); failures are rare events, typically one of 80 seed x start cases drifting a full wedge. Neither wider smoothing nor margin maximization widened the windows. The user decided to ship it at nominal as the trading fly and keep the robust 56-neuron fly (spec/params.json) as legacy: see robustness_gate.",
+    "Units: 1 tick = dt ms; currents in the model's units, where the threshold current is v_thresh/tau."
+  ],
+  "connectome": {
+    "source": "hemibrain_averaged",
+    "file": "data/cx_averaged.npz",
+    "sha256": "f9a731441f4edca17d0d3020aa2b55fa78622268721a64bd2834b63df39c88ef"
+  },
+  "model": {
+    "tau": 36.620376795494664,
+    "dt": 1.0,
+    "syn_decay": 0.8961924915446474,
+    "v_thresh": 1.0,
+    "v_reset": 0.0,
+    "refrac_ticks": 2,
+    "w_ee": 0.009460411385716627,
+    "w_ed": 0.0028887131415459393,
+    "w_de": 0.027489277971789173,
+    "w_ep": 0.00593425539919281,
+    "w_pe": 0.009095768332253012,
+    "noise_amp": 0.0,
+    "neuromod_gain": 1.0,
+    "w_dd": 0.001436602102115091,
+    "w_dp": 0.002926709298168364,
+    "w_pp": 0.0005910675742090053
+  },
+  "protocol": {
+    "landmark_current": 0.30688232817139527,
+    "t3_drive_levels": [
+      0.007718664055378473,
+      0.018210213352634935,
+      0.04347771839044472
+    ],
+    "t8_drive": 0.013653600638579831,
+    "t7_noise_amp": 0.02336972455000686
+  },
+  "_protocol_notes": {
+    "source": "None of these values are given in the brief; tuned with the model and recorded here.",
+    "landmark_current": "chosen by the search (T4 needs enough to pull the bump 180 deg; T6 caps the rates)",
+    "t3_drive_levels": "push-pull levels = [0.283, 0.667, 1.592] x v_thresh/tau, chosen by the search; CCW and faster with drive from every start wedge (T3)",
+    "t8_drive": "0.5 x v_thresh/tau on both PEN_L and PEN_R",
+    "t7_noise_amp": "0.1 x v_thresh / sqrt(tau/2): stationary membrane-noise std = 10% of threshold"
+  },
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "robustness_gate": null,
+  "_robustness_gate_note": "Waived for this spec by user decision (2026-09-19): the averaged hemibrain ring passes T1-T8 at its tuned values but not +/-10% one-at-a-time; the robustness record is still measured and must be current. spec/params.json keeps the +/-10% gate.",
+  "robustness": {
+    "margin_one_at_a_time": null,
+    "margin_with_corners": null,
+    "measured_on": {
+      "model": {
+        "tau": 36.620376795494664,
+        "dt": 1.0,
+        "syn_decay": 0.8961924915446474,
+        "v_thresh": 1.0,
+        "v_reset": 0.0,
+        "refrac_ticks": 2,
+        "w_ee": 0.009460411385716627,
+        "w_ed": 0.0028887131415459393,
+        "w_de": 0.027489277971789173,
+        "w_ep": 0.00593425539919281,
+        "w_pe": 0.009095768332253012,
+        "noise_amp": 0.0,
+        "neuromod_gain": 1.0,
+        "w_dd": 0.001436602102115091,
+        "w_dp": 0.002926709298168364,
+        "w_pp": 0.0005910675742090053
+      },
+      "protocol": {
+        "landmark_current": 0.30688232817139527,
+        "t3_drive_levels": [
+          0.007718664055378473,
+          0.018210213352634935,
+          0.04347771839044472
+        ],
+        "t8_drive": 0.013653600638579831,
+        "t7_noise_amp": 0.02336972455000686
+      },
+      "seeds": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "connectome": {
+        "source": "hemibrain_averaged",
+        "file": "data/cx_averaged.npz",
+        "sha256": "f9a731441f4edca17d0d3020aa2b55fa78622268721a64bd2834b63df39c88ef"
+      },
+      "suite": "T1-T8; T2 (with set-at <= 1 wedge) and T3 from every start wedge"
+    },
+    "gate": "waived for this spec (user decision, see _robustness_gate_note); corners are recorded but not gated. A null margin = fails already at the smallest delta (for margin_with_corners, only when corners_run is true).",
+    "method": "w_ee, w_ed, w_de, w_ep, w_pe, w_dd, w_dp, w_pp scaled by 1+/-delta one at a time (16 configs), corners not run (--no-corners; margin_with_corners null); T1-T8; T2 (with set-at <= 1 wedge) and T3 from every start wedge, on every seed; margin = largest delta on the grid [0.1, 0.15, 0.2, 0.25, 0.3] at which every config passes",
+    "failures": {
+      "0.10": [
+        [
+          "w_ee+",
+          [
+            "T2",
+            "T4"
+          ]
+        ],
+        [
+          "w_ee-",
+          [
+            "T2",
+            "T3",
+            "T6",
+            "T7"
+          ]
+        ],
+        [
+          "w_ed+",
+          [
+            "T2"
+          ]
+        ],
+        [
+          "w_de+",
+          [
+            "T2"
+          ]
+        ],
+        [
+          "w_ep-",
+          [
+            "T2",
+            "T7"
+          ]
+        ],
+        [
+          "w_pe-",
+          [
+            "T2"
+          ]
+        ],
+        [
+          "w_dp+",
+          [
+            "T2"
+          ]
+        ],
+        [
+          "w_dp-",
+          [
+            "T2"
+          ]
+        ]
+      ]
+    },
+    "corners_run": false
+  }
+}

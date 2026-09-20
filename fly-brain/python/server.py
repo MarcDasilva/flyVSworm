@@ -24,10 +24,13 @@ import os
 import time
 
 import uvicorn
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+import chain_state
 import connectome
 import live
 from market import MarketParams
@@ -39,7 +42,15 @@ FPS = 30
 TICKS_PER_SECOND = 1000  # at speed 1x
 SPEEDS = (0.25, 0.5, 1.0, 2.0, 4.0)
 
-app = FastAPI(title="fly-brain live")
+@asynccontextmanager
+async def lifespan(_app):
+    """While the backend runs, each synapse the manifest holds becomes one transaction on Thru."""
+    chain_state.start()
+    yield
+    chain_state.stop()
+
+
+app = FastAPI(title="fly-brain live", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=WEB), name="static")
 
 
@@ -59,8 +70,17 @@ def index():
 
 @app.get("/api/network")
 def network():
-    p, _ = load_spec(live.SPEC_PATH)
-    return live.network(connectome.build_procedural(p))
+    p, spec = load_spec(live.SPEC_PATH)
+    return live.network(connectome.build(p, spec.get("connectome")))
+
+
+@app.get("/api/chain")
+def chain():
+    """What the fly brain has stored on Thru: transactions, and how far the wiring has got."""
+    return chain_state.status()
+
+
+
 
 
 class Controller:
@@ -145,5 +165,21 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="fly-brain live server")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8000)
+    ap.add_argument("--spec", default=None,
+                    help="spec file (default spec/params_hemibrain_avg.json; spec/params.json = the legacy 56-neuron fly)")
+    ap.add_argument("--chain", action="store_true",
+                    help="push synapses to Thru while running (needs data/chain_deploy.json)")
+    ap.add_argument("--chain-rate", type=float, default=None, metavar="PER_SECOND",
+                    help=f"ceiling on how fast to push (default {chain_state.RATE:g}/s)")
+    ap.add_argument("--chain-order", choices=("activity", "manifest"), default="activity",
+                    help="activity: a fly runs here and the synapses it recruits are the ones "
+                         "recorded, so the count moves when the fly does. manifest: walk the "
+                         "manifest in order at --chain-rate (default: activity)")
     args = ap.parse_args()
+    if args.spec:
+        live.SPEC_PATH = os.path.abspath(args.spec)
+    chain_state.ENABLED = args.chain
+    chain_state.ACTIVITY = args.chain_order == "activity"
+    if args.chain_rate:
+        chain_state.RATE = args.chain_rate
     uvicorn.run(app, host=args.host, port=args.port)

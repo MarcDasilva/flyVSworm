@@ -1,7 +1,7 @@
 """T1-T8 acceptance tests for the float ring attractor.
 
 Every tN returns a Result: pass/fail plus the measured values, so a failure
-says how far off it was. Each test runs on every seed in spec/params.json and
+says how far off it was. Each test runs on every seed in the spec and
 passes only if all seeds pass. Result.summary lists the failing seeds and shows
 the measured values of the first one; Result.report() shows every seed.
 
@@ -10,6 +10,10 @@ ignores the first window-1 ticks of each run (window not yet full) and, in T4,
 the switch window of a 180-degree landmark jump (see t4_switch_window).
 Landmark positions are relative to n_wedges (a quarter and three quarters
 round the ring), never hardcoded wedge numbers.
+
+T2 and T3 run from EVERY start wedge (the landmark sets the bump there first)
+and pass only if every start passes: a ring with a few resting spots holds
+and turns from some headings and not others. T5 and T6 cover all these runs.
 
 Direction convention: counterclockwise = increasing wedge index. The CCW turn
 is push-pull drive (+d PEN_L, -d PEN_R); T3 asserts the direction. See
@@ -27,14 +31,32 @@ import os
 from dataclasses import dataclass, field
 
 import numpy as np
+import pytest
 
 import connectome
 import metrics
 from model_float import Input, init_state, load_spec, tick
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SPEC_PATH = os.path.normpath(os.path.join(HERE, "..", "spec", "params.json"))
-GOLDEN_PATH = os.path.normpath(os.path.join(HERE, "..", "spec", "golden.json"))
+# FLY_SPEC selects the spec. Default: the rotation-averaged hemibrain ring, the trading fly (user decision);
+# spec/params.json is the legacy procedural 56-neuron fly. Each spec has its own golden file:
+# spec/params_hemibrain_avg.json -> spec/golden_hemibrain_avg.json, spec/params.json -> spec/golden.json.
+DEFAULT_SPEC = os.path.normpath(os.path.join(HERE, "..", "spec", "params_hemibrain_avg.json"))
+SPEC_PATH = os.path.normpath(os.environ.get("FLY_SPEC") or DEFAULT_SPEC)
+LEGACY_SPEC = os.path.normpath(os.path.join(HERE, "..", "spec", "params.json"))
+
+
+def golden_path(spec_path):
+    """spec/params<X>.json -> spec/golden<X>.json"""
+    g = os.path.join(os.path.dirname(spec_path), os.path.basename(spec_path).replace("params", "golden", 1))
+    assert g != spec_path, f"spec file name must contain 'params' (got {spec_path})"
+    return g
+
+
+GOLDEN_PATH = golden_path(SPEC_PATH)
+# The cheap record checks (robustness record, golden hash) also run on the legacy fly, so a change to shared
+# code (tick, metrics, connectome) cannot break it unseen; T1-T8 themselves run on SPEC_PATH only.
+RECORD_SPECS = sorted({SPEC_PATH, LEGACY_SPEC})
 WINDOW = 50
 POPULATIONS = ("EPG", "PEN_L", "PEN_R", "D7")
 
@@ -78,15 +100,16 @@ def run_protocol(cx, p, phases, seed):
             spikes[t] = s.spikes
             t += 1
     r = metrics.rate_series(spikes, WINDOW, p.dt)
-    r_epg = r[:, cx.idx["EPG"]]
-    h, strength = metrics.heading(r_epg, cx.n_wedges)
-    bumps = np.array([metrics.bump_count(row) for row in r_epg])
+    r_wedge = metrics.wedge_rates(r[:, cx.idx["EPG"]], cx.wedge_of[cx.idx["EPG"]], cx.n_wedges)
+    h, strength = metrics.heading(r_wedge, cx.n_wedges)
+    bumps = np.array([metrics.bump_count(row) for row in r_wedge])
     return Run(cx, spans, [ph.inp for ph in phases], spikes, r, h, strength, bumps, s.v.copy())
 
 
-def t1_phases(cx, p, pr):
-    landmark = Input(landmark_wedge=cx.n_wedges // 4, landmark_current=pr["landmark_current"],
-                     landmark_active=True, noise_amp=p.noise_amp)
+def t1_phases(cx, p, pr, start=None):
+    """Landmark, then settle. start: the landmark wedge (default a quarter round the ring)."""
+    landmark = Input(landmark_wedge=cx.n_wedges // 4 if start is None else start,
+                     landmark_current=pr["landmark_current"], landmark_active=True, noise_amp=p.noise_amp)
     return [Phase("T1 landmark", 100, landmark),
             Phase("T1 settle", 200, Input(noise_amp=p.noise_amp))]
 
@@ -105,8 +128,8 @@ def t3_phases(p, pr):
             for d in pr["t3_drive_levels"]]
 
 
-def protocol_phases(name, cx, p, pr):
-    base = t1_phases(cx, p, pr)
+def protocol_phases(name, cx, p, pr, start=None):
+    base = t1_phases(cx, p, pr, start)
     if name == "T1":
         return base
     if name == "T2":
@@ -129,6 +152,9 @@ def protocol_phases(name, cx, p, pr):
 
 
 PROTOCOLS = ("T1", "T2", "T3", "T4", "T7", "T8")
+FROM_EVERY_WEDGE = ("T2", "T3")  # run once per start wedge, keyed "T2@<wedge>"
+# What the checks are; part of the robustness key, so a record measured under other checks is stale.
+SUITE = "T1-T8; T2 (with set-at <= 1 wedge) and T3 from every start wedge"
 
 
 # ------------------------------------------------------------ per-seed checks --
@@ -144,11 +170,16 @@ def check_t1(run):
 
 
 def check_t2(run):
+    """Held with no input, and held WHERE the landmark set it: without the set-at
+    check, a ring that pulls every bump into a few resting spots passes."""
     a, z = run.span("T2")
-    seg = metrics.unwrap(run.heading[a - 1:z], run.cx.n_wedges)  # start from the end of T1
+    n = run.cx.n_wedges
+    seg = metrics.unwrap(run.heading[a - 1:z], n)  # start from the end of T1
     net = float(abs(seg[-1] - seg[0]))
+    set_at = float(circ_dist(run.heading[a - 1], run.inputs[0].landmark_wedge, n))
     bmin, bmax = int(run.bumps[a:z].min()), int(run.bumps[a:z].max())
-    return bmin == 1 and bmax == 1 and net < 1.0, {"net_drift": net, "bump_min": bmin, "bump_max": bmax}
+    return bmin == 1 and bmax == 1 and net < 1.0 and set_at <= 1.0, {
+        "net_drift": net, "set_at_error": set_at, "bump_min": bmin, "bump_max": bmax}
 
 
 def check_t3(run):
@@ -162,6 +193,22 @@ def check_t3(run):
     ccw = all(v > 0 for v in vel)
     increasing = all(v2 > v1 for v1, v2 in zip(vel, vel[1:]))
     return ccw and increasing, {"velocity_wedges_per_1000": vel, "ccw": ccw, "increasing": increasing}
+
+
+def t3_margin(measured):
+    """Smallest of the slowest velocity and the velocity steps (T3 needs all > 0)."""
+    v = measured["velocity_wedges_per_1000"]
+    return min([v[0]] + [b - a for a, b in zip(v, v[1:])])
+
+
+def from_every_wedge(runs, name, check, worst):
+    """check on the run from each start wedge; passes only if every start passes.
+    Reports the failing starts and the measured values of the worst start."""
+    res = {int(k.split("@")[1]): check(r) for k, r in runs.items() if k.startswith(name + "@")}
+    bad = [w for w, (ok, _) in res.items() if not ok]
+    show = max(res, key=lambda w: worst(res[w][1]))
+    return not bad, {"starts_passed": f"{len(res) - len(bad)}/{len(res)}", "failing_starts": bad,
+                     "worst_start": show, **res[show][1]}
 
 
 def check_t4(run):
@@ -213,7 +260,8 @@ def check_t5(runs):
             worst, where = b, [name]
         elif b == worst:
             where.append(name)
-    return worst <= 1, {"max_bump_count": worst, "in": where, "t4_switch_ticks_exempt": exempt}
+    return worst <= 1, {"max_bump_count": worst, "in": "all runs" if len(where) == len(runs) else where,
+                        "t4_switch_ticks_exempt": exempt}
 
 
 def check_t6(runs, p):
@@ -285,15 +333,19 @@ def _fmt(m):
 
 
 def run_all_protocols(cx, p, pr, seed, names=PROTOCOLS):
-    return {n: run_protocol(cx, p, protocol_phases(n, cx, p, pr), seed) for n in names}
+    runs = {}
+    for n in names:
+        for w in (range(cx.n_wedges) if n in FROM_EVERY_WEDGE else [None]):
+            runs[n if w is None else f"{n}@{w}"] = run_protocol(cx, p, protocol_phases(n, cx, p, pr, w), seed)
+    return runs
 
 
 def evaluate(runs, p):
     """All eight checks for one seed's protocol runs -> {test: (passed, measured)}."""
     return {
         "T1": check_t1(runs["T1"]),
-        "T2": check_t2(runs["T2"]),
-        "T3": check_t3(runs["T3"]),
+        "T2": from_every_wedge(runs, "T2", check_t2, worst=lambda m: m["net_drift"] + m["set_at_error"]),
+        "T3": from_every_wedge(runs, "T3", check_t3, worst=lambda m: -t3_margin(m)),
         "T4": check_t4(runs["T4"]),
         "T5": check_t5(runs),
         "T6": check_t6(runs, p),
@@ -302,8 +354,9 @@ def evaluate(runs, p):
     }
 
 
-def run_suite(p, pr, seeds):
-    cx = connectome.build_procedural(p)
+def run_suite(p, pr, seeds, source=None):
+    """T1-T8 on every seed. source = spec["connectome"] (None: the procedural model)."""
+    cx = connectome.build(p, source)
     results = {n: Result(n, True) for n in ("T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8")}
     for seed in seeds:
         for name, (ok, measured) in evaluate(run_all_protocols(cx, p, pr, seed), p).items():
@@ -321,7 +374,7 @@ def format_results(results):
 @functools.lru_cache(maxsize=1)
 def _suite():
     p, spec = load_spec(SPEC_PATH)
-    return run_suite(p, spec["protocol"], spec["seeds"])
+    return run_suite(p, spec["protocol"], spec["seeds"], spec.get("connectome"))
 
 
 def _check(name):
@@ -332,7 +385,8 @@ def _check(name):
 
 def robustness_key(spec):
     """The spec values a robustness margin is only valid for."""
-    return {"model": spec["model"], "protocol": spec["protocol"], "seeds": spec["seeds"]}
+    return {"model": spec["model"], "protocol": spec["protocol"], "seeds": spec["seeds"],
+            "connectome": spec.get("connectome"), "suite": SUITE}
 
 
 def _ring(values_at):
@@ -365,22 +419,32 @@ def test_bump_count_real_double_bumps_are_two():
 ROBUSTNESS_GATE = 0.10  # each weight at 1 +/- 10%, one at a time, must pass T1-T8 on every seed
 
 
-def test_robustness_record_is_current():
-    """The margin in spec/params.json was measured on the current values and meets the gate."""
-    _, spec = load_spec(SPEC_PATH)
+def robustness_gate(spec):
+    """The spec's gate: ROBUSTNESS_GATE unless the spec sets "robustness_gate" (null = waived by the user,
+    with the reason in "_robustness_gate_note"; the record must still be current)."""
+    return spec["robustness_gate"] if "robustness_gate" in spec else ROBUSTNESS_GATE
+
+
+@pytest.mark.parametrize("spec_path", RECORD_SPECS, ids=os.path.basename)
+def test_robustness_record_is_current(spec_path):
+    """The margin in the spec was measured on the current values, and meets the spec's gate if it has one."""
+    _, spec = load_spec(spec_path)
     rec = spec.get("robustness")
     assert rec is not None, "no robustness record: run  python tune.py --robustness --write"
     assert rec["measured_on"] == robustness_key(spec), (
         "stale robustness record: spec changed since  python tune.py --robustness --write")
-    m = rec["margin_one_at_a_time"]
-    assert m is not None and m >= ROBUSTNESS_GATE, (
-        f"robustness gate failed: one-at-a-time margin {m} < {ROBUSTNESS_GATE} (see spec robustness.failures)")
+    gate, m = robustness_gate(spec), rec["margin_one_at_a_time"]
+    if gate is None:
+        assert spec.get("_robustness_gate_note"), "a waived gate needs its reason in _robustness_gate_note"
+        return
+    assert m is not None and m >= gate, (
+        f"robustness gate failed: one-at-a-time margin {m} < {gate} (see spec robustness.failures)")
 
 
-def golden_digest(p, pr, seed):
+def golden_digest(p, pr, seed, source=None):
     """sha256 over the demo run's spike raster and final membrane potentials: a
     regression lock on the exact reference trajectory, not just its behaviour."""
-    cx = connectome.build_procedural(p)
+    cx = connectome.build(p, source)
     run = run_protocol(cx, p, protocol_phases("demo", cx, p, pr), seed)
     h = hashlib.sha256()
     h.update(np.packbits(run.spikes).tobytes())
@@ -389,17 +453,18 @@ def golden_digest(p, pr, seed):
 
 
 def golden_key(spec):
-    return {"model": spec["model"], "protocol": spec["protocol"]}
+    return {"model": spec["model"], "protocol": spec["protocol"], "connectome": spec.get("connectome")}
 
 
-def test_golden_trajectory():
-    p, spec = load_spec(SPEC_PATH)
-    with open(GOLDEN_PATH) as f:
+@pytest.mark.parametrize("spec_path", RECORD_SPECS, ids=os.path.basename)
+def test_golden_trajectory(spec_path):
+    p, spec = load_spec(spec_path)
+    with open(golden_path(spec_path)) as f:
         g = json.load(f)
     assert g["made_with"] == golden_key(spec), (
-        "spec/golden.json was made with different params: regenerate with  python run.py --golden")
-    assert golden_digest(p, spec["protocol"], g["seed"]) == g["sha256"], (
-        "reference trajectory changed (spike raster or final v differ from spec/golden.json)")
+        f"{golden_path(spec_path)} was made with different params: regenerate with  python run.py --golden --spec ...")
+    assert golden_digest(p, spec["protocol"], g["seed"], spec.get("connectome")) == g["sha256"], (
+        f"reference trajectory changed (spike raster or final v differ from {golden_path(spec_path)})")
 
 
 def test_T1(): _check("T1")

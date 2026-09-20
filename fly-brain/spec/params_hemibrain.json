@@ -1,0 +1,45 @@
+{
+  "_provenance": [
+    "DRAFT: hemibrain v1.2.1 connectome, not tuned yet"
+  ],
+  "connectome": {
+    "source": "hemibrain",
+    "file": "data/cx_model.npz",
+    "sha256": "f5bcdcf9dec98d97fec163eff7b13ca80554f3656ee9bfd0204193f119363e5d"
+  },
+  "model": {
+    "tau": 12.97,
+    "dt": 1.0,
+    "syn_decay": 0.9451,
+    "v_thresh": 1.0,
+    "v_reset": 0.0,
+    "refrac_ticks": 2,
+    "w_ee": 0.005039,
+    "w_ed": 0.002593,
+    "w_de": 0.04315,
+    "w_ep": 0.005175,
+    "w_pe": 0.02112,
+    "noise_amp": 0.0,
+    "neuromod_gain": 1.0,
+    "w_dd": 0.0,
+    "w_dp": 0.0,
+    "w_pp": 0.0
+  },
+  "protocol": {
+    "landmark_current": 0.5,
+    "t3_drive_levels": [
+      0.03855,
+      0.06939,
+      0.1002
+    ],
+    "t8_drive": 0.03855,
+    "t7_noise_amp": 0.03927
+  },
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ]
+}

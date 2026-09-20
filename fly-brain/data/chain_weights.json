@@ -1,0 +1,21 @@
+{
+  "content_sha256": "9f833f16e36954a46106394102a4ad2ac16176793abc72e91228dfebfbf70067",
+  "spec": "params_hemibrain_avg.json",
+  "connectome": {
+    "source": "hemibrain_averaged",
+    "file": "data/cx_averaged.npz",
+    "sha256": "f9a731441f4edca17d0d3020aa2b55fa78622268721a64bd2834b63df39c88ef"
+  },
+  "model_sha256": "b00fe9e53c93084b707351d993daa5774093ded3e5e94fca2f1b751c4c8b75dc",
+  "manifest_sha256": "4314235eda3e52cd6f467ff82477189da51587f8aa7ca655ee4c8af256ed1caa",
+  "neurons": 134,
+  "weights": 11028,
+  "format": "Q16.16 = round(x * 65536) (halves to even), saturated to i32",
+  "suite_check": "T1-T8 pass with these weights (chain_weights.as_connectome) on seeds 0-9",
+  "weight_rounding": {
+    "median_rel_error": 0.001503,
+    "p95_rel_error": 0.013425,
+    "max_rel_error": 0.174488,
+    "rounded_to_zero": 0
+  }
+}

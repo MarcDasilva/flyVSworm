@@ -1,0 +1,25 @@
+{
+  "program_binary": {
+    "file": "chain/build/thruvm/bin/tn_fly_brain_c.bin",
+    "sha256": "4e4fd13a15b1fcc45d123735b010d322b214357e579b34ecca7530c4682877ce",
+    "bytes": 3332
+  },
+  "sources": {
+    "chain/fly_brain.abi.yaml": "b8ba1905eaccc8108884b435e74abb35a92c409f3ec74d7ee5430ca2bb797780",
+    "chain/examples/tn_fly_brain.c": "6d6e60b0deaaf8e2abfa27fe3d87cbc386af3935094861aff0ba868a7b564bfe",
+    "chain/examples/tn_fly_brain.h": "3db56baf95e62dfbf65cd49be3cd70cb328760d97125bea2247992843175616c"
+  },
+  "inputs": {
+    "data/chain_manifest.npz": "4314235eda3e52cd6f467ff82477189da51587f8aa7ca655ee4c8af256ed1caa",
+    "data/chain_weights.npz": "9f833f16e36954a46106394102a4ad2ac16176793abc72e91228dfebfbf70067"
+  },
+  "network": "alphanet",
+  "rpc": "https://rpc.alphanet.thru.org",
+  "program": "ta-LDQFUM9re6TGcyypp3yVMPJwkbn-2X8EljJdlAY26zK",
+  "meta": "taddB3d8fvASZESFOGiQxKAWHkD8-4wO5xTWtJgbokX6m3",
+  "brain": "tazCZtkIJM4TlgqdXiKXzn8GWgJ1HpcO_NkJXhH1_xjX4l",
+  "authority": "ta4r23Ev0n6dGBJrvOF9Eci4nmvglibSHWJynXHS3KF2Cz",
+  "toolchain": "v0.3.17",
+  "cli": "0.3.16",
+  "deployed": "2026-09-19"
+}

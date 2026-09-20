@@ -1,0 +1,36 @@
+{
+  "content_sha256": "4314235eda3e52cd6f467ff82477189da51587f8aa7ca655ee4c8af256ed1caa",
+  "sources": {
+    "data/cx_model.npz": "f5bcdcf9dec98d97fec163eff7b13ca80554f3656ee9bfd0204193f119363e5d",
+    "data/cx_synapses.npz": "29362b6888cba8e4788345d1d1996f01141497526b6cc987b4fef772cb24d492"
+  },
+  "wallets": 134,
+  "wallets_per_class": {
+    "EPG": 50,
+    "PEN_L": 21,
+    "PEN_R": 21,
+    "D7": 42
+  },
+  "transactions": 114854,
+  "connected_pairs": 8488,
+  "transactions_per_class_pair": {
+    "EPG->EPG": 8116,
+    "EPG->PEN_L": 5105,
+    "EPG->PEN_R": 5554,
+    "EPG->D7": 17698,
+    "PEN_L->EPG": 10885,
+    "PEN_L->PEN_L": 5617,
+    "PEN_L->PEN_R": 502,
+    "PEN_L->D7": 18,
+    "PEN_R->EPG": 11191,
+    "PEN_R->PEN_L": 456,
+    "PEN_R->PEN_R": 4812,
+    "PEN_R->D7": 13,
+    "D7->EPG": 7718,
+    "D7->PEN_L": 5709,
+    "D7->PEN_R": 6845,
+    "D7->D7": 24615
+  },
+  "units": "hemibrain voxels (8 nm)",
+  "layout": "the 134 rows of data/cx_model.npz, in that order):\n    body_id    hemibrain body ID: the universal key (a running fly may order its neurons differently)\n    type       neuPrint type, e.g. EPG, EPGt, PEN_a(PEN1), Delta7\n    instance   neuPrint instance\n    cls        model class: EPG, PEN_L, PEN_R or D7 (derive_cx.classify)\n    wedge      ring wedge 0..15, -1 for D7 (derive_cx)\n    sign       +1 excitatory (EPG, PEN: cholinergic), -1 inhibitory (D7: glutamatergic). The sign is the\n               presynaptic neuron's, so every synapse transaction carries a positive count of 1.\n\nSynapse transactions (all 114,854 synapses among the 134 neurons, data/cx_synapses.npz):\n    pre, post          wallet indices (rows above)\n    pre_xyz, post_xyz  T-bar and PSD locations, hemibrain voxels (8 nm), int32\n    Order: (pre, post, post_xyz, pre_xyz) ascending, no ties, so a neuron's outgoing synapses are\n    contiguous. This includes the 31 PEN->D7 synapses the model drops: the record is the measured brain."
+}

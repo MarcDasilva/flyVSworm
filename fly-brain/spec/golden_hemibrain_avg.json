@@ -1,0 +1,101 @@
+{
+  "protocol": "demo",
+  "seed": 0,
+  "sha256": "bdb04f9a0de528e045e0f6820811fdfdfe3bfbec34e64e28e6f610d3407dec0b",
+  "made_with": {
+    "model": {
+      "tau": 36.620376795494664,
+      "dt": 1.0,
+      "syn_decay": 0.8961924915446474,
+      "v_thresh": 1.0,
+      "v_reset": 0.0,
+      "refrac_ticks": 2,
+      "w_ee": 0.009460411385716627,
+      "w_ed": 0.0028887131415459393,
+      "w_de": 0.027489277971789173,
+      "w_ep": 0.00593425539919281,
+      "w_pe": 0.009095768332253012,
+      "noise_amp": 0.0,
+      "neuromod_gain": 1.0,
+      "w_dd": 0.001436602102115091,
+      "w_dp": 0.002926709298168364,
+      "w_pp": 0.0005910675742090053
+    },
+    "protocol": {
+      "landmark_current": 0.30688232817139527,
+      "t3_drive_levels": [
+        0.007718664055378473,
+        0.018210213352634935,
+        0.04347771839044472
+      ],
+      "t8_drive": 0.013653600638579831,
+      "t7_noise_amp": 0.02336972455000686
+    },
+    "connectome": {
+      "source": "hemibrain_averaged",
+      "file": "data/cx_averaged.npz",
+      "sha256": "f9a731441f4edca17d0d3020aa2b55fa78622268721a64bd2834b63df39c88ef"
+    }
+  },
+  "trading": {
+    "seed": 0,
+    "returns": "live.golden_returns()",
+    "sha256": "261f9c3e7f17853b6f9bcdb6868f235a0a96e7f9a76f65e750de879ffe62bc40",
+    "made_with": {
+      "spec": {
+        "model": {
+          "tau": 36.620376795494664,
+          "dt": 1.0,
+          "syn_decay": 0.8961924915446474,
+          "v_thresh": 1.0,
+          "v_reset": 0.0,
+          "refrac_ticks": 2,
+          "w_ee": 0.009460411385716627,
+          "w_ed": 0.0028887131415459393,
+          "w_de": 0.027489277971789173,
+          "w_ep": 0.00593425539919281,
+          "w_pe": 0.009095768332253012,
+          "noise_amp": 0.0,
+          "neuromod_gain": 1.0,
+          "w_dd": 0.001436602102115091,
+          "w_dp": 0.002926709298168364,
+          "w_pp": 0.0005910675742090053
+        },
+        "protocol": {
+          "landmark_current": 0.30688232817139527,
+          "t3_drive_levels": [
+            0.007718664055378473,
+            0.018210213352634935,
+            0.04347771839044472
+          ],
+          "t8_drive": 0.013653600638579831,
+          "t7_noise_amp": 0.02336972455000686
+        },
+        "connectome": {
+          "source": "hemibrain_averaged",
+          "file": "data/cx_averaged.npz",
+          "sha256": "f9a731441f4edca17d0d3020aa2b55fa78622268721a64bd2834b63df39c88ef"
+        }
+      },
+      "drive": {
+        "span_bars": 40,
+        "dead_band": 0.35,
+        "full_scale": 0.8,
+        "min_drive": 0.6,
+        "max_drive": 1.3,
+        "max_step": 0.3,
+        "warmup_bars": 20
+      },
+      "readout": {
+        "window_ticks": 500,
+        "min_speed": 0.8,
+        "full_speed": 7.0,
+        "strength_floor": 0.3,
+        "strength_full": 0.8
+      },
+      "ticks_per_bar": 100,
+      "boot_ticks": 300,
+      "rate_window": 50
+    }
+  }
+}

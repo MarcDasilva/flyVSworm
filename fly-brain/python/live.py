@@ -21,7 +21,7 @@ from model_float import Input, init_state, load_spec, tick
 from trading import DriveMapper, DriveParams, Readout, ReadoutParams
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SPEC_PATH = os.path.normpath(os.path.join(HERE, "..", "spec", "params.json"))
+SPEC_PATH = os.path.normpath(os.environ.get("FLY_SPEC") or os.path.join(HERE, "..", "spec", "params_hemibrain_avg.json"))
 TICKS_PER_BAR = 100
 BOOT_LANDMARK_TICKS = 100
 BOOT_SETTLE_TICKS = 200
@@ -43,8 +43,11 @@ def network(cx):
     neurons = [{"id": i, "pop": pop_of[i], "wedge": int(cx.wedge_of[i])} for i in range(cx.N)]
     pre, post = np.nonzero(cx.W)
     synapses = [[int(a), int(b), round(float(cx.W[a, b]), 6)] for a, b in zip(pre, post)]
-    return {"n_wedges": cx.n_wedges, "neurons": neurons, "synapses": synapses,
-            "populations": list(cx.idx.keys()), "ticks_per_bar": TICKS_PER_BAR, "boot_ticks": BOOT_TICKS}
+    dp, rp = DriveParams(), ReadoutParams()
+    return {"source": cx.source, "n_wedges": cx.n_wedges, "neurons": neurons, "synapses": synapses,
+            "populations": list(cx.idx.keys()), "ticks_per_bar": TICKS_PER_BAR, "boot_ticks": BOOT_TICKS,
+            "trading": {"min_drive": dp.min_drive, "max_drive": dp.max_drive, "max_step": dp.max_step,
+                        "warmup_bars": dp.warmup_bars, "window_ticks": rp.window_ticks, "full_speed": rp.full_speed}}
 
 
 class LiveSession:
@@ -53,12 +56,14 @@ class LiveSession:
     steps its market once per bar, so two flies sharing one market object would each advance it.
     Give each fly its own ReplayMarket(returns) to show them the same series."""
 
-    def __init__(self, seed=0, market_params=None, drive_params=None, readout_params=None, spec_path=SPEC_PATH,
+    def __init__(self, seed=0, market_params=None, drive_params=None, readout_params=None, spec_path=None,
                  market=None):
+        spec_path = spec_path or SPEC_PATH
         self.p, spec = load_spec(spec_path)
         self.spec = spec
         self.landmark_current = spec["protocol"]["landmark_current"]
-        self.cx = connectome.build_procedural(self.p)
+        self.cx = connectome.build(self.p, spec.get("connectome"))
+        self.epg_wedge = self.cx.wedge_of[self.cx.idx["EPG"]]
         self.seed = seed
         self.state = init_state(self.cx, self.p, seed)
         self.market = market if market is not None else SyntheticMarket(seed, market_params or MarketParams())
@@ -100,7 +105,8 @@ class LiveSession:
 
     def made_with(self):
         """Everything besides seed and events that decides a run: brain spec and trading parameters in use."""
-        return {"spec": {"model": self.spec["model"], "protocol": self.spec["protocol"]},
+        return {"spec": {"model": self.spec["model"], "protocol": self.spec["protocol"],
+                         "connectome": self.spec.get("connectome")},
                 "drive": dataclasses.asdict(self.mapper.p), "readout": dataclasses.asdict(self.readout.p),
                 "ticks_per_bar": TICKS_PER_BAR, "boot_ticks": BOOT_TICKS, "rate_window": RATE_WINDOW}
 
@@ -170,6 +176,7 @@ class LiveSession:
             self.hist[slot] = self.state.spikes
             spikes.extend([self.t, int(i)] for i in np.flatnonzero(self.state.spikes))
             rate_epg = self.counts[self.epg] * (1000.0 / (RATE_WINDOW * self.p.dt))
+            rate_epg = metrics.wedge_rates(rate_epg, self.epg_wedge, self.cx.n_wedges)
             h, s = metrics.heading(rate_epg, self.cx.n_wedges)
             self.heading, self.strength = float(h), float(s)
             self.bumps = metrics.bump_count(rate_epg)
@@ -185,6 +192,8 @@ class LiveSession:
         return {
             "t": self.t, "phase": self.phase, "spikes": list(spikes), "bars": [_round(b) for b in bars],
             "rates": [round(float(x), 1) for x in rates],
+            "wedge_rates": [round(float(x), 1) for x in
+                            metrics.wedge_rates(rates[self.epg], self.epg_wedge, self.cx.n_wedges)],
             "heading": round(self.heading, 4), "strength": round(self.strength, 4), "bumps": self.bumps,
             "speed": round(self.readout.speed, 4), "confidence": round(self.readout.confidence, 4),
             "signal": round(self.mapper.signal, 4), "level": round(self.mapper.level(), 4),
@@ -210,7 +219,7 @@ def golden_returns(volatility=0.002):
     return out
 
 
-def trading_records(seed=0, returns=None, spec_path=SPEC_PATH):
+def trading_records(seed=0, returns=None, spec_path=None):
     """Bar records of a fly trading a ReplayMarket: the trading layer's reference output."""
     returns = golden_returns() if returns is None else returns
     s = LiveSession(seed=seed, market=ReplayMarket(returns), spec_path=spec_path)
@@ -222,7 +231,7 @@ def trading_records(seed=0, returns=None, spec_path=SPEC_PATH):
     return bars, s.bump_violations
 
 
-def trading_digest(seed=0, spec_path=SPEC_PATH):
+def trading_digest(seed=0, spec_path=None):
     bars, violations = trading_records(seed, spec_path=spec_path)
     payload = json.dumps({"bars": bars, "bump_violations": violations}, sort_keys=True)
     return hashlib.sha256(payload.encode()).hexdigest()

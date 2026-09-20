@@ -38,7 +38,10 @@ class Params:
     w_ep: float
     w_pe: float
     noise_amp: float
-    neuromod_gain: float  # baked into W (D7->EPG) by connectome.build_procedural
+    neuromod_gain: float  # baked into W (D7->EPG) by the connectome builder
+    w_dd: float           # D7->D7 gain (hemibrain only; 0 for the procedural connectome)
+    w_dp: float           # D7->PEN gain (hemibrain only; 0 for the procedural connectome)
+    w_pp: float           # PEN->PEN gain (hemibrain only; 0 for the procedural connectome)
 
     @classmethod
     def from_dict(cls, d):

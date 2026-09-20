@@ -52,6 +52,16 @@ h2 { font-size: 14px; margin: 0; font-weight: 600; }
   font-size: 12px; padding: 3px 10px; border-radius: 999px; white-space: nowrap;
   background: var(--surface-2); color: var(--ink-2); border: 1px solid var(--grid);
 }
+.top-right { display: flex; align-items: center; gap: 10px; }
+.chain-count {
+  display: inline-flex; align-items: baseline; gap: 6px; padding: 3px 10px; border-radius: 999px;
+  background: var(--surface-2); border: 1px solid var(--grid); white-space: nowrap;
+}
+.chain-count b { font-size: 15px; font-variant-numeric: tabular-nums; color: var(--ink); }
+.chain-count-label { font-size: 11px; color: var(--ink-3); }
+.chain-count.tick b { color: var(--epg); transition: none; }
+.chain-count b { transition: color 600ms ease-out; }
+
 .pill.ok::before { content: "● "; color: var(--ok); }
 .pill.bad::before { content: "● "; color: var(--bad); }
 
