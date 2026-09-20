@@ -38,6 +38,20 @@
   #feed .dim { color: #64748b; }
   #feed a { color: #7dd3fc; text-decoration: none; }
   #feed a:hover { text-decoration: underline; }
+  /* The title card. Sits on the right because the exhibits are composed left
+     of centre in the opening shot — see OPENING_FIXED in main.ts. Fades out
+     rather than unmounting, so the button keeps its size while the camera is
+     still moving and the layout never jumps. */
+  #intro { position: fixed; right: 54px; top: 50%; transform: translateY(-50%);
+           z-index: 3; display: flex; flex-direction: column;
+           align-items: flex-end; gap: 24px; text-align: right;
+           transition: opacity 700ms ease; }
+  #intro.gone { opacity: 0; pointer-events: none; }
+  #vs { font-size: 62px; font-weight: 600; line-height: 0.92;
+        letter-spacing: 0.05em; color: #e2e8f0; }
+  #vs em { display: block; font-style: normal; font-size: 24px;
+           letter-spacing: 0.34em; color: #64748b; margin: 10px 0 8px; }
+  #enter { padding: 13px 38px; font-size: 13px; letter-spacing: 0.24em; }
   #hint { position: fixed; left: 16px; bottom: 16px; font-size: 11px;
           opacity: 0.55; }
   /* CC BY 4.0 requires the credit to be shown, so it is not inside the reveal. */
@@ -54,6 +68,10 @@
     <div id="txtitle"><span>LIVE TRANSACTIONS &middot; THRU ALPHANET</span><span><button id="txpause">PAUSE</button> <span class="dot">&#9679;</span></span></div>
     <div id="txstats"></div>
     <div id="feed"></div>
+  </div>
+  <div id="intro">
+    <div id="vs">FLY<em>VS</em>MAN</div>
+    <button id="enter">ENTER</button>
   </div>
   <div id="hint">click the tank to look closer &middot; drag to orbit &middot; scroll to zoom &middot; live on Thru alphanet</div>
   <div id="credit"><a href="https://sketchfab.com/3d-models/fly-6a4470f884554864827d848718b2b6bc" target="_blank" rel="noreferrer">&ldquo;Fly&rdquo; by victorberdugo1</a> &middot; <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a></div>

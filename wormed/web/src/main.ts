@@ -35,13 +35,13 @@ const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.01, 1
 // a second time and the paste would land somewhere else entirely.
 // ---------------------------------------------------------------------------
 const OPENING_FIXED = true;
-camera.position.set(4.61, 2.46, 5.20);
+camera.position.set(4.22, 2.46, 4.46);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 document.body.appendChild(renderer.domElement);
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.set(0.88, 0.98, 2.95);   // az 59° polar 71° dist 4.60
+controls.target.set(0.49, 0.98, 2.21);   // az 59° polar 71° dist 4.60
 // How far back the page opens. The pose above was composed AT this distance,
 // so the normalise below is currently a no-op and is kept only so a future
 // paste at some other distance still opens from here — the angle is preserved
@@ -76,6 +76,8 @@ addEventListener("keydown", e => {
   // does it, but once the camera is in close there may be no "away" left to
   // click: the trigger box is deliberately sized to cover every pixel at that
   // range, so the pointer has nowhere to land that means "let me out".
+  // ENTER opens the scene, the same as clicking the card's button.
+  if (e.key === "Enter") { enterScene(); return; }
   if (e.key === "Escape") {
     if (side === "none") return;     // nothing is open; do not yank a hand-driven camera
     side = "none";
@@ -302,13 +304,19 @@ void Promise.all([loadLaptop(scene), loadFlyDesk(scene)])
     // target move by the same vector, so the angle and distance the shot was composed at survive
     // — and WIDE_FOCUS moves with them, or the reveal's first frame would snap the scene back to
     // wherever the target started.
-    const screen = desk.monitorAt(new THREE.Vector3());
-    const shift = OPENING_FIXED ? new THREE.Vector3() : screen.clone().sub(controls.target);
-    controls.target.add(shift);
-    camera.position.add(shift);
-    WIDE_FOCUS.copy(controls.target);
-    focus.copy(controls.target);   // or the first damped frame drags the shot back
-    controls.update();
+    // OPENING_FIXED means the authored shot is the shot — do not measure, do
+    // not slide, do not touch WIDE_FOCUS. The desk can finish loading AFTER
+    // the viewer has pressed ENTER, and recentring here would snap the camera
+    // back to the title pose mid-flight.
+    if (!OPENING_FIXED) {
+      const screen = desk.monitorAt(new THREE.Vector3());
+      const shift = screen.clone().sub(controls.target);
+      controls.target.add(shift);
+      camera.position.add(shift);
+      WIDE_FOCUS.copy(controls.target);
+      focus.copy(controls.target);   // or the first damped frame drags the shot back
+      controls.update();
+    }
 
     // And the floor's origin goes under that screen too. Only the grid moves: its centre lines
     // are the one origin on screen, so sliding them is the same image as shifting every other
@@ -408,6 +416,25 @@ async function touch(label: string, neuron: string): Promise<void> {
   clicks.unshift(await feed.touch(neuron));
   clicks.length = Math.min(clicks.length, 6);
 }
+// ---------------------------------------------------------------------------
+// THE TITLE CARD. The page opens on a shot composed for the card, and ENTER
+// walks it over to the one composed for the exhibits. The two poses share an
+// angle and a distance exactly, so the difference is a pure TRANSLATION —
+// which is why this needs no tween of its own: moving WIDE_FOCUS is enough,
+// and the reveal's own damped focus below carries target and camera together.
+// ---------------------------------------------------------------------------
+const ENTER_FOCUS = new THREE.Vector3(0.88, 0.98, 2.95);
+const intro = document.getElementById("intro")!;
+let entered = false;
+function enterScene(): void {
+  if (entered) return;             // ENTER is a one-way door; re-arming it would fight a click
+  entered = true;
+  intro.classList.add("gone");
+  freeCam = false;                 // hand-driving suspends the move that is about to run
+  WIDE_FOCUS.copy(ENTER_FOCUS);
+}
+document.getElementById("enter")!.addEventListener("click", enterScene);
+
 document.getElementById("touch-head")!.onclick = () => void touch("HEAD", "ALML");
 document.getElementById("touch-tail")!.onclick = () => void touch("TAIL", "PLML");
 
