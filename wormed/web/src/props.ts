@@ -17,11 +17,13 @@ const SOIL_D = 0.35;       // soil depth below the floor
 /** Plinth top, a hair above the rim. Exported: it is the table BOTH machines stand on. */
 export const STAND_TOP = 0.45;
 const STAND_W = 1.7;       // plinth footprint; must stay wider than the laptop
-/** Deep enough for the laptop AND the fly's desk standing back to back behind it. The laptop is
- *  pinned to the plinth's tank edge, so every unit here becomes room on the far side — shrink it
- *  and the fly ends up off the end of the table. */
-const STAND_D = 2.9;
-const LAPTOP_GAP = 0.18;   // tank rim to the laptop's own near edge
+/** Margin from a table's near edge to the machine standing on it. Used on BOTH tables, which is
+ *  what makes the two rectangles read as a matching pair rather than two different desks. */
+export const LAPTOP_GAP = 0.18;
+/** World z of the tank's outer +z face — where the tables start. Exported because main.ts sizes
+ *  both of them from it, and re-deriving `ARENA.halfY + WALL_T` there would silently drift the
+ *  moment either constant moves. */
+export const TANK_EDGE = ARENA.halfY + WALL_T;
 const LAPTOP_SCALE = 0.33; // the .obj ships ~3.46 units wide; this is ~1.14
 const SOIL_RELIEF = 0.012; // surface bumps; MUST stay under the worm radius
 /** The room's floor: the plane the terrarium's slab and the grid both sit on. Anything else
@@ -159,12 +161,9 @@ export function buildTerrarium(scene: THREE.Scene): THREE.Group {
   box(WALL_T, WALL_H, d * 2, -w + WALL_T / 2, WALL_H / 2, 0, matte);
   box(WALL_T, WALL_H, d * 2, w - WALL_T / 2, WALL_H / 2, 0, matte);
 
-  // The plinth stands OUTSIDE the rim: inside it, the worm would crawl into a
-  // pillar the body integrator knows nothing about. Its near face is placed
-  // flush against the rim rather than at a fixed offset, so resizing it
-  // cannot push it into the terrarium wall.
-  box(STAND_W, STAND_TOP + SOIL_D, STAND_D,
-      0, (STAND_TOP - SOIL_D) / 2, d + STAND_D / 2, plinth);
+  // The tables are NOT built here. Each one is sized to the machine that stands on it, and
+  // neither model has loaded yet — see addPlinth and main.ts.
+  void plinth;
 
   // The room: a grey grid the whole set stands on, level with the underside
   // of the terrarium so nothing floats.
@@ -178,6 +177,24 @@ export function buildTerrarium(scene: THREE.Scene): THREE.Group {
 
   scene.add(group);
   return group;
+}
+
+/**
+ * One machine's table, spanning `zNear` to `zFar`.
+ *
+ * TWO of these, not one slab under both. The tables stand OUTSIDE the tank rim — inside it the
+ * worm would crawl into a pillar the body integrator knows nothing about — and the caller sizes
+ * each to its own machine, because neither model's depth is known until it has loaded.
+ */
+export function addPlinth(scene: THREE.Scene, zNear: number, zFar: number): THREE.Mesh {
+  const m = new THREE.Mesh(
+    new THREE.BoxGeometry(STAND_W, STAND_TOP + SOIL_D, zFar - zNear),
+    // Lifted a shade off the tank black: on the same black the laptop's own dark body
+    // disappears into the table it stands on.
+    new THREE.MeshStandardMaterial({ color: 0x23272b, roughness: 0.9, metalness: 0 }));
+  m.position.set(0, (STAND_TOP - SOIL_D) / 2, (zNear + zFar) / 2);
+  scene.add(m);
+  return m;
 }
 
 /** The laptop, and the lid box the fly's monitor is sized and squared up against. */

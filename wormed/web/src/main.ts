@@ -3,8 +3,8 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { WormBody, ChainClock, BEHAVIOR, type BehaviorState } from "./body.js";
 import { WormMesh } from "./worm.js";
 import { BrainCloud, parseMorphology } from "./brain.js";
-import { ChainFeed, type Behavior, type ChainConfig, type RelayStatus } from "./chain.js";
-import { ARENA, STAND_TOP, buildTerrarium, loadLaptop } from "./props.js";
+import { ChainFeed, type ChainConfig, type RelayStatus } from "./chain.js";
+import { ARENA, STAND_TOP, LAPTOP_GAP, TANK_EDGE, addPlinth, buildTerrarium, loadLaptop } from "./props.js";
 import { loadFlyDesk, type FlyDesk } from "./fly.js";
 import { MONITOR_WIDTH } from "./computer.js";
 
@@ -126,15 +126,19 @@ const clock = new ChainClock();
 const worm = new WormMesh(scene);
 const brain = new BrainCloud(scene, positions, names, morphology);
 const terrarium = buildTerrarium(scene);
-// The two machines stand BACK TO BACK on one table: the laptop's display faces the tank, the
-// fly's faces the fly, and the two shells meet in the middle. Each animal looks at its own screen
-// and, through it, at the other animal.
+// The two machines stand back to back on TWO tables, one each, with DESK_GAP of floor between
+// them. The laptop's display faces the tank, the fly's faces the fly, and the gap falls where the
+// two shells used to meet. Each animal looks at its own screen and, through it, at the other
+// animal.
 //
 // The fly's desk is scaled so its monitor is exactly as wide as the laptop's lid, measured — not
 // guessed — and the fly rides that scale, which is the only way its feet stay on its own keys.
 // Neither model is 1.5 MB of nothing, and the worm runs while both load.
 let fly: FlyDesk | undefined;
-const BACK_GAP = 0.06;   // shell to shell
+/** Floor between the two tables, measured between the monitors that face each other across it.
+ *  The pair is mirror-symmetric about the middle of this gap, and that is where the visible
+ *  origin goes — see the floor slide below. */
+const DESK_GAP = 0.35;
 void Promise.all([loadLaptop(scene), loadFlyDesk(scene)])
   .then(([laptop, desk]) => {
     const scale = (laptop.lid.max.x - laptop.lid.min.x) / MONITOR_WIDTH;
@@ -143,8 +147,24 @@ void Promise.all([loadLaptop(scene), loadFlyDesk(scene)])
     // of it, so a half turn puts the monitor between the fly and the laptop, screen still on the
     // fly's side.
     desk.group.rotation.y = Math.PI;
-    desk.group.position.set(0, STAND_TOP,
-                            laptop.lid.max.z + BACK_GAP + desk.monitorBack * scale);
+
+    // Both tables get the SAME depth, so the pair is mirror-symmetric about the gap. That depth
+    // is whichever machine needs more room, never the laptop's alone: size it to the laptop and
+    // the fly's keyboard hangs off the back of its own desk.
+    desk.group.position.set(0, STAND_TOP, 0);
+    desk.group.updateMatrixWorld(true);
+    const deskAtZero = new THREE.Box3().setFromObject(desk.group);
+    const lapBox = new THREE.Box3().setFromObject(laptop.group);
+    const depth = Math.max(lapBox.max.z - TANK_EDGE,
+                           deskAtZero.max.z - deskAtZero.min.z) + LAPTOP_GAP;
+    const wormFar = TANK_EDGE + depth;
+    const flyNear = wormFar + DESK_GAP;
+    addPlinth(scene, TANK_EDGE, wormFar);
+    addPlinth(scene, flyNear, flyNear + depth);
+
+    // Slide the desk back onto its OWN table, seated by its measured near edge so it keeps the
+    // same margin from the table lip that the laptop keeps from the tank.
+    desk.group.position.z = flyNear + LAPTOP_GAP - deskAtZero.min.z;
     fly = desk;
 
     // Re-centre the wide shot on the fly's SCREEN, now that there is one to measure. Camera and
@@ -162,8 +182,13 @@ void Promise.all([loadLaptop(scene), loadFlyDesk(scene)])
     // are the one origin on screen, so sliding them is the same image as shifting every other
     // object the opposite way, and it leaves the body integrator's arena on the world axes where
     // body.ts clamps against it.
+    // And the floor's origin goes to the middle of the GAP. With both tables the same depth that
+    // is the centre of the pair, so the visible origin is the thing they are symmetric about. x
+    // is the tables' own centre line, NOT the screen's: the fly's monitor sits wherever its feet
+    // landed, a few centimetres off centre, and centring the grid on that would leave the
+    // rectangles visibly lopsided about their own origin.
     const floor = terrarium.getObjectByName("floor");
-    if (floor) floor.position.set(screen.x, floor.position.y, screen.z);
+    if (floor) floor.position.set(0, floor.position.y, wormFar + DESK_GAP / 2);
   })
   .catch(e => console.warn("desk models failed to load", e));
 brain.setResolution(innerWidth, innerHeight);
@@ -181,7 +206,6 @@ addEventListener("beforeunload", () => stop.abort());
 
 const n = names.length;
 let behavior: BehaviorState = { state: BEHAVIOR.PAUSE, gain: 0 };
-let chainBehavior: Behavior | undefined;
 // A frame's mV is a VIEW over the received gRPC buffer (chain.ts), which
 // TypeScript types as ArrayBufferLike — annotate or the first assignment
 // from the chain will not fit a locally allocated Int16Array.
@@ -195,7 +219,7 @@ let lastFrameAt = 0;
 // recycle each other's pool slots within one frame anyway.
 const FIRING_PER_FRAME = 110;
 
-feed.onBehavior(b => { chainBehavior = b; behavior = { state: b.state, gain: b.gain }; });
+feed.onBehavior(b => { behavior = { state: b.state, gain: b.gain }; });
 feed.onStatus(s => { status = s; });
 /** Playback state per transaction signature. Written in the SAME callback
  *  that fires the particles, which is what keeps the panel and the animation
@@ -207,7 +231,6 @@ const txPlay = new Map<string, TxPlay>();
 /** Rolling rates, EMA. Raw per-frame counts are far too jumpy to read. */
 let framesPerSec = 0, transfersPerSec = 0, txPerMin = 0;
 let rateFrames = 0, rateTransfers = 0, rateTx = 0, rateAt = performance.now();
-let tickCount = 0, tickRate = 0;
 const seenSigs = new Set<string>();
 
 feed.onFrame(f => {
@@ -237,8 +260,6 @@ feed.onFrame(f => {
 });
 feed.start(stop.signal);
 
-const STATE_NAME = ["PAUSE", "FORWARD", "REVERSE", "OMEGA"];
-const hud = document.getElementById("hud")!;
 const txpanel = document.getElementById("txpanel")!;
 // Hidden BEFORE the first paint — set from the frame loop it would flash once.
 txpanel.style.opacity = "0";
@@ -329,8 +350,6 @@ function integrateRates(now: number): void {
   const span = (now - rateAt) / 1000;
   if (span < 1) return;
   rateAt = now;
-  tickRate += (tickCount / span - tickRate) * 0.4;
-  tickCount = 0;
   framesPerSec += (rateFrames / span - framesPerSec) * 0.4;
   transfersPerSec += (rateTransfers / span - transfersPerSec) * 0.4;
   txPerMin += (rateTx * 60 / span - txPerMin) * 0.4;
@@ -338,21 +357,18 @@ function integrateRates(now: number): void {
 }
 
 let last = performance.now();
-let lastHud = 0;
-let fps = 60;
+/** The transaction panel redraws at 10 Hz, not once per frame. */
+let lastPanel = 0;
 
 function frame(now: number): void {
   const real = (now - last) / 1000;
   // dt drives the LOOK of things — the connector fade — so it runs on the
   // wall clock and is clamped against one slow frame. The body does not use
-  // it; that comes off the ChainClock below. fps must be measured from the
-  // UNCLAMPED time or it reports 20 on a 1 fps renderer.
+  // it; that comes off the ChainClock below.
   const dt = Math.min(0.05, real);
   last = now;
-  if (real > 0) fps += (1 / real - fps) * 0.05;
 
   feed.tick();                       // paces the chain's frames onto the scene
-  tickCount++;
   // dt is the RENDER frame; what the body actually animates is however much
   // simulated time the chain has handed over. No frames, no movement.
   body.update(clock.take(real), behavior);
@@ -364,23 +380,8 @@ function frame(now: number): void {
   brain.tick(dt);
 
   integrateRates(now);
-  if (now - lastHud > 100) {
-    lastHud = now;
-    const b = chainBehavior;
-    const age = lastFrameAt ? (Math.max(0, now - lastFrameAt) / 1000).toFixed(1) : "--";
-    hud.textContent = [
-      `state    ${STATE_NAME[behavior.state]}  gain ${behavior.gain.toFixed(2)}`,
-      `drive    fwd ${(b?.driveFwd ?? 0).toFixed(3)}  rev ${(b?.driveRev ?? 0).toFixed(3)}`,
-      `sim step ${feed.stats.lastStep}  (${(feed.stats.lastStep * cfg.dtMs / 1000).toFixed(1)}s of worm)`,
-      `frames   ${feed.stats.frames} played, ${feed.stats.lag} queued, last ${age}s ago`,
-      `events   ${feed.stats.events} from the node, ${feed.stats.transfers} transfers`,
-      `frame tx ${frameSig ? frameSig.slice(0, 22) + "…" : "waiting"}`,
-      `brain    ${status ? (status.stepping ? "stepping" : status.awake ? "waking" : "idle — touch to wake") : "relay offline"}`,
-      `fee payer ${status ? status.balance.toLocaleString() : "?"} units` +
-        (status && status.balance < status.floor ? `  LOW: ${status.faucet}` : ""),
-      `pacing   burst ${feed.stats.burstMs}ms  interval ${feed.stats.interval}ms  ticks/s ${tickRate.toFixed(0)}`,
-      `neurons  ${n}   neurites ${brain.segments}   fps ${fps.toFixed(0)}`,
-    ].join("\n");
+  if (now - lastPanel > 100) {
+    lastPanel = now;
     if (!panelPaused) {
       drawLog();
       drawStats();

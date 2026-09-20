@@ -9,11 +9,8 @@
            border: 1px solid #334155; border-radius: 6px; cursor: pointer;
            font: inherit; }
   button:hover { background: #334155; }
-  #hud { position: fixed; right: 16px; top: 16px; width: 360px;
-         font-size: 11px; line-height: 1.6; opacity: 0.85;
-         white-space: pre; text-align: right; pointer-events: none; }
   /* The signature rows are LINKS into the explorer, so this panel must accept
-     clicks where #hud must not. */
+     clicks. */
   #txpanel { position: fixed; left: 16px; top: 68px; width: 430px;
              max-height: calc(100vh - 110px); display: flex;
              flex-direction: column;
@@ -53,7 +50,6 @@
     <button id="touch-head">Touch head</button>
     <button id="touch-tail">Touch tail</button>
   </div>
-  <div id="hud"></div>
   <div id="txpanel">
     <div id="txtitle"><span>LIVE TRANSACTIONS &middot; THRU ALPHANET</span><span><button id="txpause">PAUSE</button> <span class="dot">&#9679;</span></span></div>
     <div id="txstats"></div>
