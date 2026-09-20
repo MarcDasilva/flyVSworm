@@ -22,8 +22,9 @@ rim.position.set(-3, 2, -2);
 scene.add(rim);
 
 const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.01, 100);
-// The wide shot has to hold TWO exhibits — the terrarium at the origin and the fly's desk out at
-// FLY_AT — so it sits back and off to the side of the tank rather than square in front of it.
+// The wide shot has to hold BOTH exhibits — the terrarium and the fly's desk behind it — so it
+// sits back and off to the side rather than square in front of the tank. These are the composed
+// angle and distance; the desk re-centres both on the fly's screen once it has loaded.
 camera.position.set(5.5, 2.8, 4.6);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -124,7 +125,7 @@ const body = new WormBody(24, ARENA);
 const clock = new ChainClock();
 const worm = new WormMesh(scene);
 const brain = new BrainCloud(scene, positions, names, morphology);
-buildTerrarium(scene);
+const terrarium = buildTerrarium(scene);
 // The two machines stand BACK TO BACK on one table: the laptop's display faces the tank, the
 // fly's faces the fly, and the two shells meet in the middle. Each animal looks at its own screen
 // and, through it, at the other animal.
@@ -150,11 +151,19 @@ void Promise.all([loadLaptop(scene), loadFlyDesk(scene)])
     // target move by the same vector, so the angle and distance the shot was composed at survive
     // — and WIDE_FOCUS moves with them, or the reveal's first frame would snap the scene back to
     // wherever the target started.
-    const shift = desk.monitorAt(new THREE.Vector3()).sub(controls.target);
+    const screen = desk.monitorAt(new THREE.Vector3());
+    const shift = screen.clone().sub(controls.target);
     controls.target.add(shift);
     camera.position.add(shift);
     WIDE_FOCUS.copy(controls.target);
     controls.update();
+
+    // And the floor's origin goes under that screen too. Only the grid moves: its centre lines
+    // are the one origin on screen, so sliding them is the same image as shifting every other
+    // object the opposite way, and it leaves the body integrator's arena on the world axes where
+    // body.ts clamps against it.
+    const floor = terrarium.getObjectByName("floor");
+    if (floor) floor.position.set(screen.x, floor.position.y, screen.z);
   })
   .catch(e => console.warn("desk models failed to load", e));
 brain.setResolution(innerWidth, innerHeight);

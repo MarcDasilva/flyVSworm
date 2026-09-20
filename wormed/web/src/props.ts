@@ -169,6 +169,10 @@ export function buildTerrarium(scene: THREE.Scene): THREE.Group {
   // The room: a grey grid the whole set stands on, level with the underside
   // of the terrarium so nothing floats.
   const grid = new THREE.GridHelper(24, 96, 0x5a5f66, 0x2b2f34);
+  // Named so the host can slide the floor's centre under whatever the shot is built around. The
+  // grid's centre lines are the only origin anyone can SEE, so moving them is the same picture as
+  // moving every other object the other way — and one object instead of twenty.
+  grid.name = "floor";
   grid.position.y = -SOIL_D - SOIL_RELIEF;
   group.add(grid);
 
