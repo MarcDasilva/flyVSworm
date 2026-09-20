@@ -34,7 +34,15 @@ worker.stdin = {
     }, 1);
   },
 };
-mock.method(childProcess, "spawn", () => worker);
+// The chain worker is the python process; anything else the relay spawns is the `thru` CLI
+// (the fly's reservoir keeper), which must NOT run here — it would query and spend on alphanet.
+mock.method(childProcess, "spawn", cmd => cmd === "python3" ? worker : noCli());
+function noCli() {
+  const child = new EventEmitter();
+  child.stdout = new PassThrough();
+  setImmediate().then(() => child.emit("exit", 1));
+  return child;
+}
 mock.method(http, "createServer", handler => {
   handleRequest = handler;
   return { on() { return this; }, listen(_port, ready) { void ready(); } };

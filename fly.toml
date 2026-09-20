@@ -12,7 +12,10 @@ primary_region = "yyz"
   internal_port = 8787
   force_https = true
   auto_stop_machines = "off"
-  auto_start_machines = true
+  # Off: a stopped machine must STAY stopped. The proxy restarting it on the first page view
+  # put a second relay on the same signing keys while one ran locally (nonce collisions both
+  # ways). Start it by hand: fly machine start.
+  auto_start_machines = false
   min_machines_running = 1
 
 # A shared-cpu-1x could not sign the worm's 2,048-batch (23 s, versus 6 s on a laptop) while the

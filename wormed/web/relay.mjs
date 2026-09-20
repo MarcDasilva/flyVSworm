@@ -10,12 +10,13 @@ import { createInterface } from "node:readline";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { settleSynapses } from "./synapses.mjs";
-import { settleFlySynapses, outgoingEdges, BATCH_MAX } from "./flysynapses.mjs";
+import { settleFlySynapses, outgoingEdges, BATCH_MAX, FLY_PAYERS } from "./flysynapses.mjs";
 import { openStore } from "./store.mjs";
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));   // repo root
 const NAMES = new Set(JSON.parse(
   readFileSync(new URL("../data/names.json", import.meta.url), "utf8")));
+const flyCfg = JSON.parse(readFileSync(new URL("../data/fly.json", import.meta.url), "utf8"));
 
 const PORT = 8787;
 
@@ -129,16 +130,20 @@ async function chain(op, cmd) {
 // reach the model's WebSocket still sees the fly trade, and two open pages cannot submit the
 // same spike twice. The page reads the receipts back off the chain (src/flychain.ts).
 const FLY_MODEL = "http://127.0.0.1:8000";
-/** How often; flysynapses.BATCH_MAX says how many. The model makes ~14,000 events a second,
- *  so what settles is a uniform SAMPLE of the window — the page says so. */
-const FLY_SUBMIT_MS = 1000;
-/** About one submission window of the model's output, so the sample spans the whole second. */
+/** The pool: one settle loop per payer, each paced by its own batch landing (flysynapses.mjs
+ *  says why one payer tops out near 100/s). Between batches a loop pauses this long so a payer
+ *  whose batch was refused does not spin. The model makes ~14,000 events a second, so what
+ *  settles is a uniform SAMPLE of the window — the page says so. */
+const FLY_PAUSE_MS = 200;
+/** About a second of the model's output, so a sample spans the whole window. */
 const FLY_QUEUE_MAX = 16_384;
 let flyEdges = new Map();
 let flyQueue = [];
-let flyInFlight = false;
-/** What the page's fly panel prints: the FLY's payer, not the worm's (flysynapses.mjs). */
-const flyStats = { model: "offline", frames: 0, submitted: 0, balance: undefined, error: "" };
+/** What the page's fly panel prints. Balance is the POOL's — every fly payer, none of the
+ *  worm's (flysynapses.mjs). */
+const flyStats = { model: "offline", frames: 0, submitted: 0, balance: undefined, error: "",
+                   payers: Object.fromEntries(FLY_PAYERS.map(p => [p, undefined])),
+                   reservoir: undefined };
 
 async function flyModelLoop() {
   for (;;) {
@@ -174,21 +179,69 @@ async function flyModelLoop() {
   }
 }
 
-async function flySettleLoop() {
+/**
+ * Keeps the fly's reservoir funded. program/fly.c conserves charge between the reservoir and
+ * the 56 cells, but charge pools in cells that receive more than they fire, so the reservoir
+ * drains at ~0.1 unit per event and every event reverts once it is empty — measured: the
+ * original 10,000 lasted ~100,000 events. The faucet pays it straight, with the spare `fly`
+ * key as fee payer (its OWN nonce sequence, so no pool signer is disturbed); that key is
+ * refilled from the faucet too when it runs low. One CLI call each per check.
+ */
+const RESERVOIR_REFILL_AT = 10_000;
+const RESERVOIR_CHECK_MS = 15_000;
+const RESERVOIR_PAYER = "fly";
+/** One `thru --json` call, resolved with its parsed output. spawn rather than execFile so the
+ *  relay test's spawn mock covers it — promisify(execFile) is Node's own promisified variant
+ *  and slips past a mock, which had the test querying alphanet for real. */
+function cli(...args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn("thru", ["--json", ...args], { stdio: ["ignore", "pipe", "inherit"] });
+    let out = "";
+    child.stdout.on("data", c => { out += c; });
+    child.on("error", reject);
+    child.on("exit", code => {
+      if (code !== 0) { reject(Error(`thru ${args.join(" ")} exited ${code}`)); return; }
+      try { resolve(JSON.parse(out.slice(0, out.indexOf("}\n{") + 1 || undefined))); }
+      catch (e) { reject(e); }
+    });
+  });
+}
+async function flyReservoirLoop() {
+  const balance = async (who) => Number((await cli("getbalance", who)).balance.balance);
   for (;;) {
-    await new Promise(r => setTimeout(r, FLY_SUBMIT_MS));
-    // Same rule as the worm: no viewer, no spend. The model keeps running; only settlement stops.
-    if (!awake() || flyInFlight || !flyQueue.length) continue;
-    const pool = flyQueue;
-    flyQueue = [];
-    const events = [];
-    for (let i = 0; i < BATCH_MAX && pool.length; i++)
-      events.push(...pool.splice(Math.floor(Math.random() * pool.length), 1));
-    flyInFlight = true;
+    await new Promise(r => setTimeout(r, RESERVOIR_CHECK_MS));
+    if (!awake()) continue;
     try {
-      const out = await settleFlySynapses(events);
+      if (await balance(RESERVOIR_PAYER) < 2_000)
+        await cli("faucet", "withdraw", "--fee-payer", RESERVOIR_PAYER, RESERVOIR_PAYER, "10000");
+      const have = await balance(flyCfg.reservoirAccount);
+      flyStats.reservoir = have;
+      if (have < RESERVOIR_REFILL_AT) {
+        await cli("faucet", "withdraw", "--fee-payer", RESERVOIR_PAYER, flyCfg.reservoirAccount, "10000");
+        console.error(`fly reservoir: at ${have}, refilled from the faucet`);
+      }
+    } catch (e) {
+      note({ op: "fly-reservoir", error: String(e?.message ?? e).replace(/\s+/g, " ").slice(0, 200) });
+    }
+  }
+}
+
+async function flySettleLoop(payer) {
+  for (;;) {
+    await new Promise(r => setTimeout(r, FLY_PAUSE_MS));
+    // Same rule as the worm: no viewer, no spend. The model keeps running; only settlement stops.
+    if (!awake() || !flyQueue.length) continue;
+    // A uniform sample of the queue, which the other loops are drawing from too.
+    const events = [];
+    for (let i = 0; i < BATCH_MAX && flyQueue.length; i++)
+      events.push(...flyQueue.splice(Math.floor(Math.random() * flyQueue.length), 1));
+    try {
+      const out = await settleFlySynapses(events, payer);
       flyStats.submitted += out.submitted;
-      if (out.balance !== undefined) flyStats.balance = out.balance;
+      if (out.balance !== undefined) {
+        flyStats.payers[payer] = out.balance;
+        flyStats.balance = Object.values(flyStats.payers).reduce((a, b) => a + (b ?? 0), 0);
+      }
       flyStats.error = "";
       // Counted like the worm's synapses — one row per signature — so the board's total covers
       // both animals. Only the first is logged; 24 rows a batch would drown the worm's log.
@@ -197,10 +250,8 @@ async function flySettleLoop() {
         store.countTransactions(out.submitted - 1);
       }
     } catch (error) {
-      flyStats.error = String(error?.message ?? error).replace(/\s+/g, " ").slice(0, 200);
+      flyStats.error = `${payer}: ${String(error?.message ?? error).replace(/\s+/g, " ").slice(0, 180)}`;
       note({ op: "fly-synapse", error: flyStats.error });
-    } finally {
-      flyInFlight = false;
     }
   }
 }
@@ -419,5 +470,6 @@ createServer((req, res) => {
   }
   stepperLoop();
   void flyModelLoop();
-  void flySettleLoop();
+  for (const payer of FLY_PAYERS) void flySettleLoop(payer);
+  void flyReservoirLoop();
 });

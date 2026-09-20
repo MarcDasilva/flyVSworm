@@ -39,7 +39,11 @@ def _program_id() -> str:
 
 
 def _run_json(args: list[str]) -> dict:
-    r = subprocess.run(["thru", "--json", *args], capture_output=True, text=True, check=True)
+    r = subprocess.run(["thru", "--json", *args], capture_output=True, text=True)
+    if r.returncode != 0:
+        # The CLI's reason is in its output, NOT in CalledProcessError's message — a bare
+        # "exit status 1" in the relay log is what this used to be.
+        raise RuntimeError(f"thru {' '.join(args)} failed: {(r.stdout + r.stderr).strip()[:300]}")
     return json.loads(r.stdout)
 
 

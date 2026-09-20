@@ -28,9 +28,18 @@ const cfg = JSON.parse(readFileSync(new URL("../data/fly.json", import.meta.url)
  * the shared payer produced zero events, and the same eight through a payer of
  * their own produced eight. Two animals, two payers.
  *
- * Refilled from the faucet by refillFlyPayer; by hand: thru faucet withdraw default 10000
+ * And the same rule is the fly's own ceiling: one payer lands about 100 transactions a second
+ * because each batch must settle before the next (see settled). So the fly has a POOL of
+ * payers, one nonce sequence each, and the relay runs one settle loop per payer in parallel —
+ * measured ~94/s on one, and the pool scales by count until alphanet itself is the limit.
+ * A new payer is `thru account create <name>` then the faucet; refillFlyPayer keeps it topped
+ * up after that. By hand: thru faucet withdraw --fee-payer <name> <name> 10000
+ *
+ * NOT `default`. It is the CLI's implicit fee payer, so anything run by hand and the worm's
+ * own faucet refill (pipeline/deploy.py) spend its nonces outside a manager — 20 of 54 batches
+ * on it failed NONCE_TOO_LOW, and the worm's refills failed the other way.
  */
-const FEE_PAYER_KEY = "default";
+export const FLY_PAYERS = ["fly1", "fly2", "fly3", "fly4"];
 /** Leave the fly's payer enough to finish whatever is already in flight. */
 export const FLY_BALANCE_FLOOR = 2_000;
 /** Refill below this. One faucet call is 10,000 (its cap) and lands in ~3 s, so the threshold
@@ -38,7 +47,6 @@ export const FLY_BALANCE_FLOOR = 2_000;
  *  minute of spend. The relay throttles the calls, not the faucet. */
 export const FLY_REFILL_AT = 20_000;
 const REFILL_EVERY_MS = 15_000;
-let lastRefill = 0;
 
 /** Model weights are ~0.007 to 0.17; this is what turns one into whole units
  *  of balance. Small on purpose — every unit moved is a unit the accounts
@@ -95,29 +103,34 @@ export function validEvent(e) {
  * stale count is rejected with NONCE_TOO_LOW and settles nothing. Throttled: the faucet call
  * takes ~3 s to land and a second one before that would only pay another fee.
  */
-export async function refillFlyPayer(nonces) {
-  if (Date.now() - lastRefill < REFILL_EVERY_MS) return false;
-  lastRefill = Date.now();
-  await promisify(execFile)("thru", ["--json", "faucet", "withdraw", FEE_PAYER_KEY, "10000"]);
-  nonces.reset();
+export async function refillFlyPayer(signer) {
+  if (Date.now() - signer.lastRefill < REFILL_EVERY_MS) return false;
+  signer.lastRefill = Date.now();
+  // --fee-payer is load-bearing: the CLI otherwise charges `default`, which is ANOTHER pool
+  // signer, and that spends one of its nonces behind its manager — 11 of 42 default batches
+  // failed NONCE_TOO_LOW before this was explicit.
+  await promisify(execFile)("thru", ["--json", "faucet", "withdraw", "--fee-payer", signer.name,
+                                     signer.name, "10000"]);
+  signer.nonces.reset();
   return true;
 }
 
-let signer;
-async function connect() {
+/** One connection per payer name, made on first use. */
+const signers = new Map();
+async function connect(name) {
   const thru = createThruClient({ baseUrl: cfg.rpc, callOptions: { timeoutMs: 15_000 } });
-  const { stdout } = await promisify(execFile)("thru", ["--json", "keys", "get", FEE_PAYER_KEY]);
+  const { stdout } = await promisify(execFile)("thru", ["--json", "keys", "get", name]);
   const secret = JSON.parse(stdout).keys.value;
-  if (!/^[0-9a-f]{64}$/i.test(secret)) throw Error("Invalid fly signing key format");
+  if (!/^[0-9a-f]{64}$/i.test(secret)) throw Error(`Invalid fly signing key format for ${name}`);
   const privateKey = Buffer.from(secret, "hex");
   const publicKey = Pubkey.from(await thru.keys.fromPrivateKey(privateKey));
-  return { thru, feePayer: { publicKey }, key: nativeSigningKey(privateKey),
+  return { name, thru, feePayer: { publicKey }, key: nativeSigningKey(privateKey),
            chainId: await thru.chain.getChainId(),
-           nonces: thru.nonce.createFeePayerManager(publicKey) };
+           nonces: thru.nonce.createFeePayerManager(publicKey), lastRefill: 0 };
 }
 
 export async function closeFlySynapses() {
-  if (signer) (await signer).nonces.close();
+  for (const signer of signers.values()) (await signer).nonces.close();
 }
 
 /**
@@ -153,17 +166,18 @@ async function settled(thru, feePayer, nonces, end) {
  * them (settled). The BROWSER reads the confirmed receipts back off the chain itself
  * (src/flychain.ts); the wait here is for the NONCE, not the receipts.
  */
-export async function settleFlySynapses(events, floor = FLY_BALANCE_FLOOR) {
-  signer ??= connect();
-  const { thru, feePayer, key, chainId, nonces } = await signer;
+export async function settleFlySynapses(events, payerName = FLY_PAYERS[0], floor = FLY_BALANCE_FLOOR) {
+  if (!signers.has(payerName)) signers.set(payerName, connect(payerName));
+  const signer = await signers.get(payerName);
+  const { thru, feePayer, key, chainId, nonces } = signer;
   const batch = events.filter(validEvent).slice(0, BATCH_MAX);
   if (!batch.length) return { submitted: 0, balance: undefined };
   const [payer, height] = await Promise.all([
     thru.accounts.get(feePayer.publicKey), thru.blocks.getBlockHeight(),
   ]);
-  if (!payer.meta) throw Error("Fly fee payer account is missing — see FEE_PAYER_KEY");
-  if (payer.meta.balance < BigInt(FLY_REFILL_AT) && await refillFlyPayer(nonces)) {
-    console.error(`fly synapses: payer at ${payer.meta.balance}, refilled from the faucet`);
+  if (!payer.meta) throw Error(`Fly fee payer ${signer.name} is missing — see FLY_PAYERS`);
+  if (payer.meta.balance < BigInt(FLY_REFILL_AT) && await refillFlyPayer(signer)) {
+    console.error(`fly synapses: ${signer.name} at ${payer.meta.balance}, refilled from the faucet`);
     return { submitted: 0, balance: Number(payer.meta.balance) };
   }
   const canSpend = Number((payer.meta.balance - BigInt(floor)) / SYNAPSE_FEE);
@@ -186,7 +200,7 @@ export async function settleFlySynapses(events, floor = FLY_BALANCE_FLOOR) {
     const signatures = transactions.map(t => t.signature.toThruFmt());
     // Same line the worm's settler prints, and the thread back to a batch that
     // quietly went nowhere.
-    console.error(`fly synapses: sent ${sending.length} at nonce ${allocation.baseNonce}, ` +
+    console.error(`fly synapses: ${signer.name} sent ${sending.length} at nonce ${allocation.baseNonce}, ` +
                   `first ${signatures[0]}`);
     await settled(thru, feePayer, nonces, allocation.baseNonce + BigInt(sending.length));
     return { submitted: sending.length, signatures,
