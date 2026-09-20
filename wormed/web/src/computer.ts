@@ -32,7 +32,10 @@ const KEY_LIT = new THREE.Color("#5eead4");
 
 const SCREEN_W = 5.6;
 const SCREEN_H = 3.5;
-const MONITOR_Z = (ROWS * PITCH + 0.3) / 2 + 1.1;   // keyboard depth, then the gap behind it
+/** Local z of the monitor, and the height of the middle of its screen. Exported so a host scene
+ *  can aim a camera at the display itself rather than at the desk it stands on. */
+export const MONITOR_Z = (ROWS * PITCH + 0.3) / 2 + 1.1;   // keyboard depth, then the gap behind it
+export const MONITOR_SCREEN_Y = 2.75;
 /** Outside width of the monitor, bezel included. A host scene matching this to another display
  *  scales the WHOLE desk by the ratio — the fly comes with it, which is the only way its feet
  *  stay on the keys. */
@@ -80,7 +83,7 @@ export function createStandInComputer(keyboardCenter: THREE.Vector3, screen: THR
   const screenW = SCREEN_W;
   const screenH = SCREEN_H;
   const monitorZ = MONITOR_Z;
-  const screenY = 2.75;
+  const screenY = MONITOR_SCREEN_Y;
   const standBase = new THREE.Mesh(new RoundedBoxGeometry(1.8, 0.08, 1.1, 3, 0.03), shell);
   standBase.position.set(0, 0.04, monitorZ + 0.25);
   const neck = new THREE.Mesh(new RoundedBoxGeometry(0.4, screenY, 0.14, 3, 0.05), shell);

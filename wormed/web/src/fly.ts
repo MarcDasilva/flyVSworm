@@ -8,7 +8,7 @@
 // burst/pause keystroke rhythm.
 
 import * as THREE from "three";
-import { createStandInComputer, MONITOR_BACK, type Computer } from "./computer.js";
+import { createStandInComputer, MONITOR_BACK, MONITOR_SCREEN_Y, MONITOR_Z, type Computer } from "./computer.js";
 import { TradingScreen } from "./tradingScreen.js";
 
 /** Model units to scene units, unchanged from the launcher. Scene units here are worm body
@@ -100,6 +100,9 @@ export interface FlyDesk {
    *  the computer is offset to wherever the fly's feet landed, so the constant is short by that
    *  offset and anything squared up against it ends up inside the machine. */
   readonly monitorBack: number;
+  /** World position of the middle of the fly's screen, written into `out`. Valid only once the
+   *  caller has placed and scaled the desk. */
+  monitorAt(out: THREE.Vector3): THREE.Vector3;
   /** Resize the whole desk. Use this rather than `group.scale`: a point light's range and falloff
    *  are WORLD units and a parent scale does not touch them, so scaling the group alone drags the
    *  lamps in close at full strength and burns the exhibit out. */
@@ -204,6 +207,11 @@ export async function loadFlyDesk(scene: THREE.Scene): Promise<FlyDesk> {
   return {
     group,
     monitorBack: computer.group.position.z + MONITOR_BACK,
+    monitorAt(out) {
+      group.updateMatrixWorld(true);
+      return group.localToWorld(out.set(computer.group.position.x, MONITOR_SCREEN_Y,
+                                        computer.group.position.z + MONITOR_Z));
+    },
     setScale(s) {
       group.scale.setScalar(s);
       // Inverse-square: the lamp ends up s times nearer, so it needs s^2 less power to land the

@@ -136,6 +136,16 @@ void Promise.all([loadLaptop(scene), loadFlyDesk(scene)])
     desk.group.position.set(0, STAND_TOP,
                             laptop.lid.max.z + BACK_GAP + desk.monitorBack * scale);
     fly = desk;
+
+    // Re-centre the wide shot on the fly's SCREEN, now that there is one to measure. Camera and
+    // target move by the same vector, so the angle and distance the shot was composed at survive
+    // — and WIDE_FOCUS moves with them, or the reveal's first frame would snap the scene back to
+    // wherever the target started.
+    const shift = desk.monitorAt(new THREE.Vector3()).sub(controls.target);
+    controls.target.add(shift);
+    camera.position.add(shift);
+    WIDE_FOCUS.copy(controls.target);
+    controls.update();
   })
   .catch(e => console.warn("desk models failed to load", e));
 brain.setResolution(innerWidth, innerHeight);
