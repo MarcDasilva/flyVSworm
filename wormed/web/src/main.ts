@@ -31,10 +31,10 @@ controls.update();
 
 // ---------------------------------------------------------------------------
 // THE REVEAL. The page loads as a terrarium and nothing else: no nervous
-// system, no transaction feed, no explanation. Moving the pointer into the
-// window flies the camera down onto the worm and fades the rest in; taking it
-// out of the window puts everything back. One damped scalar drives all of it,
-// so the camera, the brain and the panel can never disagree about how far
+// system, no transaction feed, no explanation. Pointing at the tank flies the
+// camera down onto the worm and fades the rest in; pointing anywhere else, or
+// leaving the window, puts everything back. One damped scalar drives all of
+// it, so the camera, the brain and the panel can never disagree about how far
 // open the scene is.
 // ---------------------------------------------------------------------------
 const WIDE_FOCUS = controls.target.clone();
@@ -53,10 +53,37 @@ let reveal = 0;
 const wormFocus = new THREE.Vector3();
 const wantFocus = new THREE.Vector3();
 const orbit = new THREE.Vector3();
-addEventListener("pointermove", () => { engaged = true; });
-// pointerleave on the ROOT element, not on the canvas: the feed sits on top
-// of the canvas, so a canvas-scoped handler would close the scene the moment
-// the user reached for the panel they were just shown.
+
+// What counts as pointing at the worm: an INVISIBLE box around the tank, wide
+// enough to forgive an approach and tall enough to cover the air the
+// connectome hangs in. Raycasting one box beats raycasting the set — the soil
+// is 4,000 triangles and the answer would be the same. The material is
+// invisible rather than the object, because an invisible OBJECT is not
+// guaranteed to be raycast.
+const TRIGGER_MARGIN = 0.5;     // slack around the tank while the scene is shut
+const TRIGGER_TIGHT = 0.12;     //   and once it is open — see the frame loop
+const TRIGGER_TOP = 2.2;        // above the connectome at y = 1.05
+const trigger = new THREE.Mesh(
+  new THREE.BoxGeometry((ARENA.halfX + TRIGGER_MARGIN) * 2,
+                        TRIGGER_TOP + 0.4,
+                        (ARENA.halfY + TRIGGER_MARGIN) * 2),
+  new THREE.MeshBasicMaterial({ visible: false }));
+trigger.position.y = TRIGGER_TOP / 2 - 0.2;
+scene.add(trigger);
+
+const pointer = new THREE.Vector2();
+const ray = new THREE.Raycaster();
+addEventListener("pointermove", e => {
+  // Events that land on the feed or the touch buttons leave the state ALONE.
+  // The reveal is what put those there, and closing the scene as the user
+  // reaches for them is the one thing this must not do.
+  if (e.target !== renderer.domElement) return;
+  pointer.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  ray.setFromCamera(pointer, camera);
+  engaged = ray.intersectObject(trigger, false).length > 0;
+});
+// pointerleave on the ROOT element: the pointer can leave the window without
+// ever crossing the canvas on its way out, and the scene must still close.
 document.documentElement.addEventListener("pointerleave", () => { engaged = false; });
 
 addEventListener("resize", () => {
@@ -310,6 +337,14 @@ function frame(now: number): void {
     : THREE.MathUtils.damp(reveal, opening, REVEAL_RATE, dt);
   const eased = reveal * reveal * (3 - 2 * reveal);
   brain.setReveal(eased);
+  // The premises are generous while the scene is shut, so the tank is easy to
+  // find from the wide shot, and tight once it is open: at close range a box
+  // half a body length proud of the tank covers EVERY pixel, and then nothing
+  // the pointer does can end the reveal. Height is left alone — the column
+  // reaches the connectome, which is part of what the hover is pointing at.
+  const slack = THREE.MathUtils.lerp(TRIGGER_MARGIN, TRIGGER_TIGHT, eased);
+  trigger.scale.set((ARENA.halfX + slack) / (ARENA.halfX + TRIGGER_MARGIN), 1,
+                    (ARENA.halfY + slack) / (ARENA.halfY + TRIGGER_MARGIN));
   txpanel.style.opacity = eased.toFixed(3);
   txpanel.style.pointerEvents = eased > 0.6 ? "auto" : "none";
 
