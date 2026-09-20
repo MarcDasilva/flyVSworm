@@ -42,15 +42,31 @@
      the opening shot, see OPENING_FIXED in main.ts. The whole card fades as
      ONE element so the badge and its button leave together; fading rather
      than unmounting keeps the layout still while the camera is moving. */
-  #intro { position: fixed; right: 40px; top: 26px; z-index: 3;
+  #intro { position: fixed; right: 12vw; top: 4vh; z-index: 3;
            display: flex; flex-direction: column; align-items: center;
-           gap: 16px; transition: opacity 700ms ease; }
+           gap: 18px; transition: opacity 700ms ease; }
   #intro.gone { opacity: 0; pointer-events: none; }
   /* vw-capped so the badge cannot swallow the scene on a narrow window. The
      intrinsic width/height on the tag itself reserves the box before the PNG
      arrives, or the button jumps when it does. */
   #vs { display: block; width: min(340px, 26vw); height: auto; }
-  #enter { padding: 13px 38px; font-size: 13px; letter-spacing: 0.24em; }
+  /* Chunky arcade button, to match a cartoon badge rather than the slate
+     chrome the touch buttons use. The ID beats `button:hover` on specificity,
+     so the gradient survives the hover rule above instead of being flattened
+     back to slate. The offset shadow is the button's THICKNESS — press state
+     shortens it and drops the face onto it, which is what sells the click. */
+  #enter { padding: 15px 46px; font-size: 15px; font-weight: 700;
+           letter-spacing: 0.28em; color: #fff;
+           background: linear-gradient(180deg, #fbbf24 0%, #f97316 42%, #dc2626 100%);
+           border: 2px solid #1a1110; border-radius: 999px;
+           text-shadow: 0 2px 0 rgba(0,0,0,0.42);
+           box-shadow: 0 5px 0 #7f1d1d, 0 12px 20px rgba(0,0,0,0.45);
+           transition: transform 120ms ease, box-shadow 120ms ease,
+                       filter 120ms ease; }
+  #enter:hover { filter: brightness(1.08); transform: translateY(-2px);
+                 box-shadow: 0 7px 0 #7f1d1d, 0 16px 24px rgba(0,0,0,0.5); }
+  #enter:active { transform: translateY(3px);
+                  box-shadow: 0 2px 0 #7f1d1d, 0 5px 10px rgba(0,0,0,0.45); }
   #hint { position: fixed; left: 16px; bottom: 16px; font-size: 11px;
           opacity: 0.55; }
   /* CC BY 4.0 requires the credit to be shown, so it is not inside the reveal. */
