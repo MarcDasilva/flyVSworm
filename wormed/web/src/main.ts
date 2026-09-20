@@ -15,7 +15,8 @@ import { FlyBrain } from "./flybrain.js";
 import { FlyChain, flyNames } from "./flychain.js";
 import { MONITOR_WIDTH } from "./computer.js";
 import { createFlicker } from "./flicker.js";
-import { ambience, readMuted, setMuted } from "./ambience.js";
+import { ambience, duckAmbience, readMuted, setMuted } from "./ambience.js";
+import { startBanter, type Banter } from "./banter.js";
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0b0f14);
@@ -698,6 +699,7 @@ function enterScene(): void {
   WIDE_FOCUS.copy(ENTER_FOCUS);
   ambience("/sfx/fly.mp3", 0.25);
   ambience("/sfx/dirt.mp3", 0.2);
+  translateBtn.disabled = false;
 }
 document.getElementById("enter")!.addEventListener("click", enterScene);
 
@@ -715,6 +717,45 @@ const paintMute = () => {
 setMuted(muted);
 paintMute();
 muteBtn.onclick = () => { muted = !muted; setMuted(muted); paintMute(); };
+
+// --- translate --------------------------------------------------------------
+// The beds say the fly buzzes and the worm moves; this says what they are arguing about. Gated on
+// ENTER for the same reason the beds are: the press is the gesture that lets audio play at all.
+const translateBtn = document.getElementById("translate") as HTMLButtonElement;
+const banterLine = document.getElementById("banter") as HTMLParagraphElement;
+let banter: Banter | null = null;
+translateBtn.disabled = true;
+
+function showBanter(who: string, what: string, cls = who): void {
+  banterLine.hidden = false;
+  banterLine.innerHTML = `<span class="who ${esc(cls)}">${esc(who)}</span>${esc(what)}`;
+}
+
+function paintTranslate(): void {
+  translateBtn.setAttribute("aria-pressed", String(!!banter));
+  translateBtn.textContent = banter ? "STOP" : "TRANSLATE";
+}
+
+/** Stop talking and leave the last line up. The beds come back to full either way. */
+function stopBanter(): void {
+  banter?.stop();
+  banter = null;
+  duckAmbience(false);
+  paintTranslate();
+}
+
+translateBtn.onclick = () => {
+  if (banter) { stopBanter(); return; }
+  banterLine.hidden = false;
+  showBanter("", "listening in…", "who");
+  banter = startBanter({
+    onLine: (turn) => showBanter(turn.speaker, turn.text),
+    onSpeaking: duckAmbience,
+    onError: (message) => showBanter("", message, "oops"),
+    onDone: () => { banter = null; duckAmbience(false); paintTranslate(); },
+  });
+  paintTranslate();
+};
 
 /** Signatures and chain errors are remote strings going into innerHTML. */
 const esc = (t: string) => t.replace(/[&<>"]/g, c =>
