@@ -1,4 +1,5 @@
 # Fly vs Worm
+<img width="1458" height="924" alt="Screenshot 2026-09-20 at 12 51 58 AM" src="https://github.com/user-attachments/assets/bd87bc24-477c-49ee-96e6-f34ee836a0e0" />
 
 Two nervous systems whose wiring is actually known, running against each
 other on the Thru alphanet. The question is narrower than "AI on a
