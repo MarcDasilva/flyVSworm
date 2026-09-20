@@ -4,7 +4,7 @@ import { WormBody, ChainClock, BEHAVIOR, type BehaviorState } from "./body.js";
 import { WormMesh } from "./worm.js";
 import { BrainCloud, parseMorphology } from "./brain.js";
 import { ChainFeed, type ChainConfig, type RelayStatus } from "./chain.js";
-import { ARENA, STAND_TOP, LAPTOP_GAP, TANK_EDGE, addLeaderboard, addPlinth, buildTerrarium, loadLaptop } from "./props.js";
+import { ARENA, STAND_TOP, LAPTOP_GAP, TANK_EDGE, addLeaderboard, addTable, buildTerrarium, loadLaptop, loadTable } from "./props.js";
 import { loadFlyDesk, type FlyDesk } from "./fly.js";
 import { FlyFeed } from "./flyfeed.js";
 import { FlyBrain } from "./flybrain.js";
@@ -347,8 +347,8 @@ const DESK_GAP = 0.35;
 // socket is opened on the first click of the fly, along with the bake.
 const flyFeed = new FlyFeed();
 const flyBrain = new FlyBrain(scene, flyFeed);
-void Promise.all([loadLaptop(scene), loadFlyDesk(scene)])
-  .then(([laptop, desk]) => {
+void Promise.all([loadLaptop(scene), loadFlyDesk(scene), loadTable()])
+  .then(([laptop, desk, table]) => {
     const scale = (laptop.lid.max.x - laptop.lid.min.x) / MONITOR_WIDTH;
     desk.setScale(scale);
     // Turned to face the laptop's back. The rig is authored looking +z with its monitor in front
@@ -367,8 +367,8 @@ void Promise.all([loadLaptop(scene), loadFlyDesk(scene)])
                            deskAtZero.max.z - deskAtZero.min.z) + LAPTOP_GAP;
     const wormFar = TANK_EDGE + depth;
     const flyNear = wormFar + DESK_GAP;
-    addPlinth(scene, TANK_EDGE, wormFar);
-    addPlinth(scene, flyNear, flyNear + depth);
+    addTable(scene, table, TANK_EDGE, wormFar, laptop.group.rotation.y);
+    addTable(scene, table, flyNear, flyNear + depth, desk.group.rotation.y);
     // Backs the WHOLE set, tank included, so it is measured from the far end of the fly's table
     // to the far wall of the terrarium and not from either table alone.
     const setNear = -TANK_EDGE, setFar = flyNear + depth;

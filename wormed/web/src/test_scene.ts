@@ -9,9 +9,10 @@
 import { strict as assert } from "node:assert";
 import { readFileSync } from "node:fs";
 import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { WormBody, type BehaviorState } from "./body.js";
 import { WormMesh } from "./worm.js";
-import { ARENA } from "./props.js";
+import { ARENA, STAND_TOP, FLOOR_Y, TANK_EDGE, addTable } from "./props.js";
 import { BrainCloud, parseMorphology } from "./brain.js";
 
 const DATA = new URL("../../data/", import.meta.url);
@@ -320,3 +321,37 @@ assert.ok(outX < 0.04 && outZ < 0.04,
 
 console.log(`OK: scene holds ${base.objects} objects, ${base.materials} materials ` +
   `across 120 frames; worm crawled ${travelled.toFixed(2)} L and stayed in the pen`);
+
+// Use the supplied desk geometry and node transforms; only image decoding needs a browser.
+const deskBytes = readFileSync(new URL("old_metal_table_low_poly.glb", DATA));
+const deskLoader = new GLTFLoader().register(() => ({
+  name: "test-desk-textures", loadTexture: async () => new THREE.Texture(),
+}));
+const deskModel = (await deskLoader.parseAsync(
+  deskBytes.buffer.slice(deskBytes.byteOffset, deskBytes.byteOffset + deskBytes.byteLength) as ArrayBuffer,
+  "",
+)).scene;
+const originalDeskBounds = new THREE.Box3().setFromObject(deskModel);
+const desks = new THREE.Scene();
+const deskBounds: THREE.Box3[] = [];
+for (const near of [TANK_EDGE, TANK_EDGE + 2.15]) {
+  const facing = near === TANK_EDGE ? 0 : Math.PI;
+  const table = addTable(desks, deskModel, near, near + 1.8, facing);
+  assert.equal(table.children[0].rotation.y, Math.PI / 2 + facing);
+  const bounds = new THREE.Box3().setFromObject(table);
+  const close = (actual: number, expected: number) => assert.ok(Math.abs(actual - expected) < 1e-6);
+  close(bounds.min.x, -0.85);
+  close(bounds.max.x, 0.85);
+  close(bounds.min.y, FLOOR_Y);
+  close(bounds.max.y, STAND_TOP);
+  close(bounds.min.z, near);
+  close(bounds.max.z, near + 1.8);
+  table.traverse(o => {
+    if ((o as THREE.Mesh).isMesh) assert.ok(o.castShadow && o.receiveShadow);
+  });
+  deskBounds.push(bounds);
+}
+assert.equal(desks.children.length, 2);
+assert.ok(Math.abs(deskBounds[1].min.z - deskBounds[0].max.z - 0.35) < 1e-6);
+assert.deepEqual(new THREE.Box3().setFromObject(deskModel), originalDeskBounds);
+console.log("OK: both metal desks face outward, seat their computers, meet the floor, and preserve the gap");

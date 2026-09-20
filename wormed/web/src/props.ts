@@ -14,9 +14,9 @@ export const ARENA: Arena = { halfX: 1.4, halfY: 0.95 };
 const WALL_H = 0.42;       // rim height in body lengths; the worm is 1.0 long
 const WALL_T = 0.11;       // rim thickness
 const SOIL_D = 0.35;       // soil depth below the floor
-/** Plinth top, a hair above the rim. Exported: it is the table BOTH machines stand on. */
+/** Tabletop, a hair above the rim. Both machines stand at this height. */
 export const STAND_TOP = 0.45;
-const STAND_W = 1.7;       // plinth footprint; must stay wider than the laptop
+const STAND_W = 1.7;       // table width; must stay wider than the laptop
 /** Margin from a table's near edge to the machine standing on it. Used on BOTH tables, which is
  *  what makes the two rectangles read as a matching pair rather than two different desks. */
 export const LAPTOP_GAP = 0.18;
@@ -208,7 +208,7 @@ export function buildTerrarium(scene: THREE.Scene): THREE.Group {
                mat: THREE.Material = soil) => {
     const m = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), mat);
     m.position.set(x, y, z);
-    // Shadow flags live where the mesh is MADE, here and in addPlinth and
+    // Shadow flags live where the mesh is MADE, here and in addTable and
     // loadGrass, never in a sweep over the scene from main.ts — the lawn
     // arrives whenever it arrives and a sweep would miss whatever is late.
     m.castShadow = m.receiveShadow = true;
@@ -229,7 +229,7 @@ export function buildTerrarium(scene: THREE.Scene): THREE.Group {
   box(WALL_T, WALL_H, d * 2, w - WALL_T / 2, WALL_H / 2, 0, matte);
 
   // The tables are NOT built here. Each one is sized to the machine that stands on it, and
-  // neither model has loaded yet — see addPlinth and main.ts.
+  // neither model has loaded yet — see addTable and main.ts.
   void plinth;
 
   // The room: a lawn the whole set stands on, level with the underside of the
@@ -249,23 +249,32 @@ export function buildTerrarium(scene: THREE.Scene): THREE.Group {
   return group;
 }
 
-/**
- * One machine's table, spanning `zNear` to `zFar`.
- *
- * TWO of these, not one slab under both. The tables stand OUTSIDE the tank rim — inside it the
- * worm would crawl into a pillar the body integrator knows nothing about — and the caller sizes
- * each to its own machine, because neither model's depth is known until it has loaded.
- */
-export function addPlinth(scene: THREE.Scene, zNear: number, zFar: number): THREE.Mesh {
-  const m = new THREE.Mesh(
-    new THREE.BoxGeometry(STAND_W, STAND_TOP + SOIL_D, zFar - zNear),
-    // Lifted a shade off the tank black: on the same black the laptop's own dark body
-    // disappears into the table it stands on.
-    new THREE.MeshStandardMaterial({ color: 0x23272b, roughness: 0.9, metalness: 0 }));
-  m.position.set(0, (STAND_TOP - SOIL_D) / 2, (zNear + zFar) / 2);
-  m.castShadow = m.receiveShadow = true;
-  scene.add(m);
-  return m;
+/** Loaded once; both desks share the supplied model's geometry and textures. */
+export async function loadTable(): Promise<THREE.Group> {
+  const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
+  return (await new GLTFLoader().loadAsync("/old_metal_table_low_poly.glb")).scene;
+}
+
+/** Fit a copy under each computer: feet on the floor, tabletop at STAND_TOP. */
+export function addTable(scene: THREE.Scene, model: THREE.Group, zNear: number, zFar: number, rotationY: number): THREE.Group {
+  const table = new THREE.Group();
+  table.name = "metal-desk";
+  const copy = model.clone(true);
+  // The asset's long edge runs along Z; turn it across the screen, then match the computer.
+  copy.rotation.y += Math.PI / 2 + rotationY;
+  table.add(copy);
+  const bounds = new THREE.Box3().setFromObject(table);
+  const size = bounds.getSize(new THREE.Vector3());
+  const centre = bounds.getCenter(new THREE.Vector3());
+  table.scale.set(STAND_W / size.x, (STAND_TOP - FLOOR_Y) / size.y, (zFar - zNear) / size.z);
+  table.position.set(-centre.x * table.scale.x, FLOOR_Y - bounds.min.y * table.scale.y,
+                     (zNear + zFar) / 2 - centre.z * table.scale.z);
+  table.traverse(o => {
+    const mesh = o as THREE.Mesh;
+    if (mesh.isMesh) mesh.castShadow = mesh.receiveShadow = true;
+  });
+  scene.add(table);
+  return table;
 }
 
 /** The laptop, and the lid box the fly's monitor is sized and squared up against. */
