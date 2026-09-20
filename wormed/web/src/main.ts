@@ -172,6 +172,15 @@ let freeCam = false;
  *  as a crawl in the wide shot and a jump in close-up — the arrows already pan
  *  distance-scaled, and these have to match them. */
 const LIFT = 0.015;
+/** Escape, and the ESC button that stands in for it on a screen with no keyboard. */
+function leaveExhibit(): void {
+  closeClassifier();
+  if (side === "none") return;     // nothing is open; do not yank a hand-driven camera
+  side = "none";
+  freeCam = false;                 // same as a click: ask for the composed shot back
+}
+const backBtn = document.getElementById("back") as HTMLButtonElement;
+backBtn.addEventListener("click", leaveExhibit);
 addEventListener("keydown", e => {
   // ESCAPE closes whichever exhibit is open. Clicking off the animal already
   // does it, but once the camera is in close there may be no "away" left to
@@ -182,13 +191,7 @@ addEventListener("keydown", e => {
     if (!(e.target instanceof HTMLElement && e.target.closest("button, a, summary"))) enterScene();
     return;
   }
-  if (e.key === "Escape") {
-    closeClassifier();
-    if (side === "none") return;     // nothing is open; do not yank a hand-driven camera
-    side = "none";
-    freeCam = false;                 // same as a click: ask for the composed shot back
-    return;
-  }
+  if (e.key === "Escape") { leaveExhibit(); return; }
   if (e.key.startsWith("Arrow")) freeCam = true;
   // Camera and target rise TOGETHER, so the shot keeps its angle and the
   // maxPolarAngle clamp above the agar is never touched.
@@ -1073,6 +1076,7 @@ function frame(now: number): void {
 
   // --- The reveal, see WIDE_FOCUS above. ---
   const opening = side === "none" ? 0 : 1;
+  backBtn.hidden = side === "none";
   const settled = Math.abs(reveal - opening) < 0.002;
   reveal = settled ? opening
     : THREE.MathUtils.damp(reveal, opening, REVEAL_RATE, dt);
