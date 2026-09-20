@@ -42,10 +42,11 @@ for (const bad of [
   undefined,
 ]) assert.equal(validEvent(bad), false, `accepted ${JSON.stringify(bad)}`);
 
-// These two are the fly's whole spend. A silent bump here empties the fee
-// payer and stops the WORM, which shares it.
+// These two are the fly's whole spend. A batch is submitted every second and the faucet
+// refills 10,000 per 15 s at most (refillFlyPayer), so a batch above ~650 outruns the refill
+// and the payer drains to the floor mid-demo.
 assert.equal(UNITS, 100);
-assert.ok(BATCH_MAX <= 32, "a batch is submitted every 2 s from one fee payer");
+assert.ok(BATCH_MAX <= 600, "one batch a second must stay under the faucet's 10,000 per 15 s");
 
 console.log("OK: fly instruction bytes match the program's offsets and bad events cost no fee");
 

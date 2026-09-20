@@ -28,20 +28,27 @@ const cfg = JSON.parse(readFileSync(new URL("../data/fly.json", import.meta.url)
  * the shared payer produced zero events, and the same eight through a payer of
  * their own produced eight. Two animals, two payers.
  *
- * Top it up with: thru faucet withdraw --fee-payer worm default 10000
+ * Refilled from the faucet by refillFlyPayer; by hand: thru faucet withdraw default 10000
  */
 const FEE_PAYER_KEY = "default";
 /** Leave the fly's payer enough to finish whatever is already in flight. */
 export const FLY_BALANCE_FLOOR = 2_000;
+/** Refill below this. One faucet call is 10,000 (its cap) and lands in ~3 s, so the threshold
+ *  covers the batches sent while it is in flight — at BATCH_MAX a second, 20,000 is over a
+ *  minute of spend. The relay throttles the calls, not the faucet. */
+export const FLY_REFILL_AT = 20_000;
+const REFILL_EVERY_MS = 15_000;
+let lastRefill = 0;
 
 /** Model weights are ~0.007 to 0.17; this is what turns one into whole units
  *  of balance. Small on purpose — every unit moved is a unit the accounts
  *  created by pipeline/deploy_fly.py had to be funded with. */
 export const UNITS = 100;
-/** Most events settled per submission. The model spikes at 1000 ticks/s and
- *  the chain confirms in ~2 s, so this is a CEILING on spend, not a target —
- *  see the note on sampling in web/src/flychain.ts. */
-export const BATCH_MAX = 24;
+/** Most events settled per submission. The model produces ~14,000 events a
+ *  second and the relay submits once a second, so this is the fly's rate and a
+ *  CEILING on its spend — and the faucet's 10,000 per 15 s is the real limit
+ *  on how high it can go (FLY_REFILL_AT). What settles is a sample. */
+export const BATCH_MAX = 250;
 
 /** The model's own weight matrix, as outgoing edges in whole ledger units. An edge that
  *  rounds to zero units can never be a transaction and is dropped here rather than rejected
@@ -82,6 +89,20 @@ export function validEvent(e) {
     Number.isInteger(e.tick) && e.tick >= 0;
 }
 
+/**
+ * Tops the fly's payer up from the faucet, self-paid. The CLI spends one of this payer's
+ * nonces outside the SDK's manager, so the manager MUST be reset after — a batch built on the
+ * stale count is rejected with NONCE_TOO_LOW and settles nothing. Throttled: the faucet call
+ * takes ~3 s to land and a second one before that would only pay another fee.
+ */
+export async function refillFlyPayer(nonces) {
+  if (Date.now() - lastRefill < REFILL_EVERY_MS) return false;
+  lastRefill = Date.now();
+  await promisify(execFile)("thru", ["--json", "faucet", "withdraw", FEE_PAYER_KEY, "10000"]);
+  nonces.reset();
+  return true;
+}
+
 let signer;
 async function connect() {
   const thru = createThruClient({ baseUrl: cfg.rpc, callOptions: { timeoutMs: 15_000 } });
@@ -100,52 +121,51 @@ export async function closeFlySynapses() {
 }
 
 /**
- * Submit up to BATCH_MAX events, one transaction each. Returns the
- * signatures; the BROWSER reads the confirmed receipts back off the chain
- * itself (src/flychain.ts), so nothing here waits for confirmation.
+ * Waits for the chain's nonce to reach the end of the batch just sent — the worm confirms
+ * every batch before the next (synapses.mjs) and the fly has to as well: a batch pipelined
+ * behind one the node dropped is rejected whole with NONCE_TOO_HIGH, and at one batch a
+ * second that strands everything until someone notices (measured: 13 of 46 batches).
+ * "Dropped" is judged by the nonce STANDING STILL, not by a deadline: under load a 250-batch
+ * has taken over 20 s to land, and a deadline reset the manager to a count those late
+ * transactions then moved past, so the next batch failed NONCE_TOO_LOW (measured 2 in 34).
+ * Only when nothing has moved for STALL_MS are the missing ones treated as gone and the
+ * manager re-read from the chain.
  */
-/** The last batch sent, so the next call can check whether it ever executed.
- *  See resync — this is the whole self-healing mechanism. */
-let lastBatch;
-
-/**
- * A batch that never executes strands EVERY later transaction: the manager's
- * counter has moved past the gap and the chain is still waiting for it to be
- * filled, so nothing after it can ever run. batchSend reports transport, not
- * execution, so nothing upstream sees this happen — the fly goes on submitting
- * and the panel goes quiet with no error anywhere. The fix is to look at the
- * PREVIOUS batch before sending the next one and re-read the chain's own nonce
- * when it went missing. The worm gets this for free by confirming every batch;
- * the fly cannot afford to wait, so it checks one signature, one batch late.
- */
-async function resync(thru, nonces) {
-  if (!lastBatch || Date.now() - lastBatch.at < 4000) return;
-  const [sig] = lastBatch.signatures;
-  lastBatch = undefined;
-  // A stranded transaction is not ABSENT — the node records it as failed with
-  // a nonce error (-510 seen on alphanet under load), so presence alone
-  // proves nothing. Only a clean execution leaves the counter alone.
-  let executed = false;
-  try {
-    const result = (await thru.transactions.get(sig)).executionResult;
-    executed = result?.vmError === 0 && result.executionResult === 0n;
-  } catch { /* not indexed: same answer */ }
-  if (!executed) {
-    console.error(`fly synapses: ${sig.slice(0, 12)}… did not execute — resyncing the nonce`);
-    nonces.reset();
+const STALL_MS = 10_000;
+async function settled(thru, feePayer, nonces, end) {
+  let seen = -1n, movedAt = Date.now();
+  for (;;) {
+    const { meta } = await thru.accounts.get(feePayer.publicKey);
+    const nonce = meta?.nonce ?? -1n;
+    if (nonce >= end) return true;
+    if (nonce !== seen) { seen = nonce; movedAt = Date.now(); }
+    else if (Date.now() - movedAt > STALL_MS) {
+      console.error(`fly synapses: chain nonce stuck at ${nonce}, short of ${end} — resyncing`);
+      nonces.reset();
+      return false;
+    }
+    await new Promise(r => setTimeout(r, 250));
   }
 }
 
+/**
+ * Submit up to BATCH_MAX events, one transaction each, and return once the chain has taken
+ * them (settled). The BROWSER reads the confirmed receipts back off the chain itself
+ * (src/flychain.ts); the wait here is for the NONCE, not the receipts.
+ */
 export async function settleFlySynapses(events, floor = FLY_BALANCE_FLOOR) {
   signer ??= connect();
   const { thru, feePayer, key, chainId, nonces } = await signer;
-  await resync(thru, nonces);
   const batch = events.filter(validEvent).slice(0, BATCH_MAX);
   if (!batch.length) return { submitted: 0, balance: undefined };
   const [payer, height] = await Promise.all([
     thru.accounts.get(feePayer.publicKey), thru.blocks.getBlockHeight(),
   ]);
   if (!payer.meta) throw Error("Fly fee payer account is missing — see FEE_PAYER_KEY");
+  if (payer.meta.balance < BigInt(FLY_REFILL_AT) && await refillFlyPayer(nonces)) {
+    console.error(`fly synapses: payer at ${payer.meta.balance}, refilled from the faucet`);
+    return { submitted: 0, balance: Number(payer.meta.balance) };
+  }
   const canSpend = Number((payer.meta.balance - BigInt(floor)) / SYNAPSE_FEE);
   if (canSpend <= 0) return { submitted: 0, balance: Number(payer.meta.balance) };
   const sending = batch.slice(0, Math.min(batch.length, canSpend));
@@ -164,15 +184,14 @@ export async function settleFlySynapses(events, floor = FLY_BALANCE_FLOOR) {
     }));
     await thru.transactions.batchSend(transactions.map(t => t.rawTransaction), { numRetries: 0 });
     const signatures = transactions.map(t => t.signature.toThruFmt());
-    lastBatch = { signatures, at: Date.now() };
     // Same line the worm's settler prints, and the thread back to a batch that
     // quietly went nowhere.
     console.error(`fly synapses: sent ${sending.length} at nonce ${allocation.baseNonce}, ` +
                   `first ${signatures[0]}`);
+    await settled(thru, feePayer, nonces, allocation.baseNonce + BigInt(sending.length));
     return { submitted: sending.length, signatures,
              balance: Number(payer.meta.balance) - sending.length };
   } catch (error) {
-    lastBatch = undefined;
     nonces.reset();   // An ambiguous send leaves the allocation unusable.
     throw error;
   }

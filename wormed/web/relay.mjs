@@ -129,10 +129,11 @@ async function chain(op, cmd) {
 // reach the model's WebSocket still sees the fly trade, and two open pages cannot submit the
 // same spike twice. The page reads the receipts back off the chain (src/flychain.ts).
 const FLY_MODEL = "http://127.0.0.1:8000";
-/** Events per submission and how often. The model spikes at 1000 ticks/s and one transaction
- *  confirms in ~2 s, so what settles is a uniform SAMPLE of the window — the page says so. */
-const FLY_SUBMIT_MS = 2000;
-const FLY_QUEUE_MAX = 4096;
+/** How often; flysynapses.BATCH_MAX says how many. The model makes ~14,000 events a second,
+ *  so what settles is a uniform SAMPLE of the window — the page says so. */
+const FLY_SUBMIT_MS = 1000;
+/** About one submission window of the model's output, so the sample spans the whole second. */
+const FLY_QUEUE_MAX = 16_384;
 let flyEdges = new Map();
 let flyQueue = [];
 let flyInFlight = false;
