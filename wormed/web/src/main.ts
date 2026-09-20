@@ -4,7 +4,7 @@ import { WormBody, ChainClock, BEHAVIOR, type BehaviorState } from "./body.js";
 import { WormMesh } from "./worm.js";
 import { BrainCloud, parseMorphology } from "./brain.js";
 import { ChainFeed, type ChainConfig, type RelayStatus } from "./chain.js";
-import { ARENA, STAND_TOP, LAPTOP_GAP, TANK_EDGE, addPlinth, buildTerrarium, loadLaptop } from "./props.js";
+import { ARENA, STAND_TOP, LAPTOP_GAP, TANK_EDGE, addLeaderboard, addPlinth, buildTerrarium, loadLaptop } from "./props.js";
 import { loadFlyDesk, type FlyDesk } from "./fly.js";
 import { FlyFeed } from "./flyfeed.js";
 import { FlyBrain } from "./flybrain.js";
@@ -24,9 +24,17 @@ rim.position.set(-3, 2, -2);
 scene.add(rim);
 
 const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.01, 100);
-// The wide shot has to hold BOTH exhibits — the terrarium and the fly's desk behind it — so it
-// sits back and off to the side rather than square in front of the tank. These are the composed
-// angle and distance; the desk re-centres both on the fly's screen once it has loaded.
+// ---------------------------------------------------------------------------
+// THE OPENING SHOT — what the page shows before anything is clicked. This pair
+// is exactly what the pose logger below prints, so a shot composed live with
+// the arrow keys pastes straight back in here.
+//
+// A hand-composed pose MUST set OPENING_FIXED. The desk otherwise slides the
+// whole shot onto the fly's screen once it loads, and a pose read off the
+// running scene already includes that slide — left false it would be applied
+// a second time and the paste would land somewhere else entirely.
+// ---------------------------------------------------------------------------
+const OPENING_FIXED = false;
 camera.position.set(5.5, 2.8, 4.6);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -34,9 +42,70 @@ renderer.setSize(innerWidth, innerHeight);
 document.body.appendChild(renderer.domElement);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.target.set(0.2, 0.7, 1.4);
+// How far back the page opens. Pulled in from the 6.54 the shot was composed
+// at — the angle above is kept exactly, ONLY the distance changes, so the set
+// still reads the same way. It has to stay well clear of CLOSE_RADIUS and
+// FLY_RADIUS below or the reveal has nowhere to fly in from.
+const OPENING_RADIUS = 4.6;
+camera.position.sub(controls.target).setLength(OPENING_RADIUS).add(controls.target);
 controls.enableDamping = true;
 controls.maxPolarAngle = Math.PI * 0.49;   // stay above the agar
 controls.update();
+
+// ---------------------------------------------------------------------------
+// HAND-DRIVING. Arrow keys walk the camera so a shot can be composed in the
+// running scene and pasted back into this file. Plain arrows pan, Shift or
+// Cmd with an arrow swings the angle — OrbitControls already binds both, it
+// simply is not listening by default. Panning is GROUND-PLANE, not screen
+// space, or Up walks into the sky instead of forward.
+// ---------------------------------------------------------------------------
+controls.listenToKeyEvents(window);
+controls.screenSpacePanning = false;
+controls.keyPanSpeed = 14;
+/** Hand-driving SUSPENDS the reveal's framing below, which writes target and
+ *  distance every frame and would drag each arrow-key step straight back.
+ *  Clicking an exhibit hands control back to it. */
+let freeCam = false;
+/** Vertical step, as a fraction of the orbit distance. A fixed world step reads
+ *  as a crawl in the wide shot and a jump in close-up — the arrows already pan
+ *  distance-scaled, and these have to match them. */
+const LIFT = 0.015;
+addEventListener("keydown", e => {
+  // ESCAPE closes whichever exhibit is open. Clicking off the animal already
+  // does it, but once the camera is in close there may be no "away" left to
+  // click: the trigger box is deliberately sized to cover every pixel at that
+  // range, so the pointer has nowhere to land that means "let me out".
+  if (e.key === "Escape") {
+    if (side === "none") return;     // nothing is open; do not yank a hand-driven camera
+    side = "none";
+    freeCam = false;                 // same as a click: ask for the composed shot back
+    return;
+  }
+  if (e.key.startsWith("Arrow")) freeCam = true;
+  // Camera and target rise TOGETHER, so the shot keeps its angle and the
+  // maxPolarAngle clamp above the agar is never touched.
+  else if (e.key === "." || e.key === "/") {
+    const step = camera.position.distanceTo(controls.target) * LIFT * (e.key === "." ? 1 : -1);
+    camera.position.y += step;
+    controls.target.y += step;
+    freeCam = true;
+    controls.update();          // fires "change", so the pose still prints
+  }
+});
+
+// Printed once the move SETTLES, not every damped frame — the reveal and the
+// damping both dirty the camera continuously and the log would be unreadable.
+const deg = (r: number) => `${(r * 180 / Math.PI).toFixed(0)}\u00b0`;
+const xyz = (v: THREE.Vector3) => `${v.x.toFixed(2)}, ${v.y.toFixed(2)}, ${v.z.toFixed(2)}`;
+let poseTimer: ReturnType<typeof setTimeout>;
+controls.addEventListener("change", () => {
+  clearTimeout(poseTimer);
+  poseTimer = setTimeout(() => console.log(
+    `camera.position.set(${xyz(camera.position)});\n`
+    + `controls.target.set(${xyz(controls.target)});`
+    + `   // az ${deg(controls.getAzimuthalAngle())} polar ${deg(controls.getPolarAngle())}`
+    + ` dist ${camera.position.distanceTo(controls.target).toFixed(2)}`), 400);
+});
 
 // ---------------------------------------------------------------------------
 // THE REVEAL. The page loads as a terrarium and nothing else: no nervous
@@ -129,24 +198,13 @@ canvas.addEventListener("click", e => {
   // the camera and lets go off the tank closes the scene every time.
   if (!pressed || Math.hypot(e.clientX - pressed.x, e.clientY - pressed.y) > 5) return;
   side = sideAt(e);
+  freeCam = false;             // a click asks for the composed shot back
   // The fly's brain is 22 MB of bake and its model is a socket to a process
   // that may not be running. Both are only ever wanted here.
   if (side === "fly") {
     void flyBrain.load();
     flyFeed.connect(stop.signal);
   }
-});
-
-// ESCAPE closes whichever exhibit is open. Clicking off the animal already does
-// it, but once the camera is in close there may be no "away" left to click: the
-// trigger box is deliberately sized to cover EVERY pixel at that range, so at
-// the one moment the viewer most wants out, the pointer has nowhere to land
-// that means "let me out".
-addEventListener("keydown", e => {
-  // Only ever a way OUT. With nothing open there is nothing to minimise, and
-  // acting anyway would snatch a camera the viewer is hand-driving.
-  if (e.key !== "Escape" || side === "none") return;
-  side = "none";
 });
 
 addEventListener("resize", () => {
@@ -183,14 +241,14 @@ const terrarium = buildTerrarium(scene);
 // Neither model is 1.5 MB of nothing, and the worm runs while both load.
 let fly: FlyDesk | undefined;
 let flyHead: THREE.Object3D | undefined;
-// The fly's activity comes from the fly's own model, not from this scene. The
-// socket is opened on the first click of the fly, along with the bake.
-const flyFeed = new FlyFeed();
-const flyBrain = new FlyBrain(scene, flyFeed);
 /** Floor between the two tables, measured between the monitors that face each other across it.
  *  The pair is mirror-symmetric about the middle of this gap, and that is where the visible
  *  origin goes — see the floor slide below. */
 const DESK_GAP = 0.35;
+// The fly's activity comes from the fly's own model, not from this scene. The
+// socket is opened on the first click of the fly, along with the bake.
+const flyFeed = new FlyFeed();
+const flyBrain = new FlyBrain(scene, flyFeed);
 void Promise.all([loadLaptop(scene), loadFlyDesk(scene)])
   .then(([laptop, desk]) => {
     const scale = (laptop.lid.max.x - laptop.lid.min.x) / MONITOR_WIDTH;
@@ -213,6 +271,10 @@ void Promise.all([loadLaptop(scene), loadFlyDesk(scene)])
     const flyNear = wormFar + DESK_GAP;
     addPlinth(scene, TANK_EDGE, wormFar);
     addPlinth(scene, flyNear, flyNear + depth);
+    // Backs the WHOLE set, tank included, so it is measured from the far end of the fly's table
+    // to the far wall of the terrarium and not from either table alone.
+    const setNear = -TANK_EDGE, setFar = flyNear + depth;
+    addLeaderboard(scene, (setNear + setFar) / 2, setFar - setNear + 0.6);
 
     // Slide the desk back onto its OWN table, seated by its measured near edge so it keeps the
     // same margin from the table lip that the laptop keeps from the tank.
@@ -240,7 +302,7 @@ void Promise.all([loadLaptop(scene), loadFlyDesk(scene)])
     // — and WIDE_FOCUS moves with them, or the reveal's first frame would snap the scene back to
     // wherever the target started.
     const screen = desk.monitorAt(new THREE.Vector3());
-    const shift = screen.clone().sub(controls.target);
+    const shift = OPENING_FIXED ? new THREE.Vector3() : screen.clone().sub(controls.target);
     controls.target.add(shift);
     camera.position.add(shift);
     WIDE_FOCUS.copy(controls.target);
@@ -258,6 +320,7 @@ void Promise.all([loadLaptop(scene), loadFlyDesk(scene)])
     // rectangles visibly lopsided about their own origin.
     const floor = terrarium.getObjectByName("floor");
     if (floor) floor.position.set(0, floor.position.y, wormFar + DESK_GAP / 2);
+
   })
   .catch(e => console.warn("desk models failed to load", e));
 brain.setResolution(innerWidth, innerHeight);
@@ -475,7 +538,7 @@ function frame(now: number): void {
   // find from the wide shot, and tight once it is open: at close range a box
   // half a body length proud of the tank covers EVERY pixel, and then nothing
   // the pointer does can end the reveal. Height is left alone — the column
-  // reaches the connectome, which is part of what the hover is pointing at.
+  // reaches the connectome, which is part of what the click is aimed at.
   const slack = THREE.MathUtils.lerp(TRIGGER_MARGIN, TRIGGER_TIGHT, wormAlpha);
   trigger.scale.set((ARENA.halfX + slack) / (ARENA.halfX + TRIGGER_MARGIN), 1,
                     (ARENA.halfY + slack) / (ARENA.halfY + TRIGGER_MARGIN));
@@ -491,18 +554,24 @@ function frame(now: number): void {
     flyHead.getWorldPosition(flyFocus);
     flyFocus.y += FLY_BRAIN_ROOM * 0.55;   // the brain, not the feet
   }
-  wantFocus.lerpVectors(WIDE_FOCUS, side === "fly" ? flyFocus : wormFocus, eased);
-  focus.lerp(wantFocus, 1 - Math.exp(-REVEAL_RATE * dt));
-  wantFocus.copy(focus).sub(controls.target);
-  controls.target.add(wantFocus);
-  camera.position.add(wantFocus);
-  // Distance is forced only while the scene is still opening or closing —
-  // once it has settled the user's own zoom is the authority.
-  if (!settled) {
-    orbit.subVectors(camera.position, controls.target)
-      .setLength(THREE.MathUtils.lerp(
-        WIDE_RADIUS, side === "fly" ? FLY_RADIUS : CLOSE_RADIUS, eased));
-    camera.position.copy(controls.target).add(orbit);
+  if (freeCam) {
+    // Follow the hand-driven target, so handing framing back starts from
+    // wherever the user left the camera rather than snapping across the room.
+    focus.copy(controls.target);
+  } else {
+    wantFocus.lerpVectors(WIDE_FOCUS, side === "fly" ? flyFocus : wormFocus, eased);
+    focus.lerp(wantFocus, 1 - Math.exp(-REVEAL_RATE * dt));
+    wantFocus.copy(focus).sub(controls.target);
+    controls.target.add(wantFocus);
+    camera.position.add(wantFocus);
+    // Distance is forced only while the scene is still opening or closing —
+    // once it has settled the user's own zoom is the authority.
+    if (!settled) {
+      orbit.subVectors(camera.position, controls.target)
+        .setLength(THREE.MathUtils.lerp(
+          WIDE_RADIUS, side === "fly" ? FLY_RADIUS : CLOSE_RADIUS, eased));
+      camera.position.copy(controls.target).add(orbit);
+    }
   }
 
   controls.update();

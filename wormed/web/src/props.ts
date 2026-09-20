@@ -292,3 +292,160 @@ export async function loadLaptop(scene: THREE.Scene): Promise<Laptop> {
   const lidPart = group.getObjectByName("macBook_TopPart_Cube.004") ?? group;
   return { group, lid: new THREE.Box3().setFromObject(lidPart) };
 }
+
+/** The board's face, drawn once. No ticker, no animation: this is a sheet
+ *  posted on a wall, and a board that redraws invites someone to ask what the
+ *  numbers mean. */
+function leaderboardFace(w: number, h: number): HTMLCanvasElement {
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  const g = c.getContext("2d")!;
+  const mono = 'ui-monospace, "Cascadia Mono", Consolas, Menlo, monospace';
+  /** Column anchors, as fractions of the width. NUMBER and PROFIT are the
+   *  RIGHT edge of their column: figures line up on the decimal or the board
+   *  stops reading as a results table and starts reading as a poster. */
+  const COL = { rank: 0.04, specimen: 0.19, number: 0.685, profit: 0.955 };
+  const INK = "#23262b";
+  const FAINT = "#6c7178";
+  const GAIN = "#1d6b43";
+  const LOSS = "#a8322e";
+
+  // Paper, not a screen. The scene's own lights fall on it and the panel's
+  // emission is low (see addLeaderboard), so it reads as a printed sheet in a
+  // dim room rather than another display competing with the two machines.
+  g.fillStyle = "#a4a199";
+  g.fillRect(0, 0, w, h);
+  g.textBaseline = "middle";
+
+  // Letterhead: a line of type and a rule. No colour band — the point is that
+  // someone in the building runs this and nobody is excited about it.
+  g.fillStyle = INK;
+  g.font = `600 ${h * 0.07}px ${mono}`;
+  g.fillText("TRADING RESULTS", w * COL.rank, h * 0.08);
+  g.fillStyle = FAINT;
+  g.font = `500 ${h * 0.04}px ${mono}`;
+  g.textAlign = "right";
+  g.fillText("POSTED WEEKLY \u00b7 PERIOD 37", w * COL.profit, h * 0.082);
+  g.textAlign = "left";
+  g.strokeStyle = INK;
+  g.lineWidth = 3;
+  g.beginPath();
+  g.moveTo(w * 0.03, h * 0.155);
+  g.lineTo(w * 0.97, h * 0.155);
+  g.stroke();
+
+  // Column headers, then the rule under them.
+  const headY = h * 0.255;
+  g.fillStyle = FAINT;
+  g.font = `600 ${h * 0.05}px ${mono}`;
+  g.fillText("RANK", w * COL.rank, headY);
+  g.fillText("SPECIMEN", w * COL.specimen, headY);
+  g.textAlign = "right";
+  g.fillText("NUMBER", w * COL.number, headY);
+  g.fillText("PROFIT", w * COL.profit, headY);
+  g.textAlign = "left";
+  g.strokeStyle = "#8d8a82";
+  g.lineWidth = 2;
+  g.beginPath();
+  g.moveTo(w * 0.03, h * 0.305);
+  g.lineTo(w * 0.97, h * 0.305);
+  g.stroke();
+
+  // NUMBER is the animal's accession in the facility's register — the number
+  // written on the tank and on the desk, nothing to do with what it trades.
+  // The legend at the foot says so; without it the column reads as a score.
+  const rows: { rank: string; name: string; species: string; number: string;
+                profit: string; gain: boolean }[] = [
+    { rank: "1", name: "FLY", species: "Drosophila melanogaster",
+      number: "004117", profit: "+1,284.60", gain: true },
+    { rank: "2", name: "WORM", species: "Caenorhabditis elegans",
+      number: "004118", profit: "-212.40", gain: false },
+  ];
+  const top = h * 0.33, rowH = h * 0.245;
+  rows.forEach((r, i) => {
+    const y = top + rowH * (i + 0.5);
+    if (i % 2 === 0) {
+      g.fillStyle = "rgba(0,0,0,0.045)";
+      g.fillRect(w * 0.03, top + rowH * i, w * 0.94, rowH);
+    }
+    g.fillStyle = INK;
+    g.font = `500 ${h * 0.115}px ${mono}`;
+    g.fillText(r.rank, w * COL.rank, y);
+    g.font = `600 ${h * 0.115}px ${mono}`;
+    g.fillText(r.name, w * COL.specimen, y - h * 0.028);
+    g.fillStyle = FAINT;
+    g.font = `italic ${h * 0.046}px ${mono}`;
+    g.fillText(r.species, w * COL.specimen, y + h * 0.055);
+    g.textAlign = "right";
+    g.fillStyle = INK;
+    g.font = `500 ${h * 0.09}px ${mono}`;
+    g.fillText(r.number, w * COL.number, y);
+    // The one column that carries colour, and it is print colour rather than
+    // screen colour: a figure in red on a posted sheet is a loss, which is
+    // the oldest and dullest use of the two inks there is.
+    g.fillStyle = r.gain ? GAIN : LOSS;
+    g.font = `600 ${h * 0.085}px ${mono}`;
+    g.fillText(r.profit, w * COL.profit, y);
+    g.textAlign = "left";
+  });
+
+  // Foot: the legend, and the one line that keeps the column honest.
+  g.strokeStyle = "#8d8a82";
+  g.lineWidth = 2;
+  g.beginPath();
+  g.moveTo(w * 0.03, h * 0.875);
+  g.lineTo(w * 0.97, h * 0.875);
+  g.stroke();
+  g.fillStyle = FAINT;
+  g.font = `500 ${h * 0.043}px ${mono}`;
+  g.fillText("NUMBER = SPECIMEN ACCESSION", w * COL.rank, h * 0.935);
+  g.textAlign = "right";
+  g.fillText("USD \u00b7 SETTLED ON THRU \u00b7 UNAUDITED", w * COL.profit, h * 0.935);
+  g.textAlign = "left";
+  return c;
+}
+
+/** Board height, floor to top edge. Tall enough to clear both machines from
+ *  the wide shot and still sit under the connectome hanging over the tank. */
+const BOARD_H = 2.4;
+/** How far behind the tables the board stands. It backs BOTH exhibits, so it
+ *  runs along the pair's long axis rather than across either end. */
+const BOARD_BACK = STAND_W / 2 + 2.4;
+
+/**
+ * The scoreboard behind the pair, facing the wide shot's camera.
+ *
+ * `zCentre` and `width` come from the PLACED tables, not from constants here:
+ * the fly's desk is sized by measurement at load time, so how long the set
+ * turns out to be is not known until it has landed. See main.ts.
+ */
+export function addLeaderboard(scene: THREE.Scene, zCentre: number, width: number): THREE.Group {
+  const group = new THREE.Group();
+  const shell = new THREE.Mesh(
+    new THREE.BoxGeometry(0.12, BOARD_H + 0.18, width + 0.18),
+    new THREE.MeshStandardMaterial({ color: 0x14171a, roughness: 0.9, metalness: 0.05 }));
+  shell.position.set(-BOARD_BACK, FLOOR_Y + (BOARD_H + 0.18) / 2, zCentre);
+  group.add(shell);
+
+  const face = leaderboardFace(1536, Math.round(1536 * BOARD_H / width));
+  const tex = new THREE.CanvasTexture(face);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  const panel = new THREE.Mesh(
+    new THREE.PlaneGeometry(width, BOARD_H),
+    // Barely lit by itself. Paper needs enough emission to stay legible at
+    // board distance in a dark room, and no more: at the display's own 0.9 it
+    // glows, and a glowing notice is not a mundane one.
+    new THREE.MeshStandardMaterial({
+      map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.18,
+      roughness: 0.85, metalness: 0 }));
+  // Rotated to face +x, which puts the panel's own left-to-right along world
+  // -z — the wide shot's screen-right, so the text reads the right way round.
+  panel.rotation.y = Math.PI / 2;
+  panel.position.set(-BOARD_BACK + 0.07, FLOOR_Y + BOARD_H / 2 + 0.09, zCentre);
+  group.add(panel);
+
+  scene.add(group);
+  return group;
+}
