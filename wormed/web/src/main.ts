@@ -137,6 +137,18 @@ canvas.addEventListener("click", e => {
   }
 });
 
+// ESCAPE closes whichever exhibit is open. Clicking off the animal already does
+// it, but once the camera is in close there may be no "away" left to click: the
+// trigger box is deliberately sized to cover EVERY pixel at that range, so at
+// the one moment the viewer most wants out, the pointer has nowhere to land
+// that means "let me out".
+addEventListener("keydown", e => {
+  // Only ever a way OUT. With nothing open there is nothing to minimise, and
+  // acting anyway would snatch a camera the viewer is hand-driving.
+  if (e.key !== "Escape" || side === "none") return;
+  side = "none";
+});
+
 addEventListener("resize", () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
