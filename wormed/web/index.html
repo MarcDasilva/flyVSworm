@@ -26,8 +26,8 @@
             pointer-events: none; }
   #banter[hidden] { display: none; }
   /* What the beds are doing, for anyone who cannot hear them: the SAME transcript the translator
-     writes, one line per bed, stacked above the banter line. Hidden while translating. */
-  #sfx { position: fixed; left: 50%; transform: translateX(-50%); bottom: 72px; z-index: 2; margin: 0;
+     writes, one line per bed, in the SAME spot — the two are never up together (main.ts backToBeds). */
+  #sfx { position: fixed; left: 50%; transform: translateX(-50%); bottom: 42px; z-index: 2; margin: 0;
          display: flex; flex-direction: column; align-items: center; gap: 2px;
          font-size: 13px; line-height: 1.5; color: #e2e8f0; text-shadow: 0 1px 6px rgba(0,0,0,0.9);
          pointer-events: none; }

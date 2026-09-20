@@ -729,7 +729,7 @@ function sfxCaption(who: "fly" | "worm", variants: string[]): (on: boolean) => v
   const span = sfxLine.appendChild(document.createElement("span"));
   return (on) => {
     span.innerHTML = on
-      ? `<span class="who ${who}">${who.toUpperCase()}</span>${esc(variants[Math.floor(Math.random() * variants.length)]!)}`
+      ? `<span class="who ${who}">${who}</span>${esc(variants[Math.floor(Math.random() * variants.length)]!)}`
       : "";
   };
 }
@@ -767,13 +767,20 @@ function paintTranslate(): void {
   translateBtn.textContent = banter ? "STOP" : "TRANSLATE";
 }
 
-/** Stop talking and leave the last line up. The beds and their captions come back either way. */
-function stopBanter(): void {
-  banter?.stop();
+/** ONE transcript at a time. The noises' captions and the translated lines share the spot at the
+ *  bottom of the room and must never both be up — a buzz caption over a spoken line reads as two
+ *  animals talking at once. So handing the room back to the beds also takes the last line down. */
+function backToBeds(): void {
   banter = null;
+  banterLine.hidden = true;
   duckAmbience(false);
   sfxLine.hidden = false;
   paintTranslate();
+}
+
+function stopBanter(): void {
+  banter?.stop();
+  backToBeds();
 }
 
 translateBtn.onclick = () => {
@@ -789,7 +796,7 @@ translateBtn.onclick = () => {
     onLine: (turn) => showBanter(turn.speaker, turn.text),
     onSpeaking: () => {},
     onError: (message) => showBanter("", message, "oops"),
-    onDone: () => { banter = null; duckAmbience(false); sfxLine.hidden = false; paintTranslate(); },
+    onDone: backToBeds,
   });
   paintTranslate();
 };
