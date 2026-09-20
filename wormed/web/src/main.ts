@@ -37,11 +37,10 @@ controls.update();
 
 // ---------------------------------------------------------------------------
 // THE REVEAL. The page loads as a terrarium and nothing else: no nervous
-// system, no transaction feed, no explanation. Pointing at the tank flies the
-// camera down onto the worm and fades the rest in; pointing anywhere else, or
-// leaving the window, puts everything back. One damped scalar drives all of
-// it, so the camera, the brain and the panel can never disagree about how far
-// open the scene is.
+// system, no transaction feed, no explanation. Clicking the tank flies the
+// camera down onto the worm and fades the rest in; clicking away from it puts
+// everything back. One damped scalar drives all of it, so the camera, the
+// brain and the panel can never disagree about how far open the scene is.
 // ---------------------------------------------------------------------------
 const WIDE_FOCUS = controls.target.clone();
 const WIDE_RADIUS = camera.position.distanceTo(WIDE_FOCUS);
@@ -79,18 +78,28 @@ scene.add(trigger);
 
 const pointer = new THREE.Vector2();
 const ray = new THREE.Raycaster();
-addEventListener("pointermove", e => {
-  // Events that land on the feed or the touch buttons leave the state ALONE.
-  // The reveal is what put those there, and closing the scene as the user
-  // reaches for them is the one thing this must not do.
-  if (e.target !== renderer.domElement) return;
+const overTank = (e: MouseEvent): boolean => {
   pointer.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
   ray.setFromCamera(pointer, camera);
-  engaged = ray.intersectObject(trigger, false).length > 0;
+  return ray.intersectObject(trigger, false).length > 0;
+};
+
+// CLICK opens and closes it, never the pointer alone: a hover that flies the
+// camera in fires while the user is on their way somewhere else, and it
+// cannot be held open while they read. Hover only offers the cursor, so the
+// tank still says it can be clicked.
+const canvas = renderer.domElement;
+canvas.addEventListener("pointermove", e => {
+  canvas.style.cursor = overTank(e) ? "pointer" : "";
 });
-// pointerleave on the ROOT element: the pointer can leave the window without
-// ever crossing the canvas on its way out, and the scene must still close.
-document.documentElement.addEventListener("pointerleave", () => { engaged = false; });
+let pressed: { x: number; y: number } | null = null;
+canvas.addEventListener("pointerdown", e => { pressed = { x: e.clientX, y: e.clientY }; });
+canvas.addEventListener("click", e => {
+  // An orbit drag ends in a click event too. Without this a user who spins
+  // the camera and lets go off the tank closes the scene every time.
+  if (!pressed || Math.hypot(e.clientX - pressed.x, e.clientY - pressed.y) > 5) return;
+  engaged = overTank(e);
+});
 
 addEventListener("resize", () => {
   camera.aspect = innerWidth / innerHeight;
