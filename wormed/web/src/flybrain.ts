@@ -25,6 +25,8 @@ const LIFT = 0.62;
 // from the background firing instead of washing the whole ring out.
 const RATE_LOW_HZ = 20;
 const RATE_HIGH_HZ = 200;
+/** Emission of a cell the model is not firing. */
+const IDLE_GLOW = 0.12;
 /** Seconds a single spike's extra brightness takes to decay. */
 const FLICKER_TAU = 0.11;
 const OUTLINE_COLOR = 0x8fa3b8;
@@ -153,9 +155,13 @@ export class FlyBrain {
     for (const n of manifest.neurons) {
       const color = new THREE.Color(manifest.populations[n.pop].color);
       const material = new THREE.MeshStandardMaterial({
-        // Idle is DIM, not black: with the model offline the cells still have
-        // to read as the circuit they are, and the ramp below still has room.
-        color, emissive: color, emissiveIntensity: 0.25, roughness: 0.55,
+        // The cell's own colour is held DOWN and the firing is carried by
+        // emission: lit at full strength by the room's lights, a silent cell
+        // and a cell at 200 Hz look nearly the same and the bump disappears.
+        // Idle is dim rather than black so the circuit still reads when the
+        // model is not running.
+        color: color.clone().multiplyScalar(0.3), emissive: color,
+        emissiveIntensity: IDLE_GLOW, roughness: 0.55,
         transparent: true, opacity: 1,
       });
       mesh(n.node).material = material;
@@ -213,7 +219,7 @@ export class FlyBrain {
       n.flicker *= decay;
       const hz = frame && n.live >= 0 ? frame.rates[n.live] ?? 0 : 0;
       const glow = THREE.MathUtils.smoothstep(hz, RATE_LOW_HZ, RATE_HIGH_HZ);
-      n.material.emissiveIntensity = 0.25 + 1.3 * glow + 0.3 * n.flicker;
+      n.material.emissiveIntensity = IDLE_GLOW + 2.6 * glow + 0.6 * n.flicker;
     }
   }
 }
