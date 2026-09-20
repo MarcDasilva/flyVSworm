@@ -35,13 +35,13 @@ const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.01, 1
 // a second time and the paste would land somewhere else entirely.
 // ---------------------------------------------------------------------------
 const OPENING_FIXED = true;
-camera.position.set(4.22, 2.46, 4.46);
+camera.position.set(5.35, 2.94, 3.97);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 document.body.appendChild(renderer.domElement);
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.set(0.49, 0.98, 2.21);   // az 59° polar 71° dist 4.60
+controls.target.set(1.62, 1.46, 1.72);   // az 59° polar 71° dist 4.60
 // How far back the page opens. The pose above was composed AT this distance,
 // so the normalise below is currently a no-op and is kept only so a future
 // paste at some other distance still opens from here — the angle is preserved
