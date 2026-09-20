@@ -1,28 +1,33 @@
 "use client";
 
-// The landing page: a full-screen scene of the fly typing trades at its computer.
-// Clicking the fly opens the brain modal; the scene pauses while it is open.
+// The landing page: the fly typing trades at its computer, with the worm's terrarium across the
+// desk. Clicking either animal opens that animal's brain; the scene pauses while it is open.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createFlyScene, type FlyScene } from "./flyScene";
+import { createFlyScene, type FlyScene, type Subject } from "./flyScene";
 import BrainModal from "@/components/brain/BrainModal";
 
 type Status = { state: "loading" } | { state: "ready" } | { state: "error"; message: string };
+
+const PROMPT: Record<Subject, string> = {
+  fly: "click the fly to see its brain",
+  worm: "click the worm to see its brain",
+};
 
 export default function Launcher() {
   const mount = useRef<HTMLDivElement>(null);
   const scene = useRef<FlyScene | null>(null);
   const [status, setStatus] = useState<Status>({ state: "loading" });
-  const [hover, setHover] = useState(false);
-  const [open, setOpen] = useState(false);
-  const close = useCallback(() => setOpen(false), []);
+  const [hover, setHover] = useState<Subject | null>(null);
+  const [open, setOpen] = useState<Subject | null>(null);
+  const close = useCallback(() => setOpen(null), []);
 
   useEffect(() => {
     const handle = createFlyScene(mount.current!, {
       onReady: () => setStatus({ state: "ready" }),
       onError: (message) => setStatus({ state: "error", message }),
       onHover: setHover,
-      onFlyClick: () => setOpen(true),
+      onPick: setOpen,
     });
     scene.current = handle;
     return () => {
@@ -32,7 +37,7 @@ export default function Launcher() {
   }, []);
 
   useEffect(() => {
-    scene.current?.setPaused(open);
+    scene.current?.setPaused(open !== null);
   }, [open]);
 
   return (
@@ -40,19 +45,20 @@ export default function Launcher() {
       <div ref={mount} className="absolute inset-0" />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_55%,rgba(0,0,0,0.55))]" />
 
-      <div className="pointer-events-none absolute inset-x-0 bottom-10 flex justify-center">
+      <div className="pointer-events-none absolute inset-x-0 bottom-10 flex justify-center gap-6">
         {status.state === "loading" && <p className="font-mono text-sm text-zinc-500">loading the fly…</p>}
         {status.state === "error" && <p className="max-w-md px-4 text-center text-sm text-red-400">{status.message}</p>}
-        {status.state === "ready" && (
-          // also a real button, so the brain opens from the keyboard and for screen readers
+        {status.state === "ready" && (["fly", "worm"] as const).map((subject) => (
+          // also real buttons, so each brain opens from the keyboard and for screen readers
           <button
+            key={subject}
             type="button"
-            onClick={() => setOpen(true)}
-            className={`pointer-events-auto rounded px-2 py-1 font-mono text-sm tracking-wide transition-colors hover:text-teal-300 focus-visible:text-teal-300 focus-visible:outline focus-visible:outline-1 focus-visible:outline-teal-300/60 ${hover ? "text-teal-300" : "text-zinc-500"}`}
+            onClick={() => setOpen(subject)}
+            className={`pointer-events-auto rounded px-2 py-1 font-mono text-sm tracking-wide transition-colors hover:text-teal-300 focus-visible:text-teal-300 focus-visible:outline focus-visible:outline-1 focus-visible:outline-teal-300/60 ${hover === subject ? "text-teal-300" : "text-zinc-500"}`}
           >
-            click the fly to see its brain
+            {PROMPT[subject]}
           </button>
-        )}
+        ))}
       </div>
 
       <p className="absolute bottom-3 right-4 text-[11px] text-zinc-600">
@@ -75,7 +81,12 @@ export default function Launcher() {
         </a>
       </p>
 
-      <BrainModal open={open} onClose={close} />
+      {/* The worm's gait here is local, not the chain's (wormTank.ts) — say so where it shows. */}
+      <p className="absolute bottom-3 left-4 text-[11px] text-zinc-600">
+        worm: demo gait, not on chain
+      </p>
+
+      <BrainModal subject={open} onClose={close} />
     </main>
   );
 }
