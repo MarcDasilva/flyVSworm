@@ -12,6 +12,11 @@ type MuteStorage = Pick<Storage, "getItem" | "setItem">;
 const beds: HTMLAudioElement[] = [];
 let muted = false;
 
+/** The volume each bed's swell is asking for, before ducking. Kept apart from the element's own
+ *  volume so a duck scales the swell instead of compounding with it. */
+const want = new WeakMap<HTMLAudioElement, number>();
+let duck = 1;
+
 /** The stored preference. ABSENT reads as sound ON — a first visit must not open silent. */
 export function readMuted(storage: Pick<Storage, "getItem"> = localStorage): boolean {
   try { return storage.getItem(MUTED_KEY) === "1"; } catch { return false; }
@@ -24,6 +29,13 @@ export function setMuted(on: boolean, storage: MuteStorage = localStorage): void
   muted = on;
   for (const a of beds) a.muted = on;
   try { storage.setItem(MUTED_KEY, on ? "1" : "0"); } catch { /* remembered next time, or not */ }
+}
+
+/** Drop the beds under a talking voice and bring them back, leaving the swells running
+ *  underneath: a line that lands mid-swell returns to the swell, not to silence. */
+export function duckAmbience(under: boolean): void {
+  duck = under ? 0.18 : 1;
+  for (const a of beds) a.volume = (want.get(a) ?? a.volume) * duck;
 }
 
 /** Fade the bed up to `peak`, hold, fade out, sleep a random gap — forever. */
@@ -47,10 +59,13 @@ export function ambience(url: string, peak: number): void {
 
 /** Linear volume ramp; ponytail: setTimeout steps, swap for GainNode if it clicks. */
 async function ramp(a: HTMLAudioElement, to: number, ms: number): Promise<void> {
-  const from = a.volume, t0 = performance.now();
+  const from = want.get(a) ?? a.volume, t0 = performance.now();
   for (let t = 0; t < 1; t = (performance.now() - t0) / ms) {
-    a.volume = from + (to - from) * Math.min(t, 1);
+    const v = from + (to - from) * Math.min(t, 1);
+    want.set(a, v);
+    a.volume = v * duck;
     await wait(50);
   }
-  a.volume = to;
+  want.set(a, to);
+  a.volume = to * duck;
 }

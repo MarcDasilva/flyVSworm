@@ -12,6 +12,11 @@ import { fileURLToPath } from "node:url";
 import { settleSynapses } from "./synapses.mjs";
 import { settleFlySynapses, outgoingEdges, BATCH_MAX } from "./flysynapses.mjs";
 import { openStore } from "./store.mjs";
+import { loadEnv, speak, writeLine } from "./banter.mjs";
+
+// Gemini's and ElevenLabs' keys, out of the repo's .env. Read before any request arrives so a
+// missing key is a startup line rather than a puzzle mid-demo.
+loadEnv();
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url));   // repo root
 const NAMES = new Set(JSON.parse(
@@ -383,6 +388,55 @@ createServer((req, res) => {
       }
       viewerSeen = Date.now();
       json(res, 200, store.board());
+    });
+    return;
+  }
+  // --- the two animals talking ---------------------------------------------
+  // The page asks for one line at a time and plays it before asking for the next, so there is no
+  // streaming here and no state: the argument so far comes back up with every request.
+  if (req.method === "POST" && url.pathname === "/api/banter") {
+    let body = "";
+    req.on("data", c => { body += c; if (body.length > 8192) req.destroy(); });
+    req.on("end", async () => {
+      let posted;
+      try { posted = JSON.parse(body); } catch { json(res, 400, { error: "bad json" }); return; }
+      // TRUST BOUNDARY. Both fields go into a prompt, so the speaker is narrowed to the two
+      // animals that exist and the history is capped and stringified -- a page that posts a novel
+      // gets a short argument, not a large bill.
+      const speaker = posted.speaker === "worm" ? "worm" : "fly";
+      const history = (Array.isArray(posted.history) ? posted.history : []).slice(-6)
+        .map(t => ({ speaker: t?.speaker === "worm" ? "worm" : "fly", text: String(t?.text ?? "").slice(0, 300) }));
+      viewerSeen = Date.now();
+      try {
+        json(res, 200, { speaker, text: await writeLine(speaker, history, store.board()) });
+      } catch (e) {
+        json(res, 502, { error: String(e?.message ?? e) });
+      }
+    });
+    return;
+  }
+  if (req.method === "POST" && url.pathname === "/api/speak") {
+    let body = "";
+    req.on("data", c => { body += c; if (body.length > 4096) req.destroy(); });
+    req.on("end", async () => {
+      let posted;
+      try { posted = JSON.parse(body); } catch { json(res, 400, { error: "bad json" }); return; }
+      // TRUST BOUNDARY. The text is spoken, not executed, but it is still billed by the character.
+      const speaker = posted.speaker === "worm" ? "worm" : "fly";
+      const text = String(posted.text ?? "").trim().slice(0, 300);
+      if (!text) { json(res, 400, { error: "nothing to say" }); return; }
+      viewerSeen = Date.now();
+      try {
+        const upstream = await speak(speaker, text);
+        res.writeHead(200, { "content-type": "audio/mpeg", "cache-control": "no-store" });
+        // Web stream off fetch, node stream on the wire: hand the chunks over as they land so the
+        // scene is not holding a silence while a whole mp3 buffers here.
+        for await (const chunk of upstream.body) res.write(chunk);
+        res.end();
+      } catch (e) {
+        if (!res.headersSent) json(res, 502, { error: String(e?.message ?? e) });
+        else res.end();
+      }
     });
     return;
   }
