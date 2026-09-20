@@ -70,6 +70,9 @@ let stepping = false;
 let workerAlive = true;
 let viewerSeen = 0;
 let wakeAt = 0;
+/** Slow poll so a halted relay notices a top-up without needing a click. */
+const BALANCE_RECHECK_MS = 15_000;
+let lastBalanceAt = 0;
 let autoAt = 0;
 let autoIdx = 0;
 const log = [];
@@ -186,6 +189,16 @@ async function stepperLoop() {
     } else {
       stepping = false;
       await new Promise(r => setTimeout(r, 500));
+      // `balance` is ONLY refreshed by affordable(), which only runs inside
+      // stepperCycle() — which this gate blocks whenever balance < floor. So
+      // a halted relay can never observe its own top-up and sits there with a
+      // funded wallet reporting the stale figure that halted it, until
+      // something hits /api/touch. Re-read on a slow cadence so it heals
+      // itself; the cost is one balance RPC a few times a minute while idle.
+      if (balance < floor && Date.now() - lastBalanceAt >= BALANCE_RECHECK_MS) {
+        lastBalanceAt = Date.now();
+        if (await affordable()) note({ op: "resume", ms: 0 });
+      }
     }
   }
 }
