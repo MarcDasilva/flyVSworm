@@ -14,9 +14,14 @@ export const ARENA: Arena = { halfX: 1.4, halfY: 0.95 };
 const WALL_H = 0.42;       // rim height in body lengths; the worm is 1.0 long
 const WALL_T = 0.11;       // rim thickness
 const SOIL_D = 0.35;       // soil depth below the floor
-const STAND_TOP = 0.45;    // plinth top, a hair above the rim
+/** Plinth top, a hair above the rim. Exported: it is the table BOTH machines stand on. */
+export const STAND_TOP = 0.45;
 const STAND_W = 1.7;       // plinth footprint; must stay wider than the laptop
-const STAND_D = 1.2;       //   or the machine overhangs its own table
+/** Deep enough for the laptop AND the fly's desk standing back to back behind it. The laptop is
+ *  pinned to the plinth's tank edge, so every unit here becomes room on the far side — shrink it
+ *  and the fly ends up off the end of the table. */
+const STAND_D = 2.9;
+const LAPTOP_GAP = 0.18;   // tank rim to the laptop's own near edge
 const LAPTOP_SCALE = 0.33; // the .obj ships ~3.46 units wide; this is ~1.14
 const SOIL_RELIEF = 0.012; // surface bumps; MUST stay under the worm radius
 /** The room's floor: the plane the terrarium's slab and the grid both sit on. Anything else
@@ -171,6 +176,13 @@ export function buildTerrarium(scene: THREE.Scene): THREE.Group {
   return group;
 }
 
+/** The laptop, and the lid box the fly's monitor is sized and squared up against. */
+export type Laptop = {
+  group: THREE.Group;
+  /** World bounds of the OPEN LID — the display panel and its shell, not the base. */
+  lid: THREE.Box3;
+};
+
 /**
  * The laptop: geometry and UVs from wormed/data/MacBookPro.obj, textures from
  * wormed/data/textures (unpacked out of the .blend by
@@ -181,7 +193,7 @@ export function buildTerrarium(scene: THREE.Scene): THREE.Group {
  * name on each material, and THAT is what the finish below is keyed on —
  * rename a group in the model and it falls back to bare aluminium.
  */
-export async function loadLaptop(scene: THREE.Scene): Promise<THREE.Group> {
+export async function loadLaptop(scene: THREE.Scene): Promise<Laptop> {
   const { OBJLoader } = await import("three/examples/jsm/loaders/OBJLoader.js");
   const model = await new OBJLoader().loadAsync("/MacBookPro.obj");
 
@@ -244,12 +256,18 @@ export async function loadLaptop(scene: THREE.Scene): Promise<THREE.Group> {
 
   // Sit it ON the table rather than trusting the model's origin: this one is
   // authored a long way off-centre, so the bounds decide where it goes. Drop
-  // the feet onto STAND_TOP and centre the footprint over the plinth.
+  // the feet onto STAND_TOP and pull the machine up against the plinth's TANK
+  // edge — not its centre — so the rest of the table is free for the fly.
   group.updateMatrixWorld(true);
   const bounds = new THREE.Box3().setFromObject(group);
   const mid = bounds.getCenter(new THREE.Vector3());
   group.position.set(-mid.x, STAND_TOP - bounds.min.y,
-                     ARENA.halfY + WALL_T + STAND_D / 2 - mid.z);
+                     ARENA.halfY + WALL_T + LAPTOP_GAP - bounds.min.z);
+
   scene.add(group);
-  return group;
+  group.updateMatrixWorld(true);
+  // The lid is its own object in the .obj. Measuring the whole model instead would hand back the
+  // base's footprint, and the fly's monitor would come out sized to a keyboard.
+  const lidPart = group.getObjectByName("macBook_TopPart_Cube.004") ?? group;
+  return { group, lid: new THREE.Box3().setFromObject(lidPart) };
 }

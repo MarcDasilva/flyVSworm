@@ -11,6 +11,9 @@ export interface Computer {
   keyTopY: number;
   /** A leg struck the keyboard at this world point. */
   press(at: THREE.Vector3): void;
+  /** Told when the host scales the desk. A point light's falloff is in WORLD units, so shrinking
+   *  the desk drags the screen glow in close at full strength and blows the whole exhibit white. */
+  setScale(s: number): void;
   update(dt: number): void;
   dispose(): void;
 }
@@ -26,6 +29,17 @@ const PRESS_SECONDS = 0.28;
 
 const KEY_COLOR = new THREE.Color("#262b34");
 const KEY_LIT = new THREE.Color("#5eead4");
+
+const SCREEN_W = 5.6;
+const SCREEN_H = 3.5;
+const MONITOR_Z = (ROWS * PITCH + 0.3) / 2 + 1.1;   // keyboard depth, then the gap behind it
+/** Outside width of the monitor, bezel included. A host scene matching this to another display
+ *  scales the WHOLE desk by the ratio — the fly comes with it, which is the only way its feet
+ *  stay on the keys. */
+export const MONITOR_WIDTH = SCREEN_W + 0.24;
+/** Local z of the back of the monitor assembly, stand included — the face to put against another
+ *  machine's back. The stand reaches further than the bezel does. */
+export const MONITOR_BACK = MONITOR_Z + 0.8;
 
 /**
  * Keyboard centred under `keyboardCenter` (x, z on the desk at y = 0), monitor behind it facing -Z,
@@ -63,9 +77,9 @@ export function createStandInComputer(keyboardCenter: THREE.Vector3, screen: THR
   group.add(keys);
 
   // monitor: stand, neck, bezel, screen
-  const screenW = 5.6;
-  const screenH = 3.5;
-  const monitorZ = kbD / 2 + 1.1;
+  const screenW = SCREEN_W;
+  const screenH = SCREEN_H;
+  const monitorZ = MONITOR_Z;
   const screenY = 2.75;
   const standBase = new THREE.Mesh(new RoundedBoxGeometry(1.8, 0.08, 1.1, 3, 0.03), shell);
   standBase.position.set(0, 0.04, monitorZ + 0.25);
@@ -92,10 +106,14 @@ export function createStandInComputer(keyboardCenter: THREE.Vector3, screen: THR
 
   const local = new THREE.Vector3();
   const color = new THREE.Color();
+  const glowWatts = glow.intensity;
 
   return {
     group,
     keyTopY: BASE_H + KEY_H,
+    setScale(s) {
+      glow.intensity = glowWatts * s * s;   // inverse-square: s times nearer, s^2 less power
+    },
     press(at) {
       group.worldToLocal(local.copy(at));
       let best = 0;

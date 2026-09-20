@@ -8,7 +8,7 @@
 // burst/pause keystroke rhythm.
 
 import * as THREE from "three";
-import { createStandInComputer, type Computer } from "./computer.js";
+import { createStandInComputer, MONITOR_BACK, type Computer } from "./computer.js";
 import { TradingScreen } from "./tradingScreen.js";
 
 /** Model units to scene units, unchanged from the launcher. Scene units here are worm body
@@ -96,6 +96,14 @@ export interface FlyDesk {
   /** Fly, keyboard and monitor together. Position and rotate THIS — the pieces inside are placed
    *  relative to each other and must not be moved apart. */
   readonly group: THREE.Group;
+  /** Desk-local z of the back of the monitor, stand included. NOT computer.ts's MONITOR_BACK:
+   *  the computer is offset to wherever the fly's feet landed, so the constant is short by that
+   *  offset and anything squared up against it ends up inside the machine. */
+  readonly monitorBack: number;
+  /** Resize the whole desk. Use this rather than `group.scale`: a point light's range and falloff
+   *  are WORLD units and a parent scale does not touch them, so scaling the group alone drags the
+   *  lamps in close at full strength and burns the exhibit out. */
+  setScale(s: number): void;
   update(dt: number): void;
 }
 
@@ -137,6 +145,8 @@ export async function loadFlyDesk(scene: THREE.Scene): Promise<FlyDesk> {
   const fill = new THREE.PointLight(0x9fb6ff, 35, 24, 2);
   fill.position.set(3.5, 3.5, 4.5);
   group.add(lamp, fill);
+  const lampWatts = [lamp.intensity, fill.intensity];
+  const lampRange = [lamp.distance, fill.distance];
 
   const head = new Joint(root.getObjectByName("FLYCAB")!);
   const headYaw = head.axis(UP);
@@ -193,6 +203,18 @@ export async function loadFlyDesk(scene: THREE.Scene): Promise<FlyDesk> {
 
   return {
     group,
+    monitorBack: computer.group.position.z + MONITOR_BACK,
+    setScale(s) {
+      group.scale.setScalar(s);
+      // Inverse-square: the lamp ends up s times nearer, so it needs s^2 less power to land the
+      // same brightness on the animal. Range is a plain world length and scales straight.
+      [lamp, fill].forEach((l, i) => {
+        l.intensity = lampWatts[i] * s * s;
+        l.distance = lampRange[i] * s;
+      });
+      computer.setScale(s);   // its screen glow is a point light too
+
+    },
     update(dt) {
       t += Math.min(dt, 0.1);
       for (const leg of legs) {

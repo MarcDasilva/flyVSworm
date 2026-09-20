@@ -4,14 +4,15 @@ import { WormBody, ChainClock, BEHAVIOR, type BehaviorState } from "./body.js";
 import { WormMesh } from "./worm.js";
 import { BrainCloud, parseMorphology } from "./brain.js";
 import { ChainFeed, type Behavior, type ChainConfig, type RelayStatus } from "./chain.js";
-import { ARENA, FLOOR_Y, buildTerrarium, loadLaptop } from "./props.js";
+import { ARENA, STAND_TOP, buildTerrarium, loadLaptop } from "./props.js";
 import { loadFlyDesk, type FlyDesk } from "./fly.js";
+import { MONITOR_WIDTH } from "./computer.js";
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0b0f14);
 // Far enough back to clear BOTH exhibits. At the old 6/16 the fly's desk and half the tank sat
 // past the far plane in the wide shot and faded into the background entirely.
-scene.fog = new THREE.Fog(0x0b0f14, 16, 48);
+scene.fog = new THREE.Fog(0x0b0f14, 12, 34);
 scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 const key = new THREE.DirectionalLight(0xffffff, 1.1);
 key.position.set(2, 4, 2);
@@ -23,13 +24,13 @@ scene.add(rim);
 const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.01, 100);
 // The wide shot has to hold TWO exhibits — the terrarium at the origin and the fly's desk out at
 // FLY_AT — so it sits back and off to the side of the tank rather than square in front of it.
-camera.position.set(14.8, 6.4, 12.6);
+camera.position.set(5.5, 2.8, 4.6);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 document.body.appendChild(renderer.domElement);
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.set(5.4, 1.2, 0.3);
+controls.target.set(0.2, 0.7, 1.4);
 controls.enableDamping = true;
 controls.maxPolarAngle = Math.PI * 0.49;   // stay above the agar
 controls.update();
@@ -115,22 +116,28 @@ const clock = new ChainClock();
 const worm = new WormMesh(scene);
 const brain = new BrainCloud(scene, positions, names, morphology);
 buildTerrarium(scene);
-// The desk prop is 1.5 MB and nothing waits on it — the worm runs while it loads.
-void loadLaptop(scene).catch(e => console.warn("laptop model failed to load", e));
-
-// The fly is a SEPARATE exhibit: its own computer, its own scale, its own patch of floor, placed
-// far enough out that nothing of it overlaps the terrarium. The only thing the two share is that
-// they face each other across the room — turned to -x, the fly looks down its keyboard at the
-// tank. Nothing here reads the tank's geometry and nothing in the tank reads this.
+// The two machines stand BACK TO BACK on one table: the laptop's display faces the tank, the
+// fly's faces the fly, and the two shells meet in the middle. Each animal looks at its own screen
+// and, through it, at the other animal.
+//
+// The fly's desk is scaled so its monitor is exactly as wide as the laptop's lid, measured — not
+// guessed — and the fly rides that scale, which is the only way its feet stay on its own keys.
+// Neither model is 1.5 MB of nothing, and the worm runs while both load.
 let fly: FlyDesk | undefined;
-const FLY_AT = 11;
-void loadFlyDesk(scene)
-  .then(desk => {
-    desk.group.rotation.y = -Math.PI / 2;
-    desk.group.position.set(FLY_AT, FLOOR_Y, 0);
+const BACK_GAP = 0.06;   // shell to shell
+void Promise.all([loadLaptop(scene), loadFlyDesk(scene)])
+  .then(([laptop, desk]) => {
+    const scale = (laptop.lid.max.x - laptop.lid.min.x) / MONITOR_WIDTH;
+    desk.setScale(scale);
+    // Turned to face the laptop's back. The rig is authored looking +z with its monitor in front
+    // of it, so a half turn puts the monitor between the fly and the laptop, screen still on the
+    // fly's side.
+    desk.group.rotation.y = Math.PI;
+    desk.group.position.set(0, STAND_TOP,
+                            laptop.lid.max.z + BACK_GAP + desk.monitorBack * scale);
     fly = desk;
   })
-  .catch(e => console.warn("fly model failed to load", e));
+  .catch(e => console.warn("desk models failed to load", e));
 brain.setResolution(innerWidth, innerHeight);
 
 // ---------------------------------------------------------------------------
