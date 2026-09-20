@@ -4,7 +4,8 @@ import { WormBody, ChainClock, BEHAVIOR, type BehaviorState } from "./body.js";
 import { WormMesh } from "./worm.js";
 import { BrainCloud, parseMorphology } from "./brain.js";
 import { ChainFeed, type Behavior, type ChainConfig, type RelayStatus } from "./chain.js";
-import { ARENA, buildTerrarium, loadLaptop } from "./props.js";
+import { ARENA, STAND_TOP, buildTerrarium, loadLaptop } from "./props.js";
+import { loadFly, type Fly } from "./fly.js";
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0b0f14);
@@ -111,7 +112,21 @@ const worm = new WormMesh(scene);
 const brain = new BrainCloud(scene, positions, names, morphology);
 buildTerrarium(scene);
 // The desk prop is 1.5 MB and nothing waits on it — the worm runs while it loads.
-void loadLaptop(scene).catch(e => console.warn("laptop model failed to load", e));
+//
+// The fly is seated off the LAPTOP's measured bounds rather than off a constant, so moving the
+// machine moves the typist with it. It faces -z: the display faces the tank, so the seat is on the
+// far side and the animal looks down the keyboard at both the screen and the worm beyond it.
+let fly: Fly | undefined;
+const FLY_SETBACK = 0.05;   // laptop's near edge to the fly's perch
+void loadLaptop(scene)
+  .then(async laptop => {
+    const f = await loadFly(scene);
+    f.perch.rotation.y = Math.PI;
+    f.perch.position.set(0, STAND_TOP, laptop.front + FLY_SETBACK);
+    f.restFeetAt(laptop.keyTop);
+    fly = f;
+  })
+  .catch(e => console.warn("desk model failed to load", e));
 brain.setResolution(innerWidth, innerHeight);
 
 // ---------------------------------------------------------------------------
@@ -303,6 +318,9 @@ function frame(now: number): void {
   // simulated time the chain has handed over. No frames, no movement.
   body.update(clock.take(real), behavior);
   worm.update(body.points);
+  // The typist runs on the WALL clock: it is scenery, not simulation, and freezing it whenever the
+  // chain stalls would read as the page having crashed.
+  fly?.update(dt);
   brain.setVoltages(voltages);
   brain.tick(dt);
 
