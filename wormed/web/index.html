@@ -228,10 +228,8 @@
              justify-content: center; gap: 28px; transition: opacity 600ms ease; }
   #loading.gone { opacity: 0; pointer-events: none; }
   #shutdown-notice { position: fixed; top: 24px; left: 16px; right: 16px; z-index: 3;
-                     margin: 0; color: #fff; text-align: center; font-size: clamp(14px, 1.6vw, 22px);
-                     font-weight: 400; pointer-events: none; visibility: hidden; }
-  /* Wait for the loading screen's 600 ms fade to finish. */
-  #loading.gone + #shutdown-notice { visibility: visible; transition: visibility 0s 600ms; }
+                     margin: 0; color: #9ca3af; text-align: center; font-size: clamp(14px, 1.6vw, 22px);
+                     font-weight: 300; pointer-events: none; }
   @media (max-width: 700px) { #shutdown-notice { top: 72px; } }
   #loading img { width: min(340px, 60vw); height: auto; }
   #loading .dots { display: flex; gap: 10px; }
