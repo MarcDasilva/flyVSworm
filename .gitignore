@@ -1,3 +1,5 @@
+__pycache__/
+*.pyc
 .venv
 .env
 *node_modules
@@ -5,5 +7,10 @@
 *.log
 *.exe
 
+# The exhibit's ledger: written by the relay at run time, never shipped.
+wormed/data/*.db
+
 # Generator bytecode
 tools/__pycache__/
+.vercel
+.env*

@@ -40,12 +40,6 @@ export default function Launcher() {
       <div ref={mount} className="absolute inset-0" />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_55%,rgba(0,0,0,0.55))]" />
 
-      {status.state === "ready" && (
-        <h1 className="pointer-events-none absolute inset-x-0 top-8 px-6 text-center font-mono text-lg text-white sm:text-2xl">
-          Brain&apos;s Have Been Shutdown, For Now.....
-        </h1>
-      )}
-
       <div className="pointer-events-none absolute inset-x-0 bottom-10 flex justify-center">
         {status.state === "loading" && <p className="font-mono text-sm text-zinc-500">loading the fly…</p>}
         {status.state === "error" && <p className="max-w-md px-4 text-center text-sm text-red-400">{status.message}</p>}

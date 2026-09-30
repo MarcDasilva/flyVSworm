@@ -1,0 +1,50 @@
+Connectome source (Task 2 data-sourcing deviation)
+====================================================
+
+The brief's suggested URL 404s:
+  https://raw.githubusercontent.com/openworm/c302/master/c302/data/CElegansNeuronTables.xls.csv
+
+Real data used instead, fetched 2026-09-19:
+  https://raw.githubusercontent.com/openworm/ConnectomeToolbox/main/cect/data/NeuronConnect.xls
+
+openworm/ConnectomeToolbox is the current name of the openworm/c302 repository
+(renamed upstream; c302 now lives under cect/ in that repo). NeuronConnect.xls
+is the classic Varshney, Chen, Paniagua, Hall & Chklovskii (2011) "Structural
+properties of the C. elegans neuronal network" (PLoS Comput Biol) connectivity
+table, originally distributed by WormAtlas. Its embedded sheet name
+("NeuronConnect.csv") confirms it is the canonical CSV re-packaged as .xls.
+
+Converted to CSV with xlrd (`pip3 install --user xlrd`) and committed verbatim
+as NeuronConnect.csv (6418 data rows + header, columns: Neuron 1, Neuron 2,
+Type, Nbr) so nothing fetches at demo time.
+
+Known properties of this exact file, verified by direct inspection here
+(not taken on faith from the brief):
+  - Covers 279 distinct extrapharyngeal (non-pharyngeal) neurons only. It
+    does NOT include the 20 pharyngeal neurons (Albertson & Thomson 1976
+    reconstructed the pharynx separately; that wiring was never folded into
+    this file) or CANL/CANR (no synapses of any kind — canal-associated,
+    not part of the connectome) or VC06 (its only connection in this file is
+    an NMJ to muscle, out of scope for a neuron-neuron connectome).
+  - Row Type values: S/Sp (Neuron 1 sends to Neuron 2 — monadic/polyadic
+    chemical), R/Rp (mirror bookkeeping rows: Neuron 1 receives from
+    Neuron 2 — same physical synapses as some S/Sp rows, listed a second
+    time for reverse lookup), EJ (electrical/gap junction, also mirrored in
+    both directions), NMJ (neuromuscular junction; Neuron 2 is the literal
+    string "NMJ", a pseudo-target with no neuron identity).
+  - One data-entry typo: row 1872 reads "avfl,avfr,Rp,1.0" in lowercase,
+    the only lowercase row in the file. It refers to the same AVFL/AVFR
+    cells already present in uppercase elsewhere. The loader upper-cases
+    every name before indexing, which folds this row into the existing
+    AVFL/AVFR pair instead of creating two phantom one-off neurons.
+
+wormed/pipeline/connectome.py documents how these 302 dense-index slots are
+assembled from this file (279 with real S/Sp/EJ data) plus 23 anatomically
+real neurons with no synapses in this source (20 pharyngeal + CANL + CANR +
+VC6), and why the S/Sp-only, EJ-deduplicated edge counts differ from the
+brief's original 6000-8000 / 1100-1700 test bounds. See the comment above
+`load_connectome` in that file for the full explanation and the published
+totals (6394 chemical synaptic contacts, 890 gap-junction contacts —
+Varshney et al. 2011's headline numbers, reproduced exactly by summing Nbr
+over the deduplicated edges here) that justify the adjusted bounds in
+wormed/pipeline/test_pipeline.py.

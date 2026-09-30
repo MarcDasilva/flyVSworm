@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "https://wormed-exhibit.fly.dev/api/:path*" },
+    { "source": "/fly/:path*", "destination": "https://wormed-exhibit.fly.dev/fly/:path*" }
+  ]
+}

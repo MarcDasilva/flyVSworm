@@ -1,0 +1,276 @@
+// Run: npx tsx src/test_body.ts
+import { strict as assert } from "node:assert";
+import { WormBody, ChainClock, BODY_LENGTH_MM, type BehaviorState } from "./body.js";
+
+const SEGMENTS = 24;
+const SEG = BODY_LENGTH_MM / SEGMENTS;
+const FWD: BehaviorState = { state: 1, gain: 1 };
+const REV: BehaviorState = { state: 2, gain: 1 };
+const PAUSE: BehaviorState = { state: 0, gain: 0 };
+const OMEGA: BehaviorState = { state: 3, gain: 1 };
+const DT = 1 / 60;
+
+type V = readonly number[];
+const dist = (a: V, b: V) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+const sub = (a: V, b: V) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const dot = (a: V, b: V) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const norm = (a: V) => { const m = Math.hypot(a[0], a[1], a[2]); return [a[0] / m, a[1] / m, a[2] / m]; };
+const angleBetween = (a: V, b: V) =>
+  Math.acos(Math.max(-1, Math.min(1, dot(norm(a), norm(b)))));
+
+function run(w: WormBody, frames: number, b: BehaviorState, dt = DT) {
+  for (let i = 0; i < frames; i++) w.update(dt, b);
+}
+
+// A worm modelled as y = A*sin(x) stretches as it oscillates, and a stretching
+// worm reads as wrong instantly. Checked on EVERY frame, not just the last —
+// a seed path only one body long clamps the tail on frame one and heals
+// itself by frame two, which an end-state-only assert cannot see.
+function assertInextensible(w: WormBody, where: string) {
+  assert.equal(w.points.length, SEGMENTS, `${where}: wrong segment count`);
+  for (let k = 1; k < w.points.length; k++) {
+    const d = dist(w.points[k - 1], w.points[k]);
+    assert.ok(Number.isFinite(d), `${where}: segment ${k} is not finite`);
+    assert.ok(Math.abs(d - SEG) < SEG * 0.05,
+      `${where}: segment ${k} length ${d} drifted from ${SEG} — body is stretching`);
+  }
+}
+
+// THE invariant, under every state including the tight omega bend.
+{
+  for (const [name, b] of [["forward", FWD], ["reverse", REV], ["omega", OMEGA]] as const) {
+    const w = new WormBody(SEGMENTS);
+    assertInextensible(w, `${name} frame 0`);
+    for (let i = 0; i < 2000; i++) {
+      w.update(DT, b);
+      assertInextensible(w, `${name} frame ${i + 1}`);
+    }
+  }
+  // Direction changes must not tear the body either.
+  const w = new WormBody(SEGMENTS);
+  const script: BehaviorState[] = [FWD, REV, OMEGA, PAUSE, REV, FWD, OMEGA, FWD];
+  for (const b of script) {
+    for (let i = 0; i < 200; i++) { w.update(DT, b); assertInextensible(w, `script ${b.state}`); }
+  }
+}
+
+// FORWARD and REVERSE must translate the worm in OPPOSITE directions along its
+// own axis. Asserting only that the two head positions differ passes on the
+// undulation phase alone, and would not catch a "reverse" that crawls forward
+// with the body wave running backwards — the single most visible front-end
+// failure, since head touch is supposed to make the worm back away.
+{
+  const f = new WormBody(SEGMENTS);
+  run(f, 600, FWD);
+  const fwdTravel = sub(f.points[0], [0, 0, 0]);
+  assert.ok(Math.hypot(...fwdTravel) > 0.02, `forward barely moved: ${fwdTravel}`);
+  assert.ok(fwdTravel[0] > 0.5, `forward did not travel along +x: ${fwdTravel[0]}`);
+  // Travel is nose-first: the displacement agrees with the body's own axis.
+  assert.ok(dot(fwdTravel, sub(f.points[0], f.points[SEGMENTS - 1])) > 0,
+    "forward travel does not point nose-first along the body axis");
+
+  const r = new WormBody(SEGMENTS);
+  run(r, 600, REV);
+  const revTravel = sub(r.points[0], [0, 0, 0]);
+  assert.ok(Math.hypot(...revTravel) > 0.02, `reverse barely moved: ${revTravel}`);
+  assert.ok(revTravel[0] < -0.3, `reverse did not travel along -x: ${revTravel[0]}`);
+  // Travel is tail-first: the displacement OPPOSES the body's own axis.
+  assert.ok(dot(revTravel, sub(r.points[0], r.points[SEGMENTS - 1])) < 0,
+    "reverse travel is not tail-first — the worm is crawling forwards");
+
+  assert.ok(Math.sign(fwdTravel[0]) !== Math.sign(revTravel[0]),
+    "forward and reverse translate the same way");
+  assert.ok(angleBetween(fwdTravel, revTravel) > 2.5,
+    `forward and reverse are not opposed: ${angleBetween(fwdTravel, revTravel)} rad`);
+}
+
+// PAUSE must stop translation but keep the body coherent.
+{
+  const w = new WormBody(SEGMENTS);
+  run(w, 300, FWD);
+  const before = [...w.points[0]];
+  const bodyBefore = w.points.map((p) => [...p]);
+  run(w, 300, PAUSE);
+  assert.ok(dist(w.points[0], before) < 0.005, "PAUSE still translating");
+  for (let k = 0; k < SEGMENTS; k++) {
+    assert.ok(dist(w.points[k], bodyBefore[k]) < 1e-12, `PAUSE moved segment ${k}`);
+  }
+  assertInextensible(w, "paused");
+}
+
+// An OMEGA turn must reverse the direction of travel, or the escape response
+// is invisible on screen. Travel is sampled over a whole undulation period so
+// the body wave averages out of the measurement.
+{
+  const PERIOD_FRAMES = Math.round(60 / 0.4);
+  const w = new WormBody(SEGMENTS);
+  run(w, 300, FWD);
+  const a0 = [...w.points[0]];
+  run(w, PERIOD_FRAMES, FWD);
+  const dirBefore = sub(w.points[0], a0);
+
+  run(w, 60, OMEGA);
+
+  const a1 = [...w.points[0]];
+  run(w, PERIOD_FRAMES, FWD);
+  const dirAfter = sub(w.points[0], a1);
+
+  assert.ok(angleBetween(dirBefore, dirAfter) > 2.0,
+    `omega turned only ${angleBetween(dirBefore, dirAfter)} rad — escape turn is invisible`);
+}
+
+// A crawling worm is a deep S, not a wiggling rod. If the end-to-end chord is
+// close to the arc length the undulation amplitude is too small to read as a
+// worm; if it collapses the body has curled into a knot.
+{
+  const w = new WormBody(SEGMENTS);
+  const span = (SEGMENTS - 1) * SEG;
+  let minChord = Infinity, maxChord = 0;
+  for (let i = 0; i < 1200; i++) {
+    w.update(DT, FWD);
+    if (i < 300) continue;
+    const c = dist(w.points[0], w.points[SEGMENTS - 1]);
+    minChord = Math.min(minChord, c);
+    maxChord = Math.max(maxChord, c);
+  }
+  assert.ok(maxChord < span * 0.92, `body is a straight rod: chord ${maxChord} of span ${span}`);
+  assert.ok(minChord > span * 0.45, `body curled into a knot: chord ${minChord} of span ${span}`);
+}
+
+// Replays must line up: identical input gives bit-identical output, so a
+// recorded chain trace redraws the same worm every time.
+{
+  const script: BehaviorState[] = [FWD, OMEGA, REV, PAUSE, FWD, REV];
+  const a = new WormBody(SEGMENTS), b = new WormBody(SEGMENTS);
+  for (const s of script) { run(a, 137, s); run(b, 137, s); }
+  for (let k = 0; k < SEGMENTS; k++) {
+    assert.deepEqual(a.points[k], b.points[k], `replay diverged at segment ${k}`);
+  }
+}
+
+// Frame time comes from requestAnimationFrame, NEVER a fixed 1/60. Laying one
+// path point per frame makes the body curve as coarse as the frame rate, and
+// the omega bend is where that first tears the body — a dropped-frame worm
+// must not stretch. Measured: one point per frame breaks the 5% bound at 8 fps.
+{
+  for (const fps of [60, 30, 12, 8]) {
+    const w = new WormBody(SEGMENTS);
+    const frames = Math.round(fps * 5);
+    for (let i = 0; i < frames; i++) { w.update(1 / fps, FWD); assertInextensible(w, `${fps} fps forward`); }
+    for (let i = 0; i < fps; i++) { w.update(1 / fps, OMEGA); assertInextensible(w, `${fps} fps omega`); }
+  }
+  const fast = new WormBody(SEGMENTS), slow = new WormBody(SEGMENTS);
+  run(fast, 600, FWD, 1 / 60);
+  run(slow, 80, FWD, 1 / 8);
+  const df = dist(fast.points[0], [0, 0, 0]), ds = dist(slow.points[0], [0, 0, 0]);
+  assert.ok(Math.abs(df - ds) < df * 0.005,
+    `frame rate changed the distance travelled: ${df} vs ${ds}`);
+}
+
+// THE PEN. A confined worm must stay in it under every state, must roam it
+// rather than settle into a rut along one wall, and must NOT solve the wall
+// by grinding to a halt against it — which a position clamp alone does.
+{
+  const pen = { halfX: 1.8, halfY: 1.2 };
+  const w = new WormBody(SEGMENTS, pen);
+  let far = -Infinity, near = 0;
+  const lo = [Infinity, Infinity], hi = [-Infinity, -Infinity];
+  for (let i = 0; i < 6000; i++) {
+    const b = i % 900 < 600 ? FWD : i % 900 < 750 ? OMEGA : REV;
+    w.update(DT, b);
+    assertInextensible(w, `penned frame ${i}`);
+    for (const pt of w.points) {
+      far = Math.max(far, Math.abs(pt[0]) - pen.halfX, Math.abs(pt[1]) - pen.halfY);
+      for (const k of [0, 1]) {
+        lo[k] = Math.min(lo[k], pt[k]);
+        hi[k] = Math.max(hi[k], pt[k]);
+      }
+    }
+    const [x, y] = w.points[0];
+    if (Math.abs(x) > pen.halfX - 0.3 || Math.abs(y) > pen.halfY - 0.3) near++;
+  }
+  assert.ok(far <= 1e-9, `worm escaped the pen by ${far}`);
+  assert.ok(near > 300, `worm never worked a wall (${near} frames) — the steering is untested`);
+  assert.ok(hi[0] - lo[0] > pen.halfX, `worm covered only ${hi[0] - lo[0]} L of x — stuck in a rut`);
+  assert.ok(hi[1] - lo[1] > pen.halfY, `worm covered only ${hi[1] - lo[1]} L of y — stuck in a rut`);
+
+  // Still crawling at the end: sampled over a whole undulation period so the
+  // body wave cannot pass for travel.
+  const before = [...w.points[0]];
+  run(w, Math.round(60 / 0.4), FWD);
+  assert.ok(dist(w.points[0], before) > 0.05,
+    `penned worm stalled against a wall: moved ${dist(w.points[0], before)}`);
+}
+
+// Garbage from the classifier must not produce NaN geometry — the renderer
+// would silently draw nothing.
+{
+  const w = new WormBody(SEGMENTS);
+  for (const g of [0, -5, 1e6, NaN]) {
+    for (let i = 0; i < 120; i++) w.update(DT, { state: 1, gain: g });
+  }
+  for (const dt of [0, -1, NaN]) w.update(dt, FWD);
+  assertInextensible(w, "hostile input");
+}
+
+// THE ANIMAL IS A READOUT. It may only move on simulated time the chain
+// actually delivered, because the behaviour account keeps returning its last
+// byte forever after the chain stops and the browser reads that account
+// directly. Before ChainClock existed this was measured live: 24 seconds
+// after the relay was killed the worm was still moving in 8 of 12 samples,
+// stuck in FORWARD.
+{
+  const DT_MS = 5;             // chain.json dtMs
+  const STEPS_PER_FRAME = 10;  // relay SETTLE_EVERY
+
+  // A starved clock hands out nothing, and nothing is what the body moves.
+  const idle = new ChainClock();
+  assert.equal(idle.take(1 / 60), 0, "a clock with no frames still paid out");
+  const frozen = new WormBody(SEGMENTS);
+  const at0 = [...frozen.points[0]];
+  for (let i = 0; i < 600; i++) frozen.update(idle.take(1 / 60), FWD);
+  assert.equal(dist(frozen.points[0], at0), 0,
+    "the worm moved across 10 s with the chain delivering nothing");
+
+  // The first frame credits nothing: with no previous step there is no
+  // interval to measure, and assuming one would invent worm-time.
+  const c = new ChainClock();
+  c.deliver(1000, DT_MS);
+  assert.equal(c.pending, 0, "the first frame invented time out of nothing");
+
+  // Thereafter a frame is worth exactly its step interval.
+  c.deliver(1000 + STEPS_PER_FRAME, DT_MS);
+  assert.ok(Math.abs(c.pending - 0.05) < 1e-9,
+    `10 steps at 5 ms should be 0.05 worm-seconds, got ${c.pending}`);
+
+  // A rewind — a replay or a reset_sim — must not credit backwards or
+  // re-credit time already animated.
+  c.deliver(10, DT_MS);
+  assert.ok(Math.abs(c.pending - 0.05) < 1e-9, `a rewind moved the debt to ${c.pending}`);
+  c.deliver(10 + STEPS_PER_FRAME, DT_MS);
+  assert.ok(Math.abs(c.pending - 0.10) < 1e-9, "the clock did not resume after a rewind");
+
+  // Everything delivered is eventually animated, and never more than that.
+  const drain = new ChainClock();
+  drain.deliver(0, DT_MS);
+  let delivered = 0;
+  for (let f = 1; f <= 200; f++) { drain.deliver(f * STEPS_PER_FRAME, DT_MS); delivered += 0.05; }
+  let taken = 0;
+  for (let i = 0; i < 4000; i++) taken += drain.take(1 / 60);
+  assert.ok(Math.abs(taken - delivered) < 1e-6,
+    `paid out ${taken} worm-seconds against ${delivered} delivered`);
+  assert.equal(drain.take(1 / 60), 0, "the clock kept paying after the debt cleared");
+
+  // Catch-up is BOUNDED. A whole transaction lands at once; without a ceiling
+  // the body would animate three seconds of crawl in one render frame and
+  // teleport across the pen.
+  const burst = new ChainClock();
+  burst.deliver(0, DT_MS);
+  burst.deliver(600, DT_MS);          // one 600-step transaction = 3 s of worm
+  assert.ok(burst.pending > 2.9, "a full transaction should owe ~3 s");
+  const one = burst.take(1 / 60);
+  assert.ok(one <= 1 / 60 * 2 + 1e-9,
+    `one render frame animated ${one} worm-seconds of a 3 s burst`);
+}
+
+console.log("OK: body kinematics invariants hold");

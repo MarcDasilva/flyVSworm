@@ -1,0 +1,26 @@
+app = "wormed-exhibit"
+primary_region = "yyz"
+
+[build]
+
+[mounts]
+  source = "exhibit_data"
+  destination = "/data"
+
+# One public port. The relay serves /api itself and proxies /fly to the model (relay.mjs).
+[http_service]
+  internal_port = 8787
+  force_https = true
+  auto_stop_machines = "off"
+  # Off: a stopped machine must STAY stopped. The proxy restarting it on the first page view
+  # put a second relay on the same signing keys while one ran locally (nonce collisions both
+  # ways). Start it by hand: fly machine start.
+  auto_start_machines = false
+  min_machines_running = 1
+
+# A shared-cpu-1x could not sign the worm's 2,048-batch (23 s, versus 6 s on a laptop) while the
+# fly settles 250 a second and the model steps one session per viewer — the relay's event loop
+# stalled, every WebSocket through it dropped once a minute, and the relay died once.
+[[vm]]
+  size = "performance-2x"
+  memory = "4gb"

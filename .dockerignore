@@ -1,0 +1,13 @@
+**/node_modules
+**/dist
+**/__pycache__
+**/.venv
+.git
+wormed/data/*.db*
+wormed/data/raw
+frontend
+app
+legacy
+vendor
+docs/*
+!docs/measurements.md
